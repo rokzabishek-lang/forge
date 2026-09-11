@@ -1,0 +1,7 @@
+# Forge sidecar — local AI capabilities.
+#
+# Audio decoding goes through the ffmpeg binary the app already bundles, so
+# neither soundfile nor av is needed here. That avoids a compiled dependency
+# (soundfile has no cp314 wheel) and keeps one ffmpeg version across the app.
+
+faster-whisper==1.2.1

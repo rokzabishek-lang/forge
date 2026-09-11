@@ -1,0 +1,15 @@
+node_modules/
+out/
+dist/
+.DS_Store
+*.log
+
+# Python sidecar
+sidecar/.venv/
+__pycache__/
+*.py[cod]
+
+# Asset library. Currently a symlink to the existing library while placement is
+# undecided (docs/ASSETS.md §"Open decision"), so it must not be committed.
+assets
+asset-catalog.json

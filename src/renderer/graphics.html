@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Forge graphics layer</title>
+    <style>
+      /* Transparent all the way down: the capture must contain only the
+         graphics, with real alpha, so ffmpeg can composite it over video. */
+      html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; }
+      #stage { position: relative; overflow: hidden; background: transparent; }
+      .layer { position: absolute; will-change: transform, opacity; }
+      .text-layer { white-space: pre-wrap; margin: 0; line-height: 1.1; }
+    </style>
+  </head>
+  <body>
+    <div id="stage"></div>
+    <script type="module" src="/src/graphics/main.ts"></script>
+  </body>
+</html>

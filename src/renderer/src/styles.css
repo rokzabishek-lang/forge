@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink-950: #0b0d10;
+  --color-ink-900: #11151a;
+  --color-ink-850: #161b22;
+  --color-ink-800: #1c222b;
+  --color-ink-700: #2a323d;
+  --color-ink-600: #3a4552;
+  --color-ink-400: #7d8b9c;
+  --color-ink-200: #c3cdd8;
+  --color-flame-500: #f97341;
+  --color-flame-400: #fb8f65;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-ink-950);
+  color: var(--color-ink-200);
+  font-family: ui-sans-serif, -apple-system, "Segoe UI", system-ui, sans-serif;
+  font-size: 13px;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* The macOS traffic lights sit over the header; keep it draggable. */
+.drag-region {
+  -webkit-app-region: drag;
+}
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-ink-700);
+  border-radius: 5px;
+  border: 2px solid var(--color-ink-950);
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+input[type="range"] {
+  accent-color: var(--color-flame-500);
+}
