@@ -30,6 +30,12 @@ export interface CaptionStyle {
   wordsPerLine: number
   /** Size multiplier applied to the active word. 1 disables the pop. */
   highlightScale: number
+  /**
+   * Per-word entry animation. ASS cannot express this — karaoke tags recolour
+   * but cannot scale, and there is no per-word easing — so an animated style
+   * routes to the Chromium frame server (tier 2) instead of libass.
+   */
+  animated?: boolean
 }
 
 export const CAPTION_STYLES: CaptionStyle[] = [
@@ -49,6 +55,25 @@ export const CAPTION_STYLES: CaptionStyle[] = [
     marginV: 220,
     wordsPerLine: 3,
     highlightScale: 1.18
+  },
+  {
+    id: 'kinetic',
+    label: 'Kinetic',
+    fontFamily: 'Anton',
+    fontSize: 90,
+    bold: false,
+    uppercase: true,
+    primaryColor: '#FFFFFF',
+    highlightColor: '#FFD400',
+    outlineColor: '#000000',
+    outlineWidth: 8,
+    shadowDepth: 0,
+    position: 'bottom',
+    marginV: 240,
+    wordsPerLine: 3,
+    highlightScale: 1.2,
+    // Routes to the frame server: each word pops in with its own easing.
+    animated: true
   },
   {
     id: 'clean',
@@ -107,6 +132,7 @@ export type StyleOverrides = Partial<
     | 'marginV'
     | 'wordsPerLine'
     | 'highlightScale'
+    | 'animated'
   >
 >
 

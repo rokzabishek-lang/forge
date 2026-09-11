@@ -11,6 +11,7 @@ import { SIDECAR_METHODS } from '@shared/sidecar/protocol'
 import { segmentIntoSentences, type Transcript, type Word } from '@shared/transcript'
 import { JobQueue } from './queue'
 import { startRender, type RenderOptions } from './render/renderJob'
+import { needsFrameServer, runGraphicsSelfTest, startTier2Render } from './graphics/tier2'
 import { toAsset } from './assets'
 import { prepareCaptions } from './captions'
 import { peaksFor } from './waveform'
@@ -34,7 +35,11 @@ export function registerIpc(getWindow: () => BrowserWindow | null): JobQueue {
   const queue = new JobQueue((job, onProgress) => {
     const options = renders.get(job.id)
     if (!options) throw new Error('This export is missing its render settings')
-    return startRender(options, onProgress)
+    // The tier is a property of the request: only a project that actually needs
+    // the frame server pays for it.
+    return needsFrameServer(options.project)
+      ? startTier2Render(options, onProgress)
+      : startRender(options, onProgress)
   }, 1)
 
   queue.on('changed', (jobs: Job[]) => {
@@ -200,9 +205,11 @@ export function registerIpc(getWindow: () => BrowserWindow | null): JobQueue {
       height: request.project.settings.height
     }
 
-    // Captions are written before the job is queued, so a failure to build them
-    // surfaces here rather than as a mysterious ffmpeg error mid-render.
-    const captions = await prepareCaptions(request.project, canvas)
+    // An animated caption style is drawn by the frame server, so burning it
+    // with libass as well would render every caption twice.
+    const captions = needsFrameServer(request.project)
+      ? null
+      : await prepareCaptions(request.project, canvas)
 
     const job = queue.add({
       presetId: 'render',
@@ -228,6 +235,8 @@ export function registerIpc(getWindow: () => BrowserWindow | null): JobQueue {
     if (typeof id !== 'string') throw new Error('Cancel expects a job id')
     queue.cancel(id)
   })
+
+  ipcMain.handle('graphics:selftest', () => runGraphicsSelfTest())
 
   ipcMain.handle('jobs:list', () => queue.list())
   ipcMain.handle('jobs:clearFinished', () => {

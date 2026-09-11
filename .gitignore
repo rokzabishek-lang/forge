@@ -13,3 +13,5 @@ __pycache__/
 # undecided (docs/ASSETS.md §"Open decision"), so it must not be committed.
 assets
 asset-catalog.json
+*.tsbuildinfo
+*.tsbuildinfo

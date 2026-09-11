@@ -3,6 +3,7 @@ import { Download, FolderOpen, Loader2, X } from 'lucide-react'
 import { clipEnd, formatTimecode } from '@shared/timeline'
 import { ASPECTS, useEditor, type AspectKey } from '../store'
 import { CAPTION_STYLES, resolveStyle, type StyleOverrides } from '@shared/captions/style'
+import { Sparkles } from 'lucide-react'
 import { FontPicker } from './FontPicker'
 import { useCatalog } from '../catalog'
 import { TRANSITIONS, availableFamilies, transitionsInFamily } from '@shared/transitions/registry'
@@ -33,6 +34,19 @@ export function Inspector(): ReactNode {
   const setCaptionOverride = useEditor((s) => s.setCaptionOverride)
   const clearCaptionOverrides = useEditor((s) => s.clearCaptionOverrides)
   const [pickingFont, setPickingFont] = useLocalState(false)
+  const [selfTest, setSelfTest] = useLocalState<{ ok: boolean; message: string } | null>(null)
+  const [testing, setTesting] = useLocalState(false)
+
+  const runSelfTest = async (): Promise<void> => {
+    setTesting(true)
+    try {
+      setSelfTest(await window.forge.graphicsSelfTest())
+    } catch (err) {
+      setSelfTest({ ok: false, message: err instanceof Error ? err.message : String(err) })
+    } finally {
+      setTesting(false)
+    }
+  }
   const setTransition = useEditor((s) => s.setTransition)
   const clearTransition = useEditor((s) => s.clearTransition)
 
@@ -158,19 +172,27 @@ export function Inspector(): ReactNode {
             </button>
           </div>
           <div className="grid gap-1">
-            {CAPTION_STYLES.map((style) => (
+            {CAPTION_STYLES.map((preset) => (
               <button
-                key={style.id}
-                onClick={() => setCaptionStyle(style.id)}
+                key={preset.id}
+                onClick={() => setCaptionStyle(preset.id)}
                 disabled={!project.captions.enabled}
                 className={`flex items-center justify-between rounded px-2 py-1.5 text-[11px] transition-colors disabled:opacity-40 ${
-                  project.captions.styleId === style.id
+                  project.captions.styleId === preset.id
                     ? 'bg-ink-700 text-ink-200'
                     : 'bg-ink-800 text-ink-400 hover:bg-ink-700'
                 }`}
               >
-                <span>{style.label}</span>
-                <span className="text-[10px] text-ink-600">{style.fontFamily}</span>
+                <span className="flex items-center gap-1">
+                  {preset.label}
+                  {preset.animated && (
+                    <Sparkles
+                      size={9}
+                      className="text-flame-400"
+                    />
+                  )}
+                </span>
+                <span className="text-[10px] text-ink-600">{preset.fontFamily}</span>
               </button>
             ))}
           </div>
@@ -257,6 +279,31 @@ export function Inspector(): ReactNode {
                   Reset
                 </button>
               </div>
+            </div>
+          )}
+
+          {style.animated && project.captions.enabled && (
+            <div className="mt-1.5 rounded border border-flame-500/40 bg-flame-500/10 px-2 py-1.5">
+              <div className="text-[10.5px] leading-snug text-flame-300">
+                Animated captions render through the graphics engine, so export is slower
+                than a plain style.
+              </div>
+              <button
+                onClick={() => void runSelfTest()}
+                disabled={testing}
+                className="mt-1 w-full rounded bg-ink-800 px-2 py-1 text-[10px] text-ink-300 hover:bg-ink-700 disabled:opacity-50"
+              >
+                {testing ? 'Checking graphics engine…' : 'Check graphics engine'}
+              </button>
+              {selfTest && (
+                <div
+                  className={`mt-1 text-[10px] leading-snug ${
+                    selfTest.ok ? 'text-emerald-400' : 'text-red-400'
+                  }`}
+                >
+                  {selfTest.message}
+                </div>
+              )}
             </div>
           )}
 

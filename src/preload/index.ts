@@ -50,6 +50,14 @@ const api = {
   cancelRender: (id: string): Promise<void> => ipcRenderer.invoke('render:cancel', id),
   listJobs: (): Promise<Job[]> => ipcRenderer.invoke('jobs:list'),
   clearFinished: (): Promise<void> => ipcRenderer.invoke('jobs:clearFinished'),
+  graphicsSelfTest: (): Promise<{
+    ok: boolean
+    transparentFraction: number
+    opaqueFraction: number
+    bytes: number
+    message: string
+  }> => ipcRenderer.invoke('graphics:selftest'),
+
   chooseExportPath: (suggested: string): Promise<string | null> =>
     ipcRenderer.invoke('dialog:exportPath', suggested),
 
