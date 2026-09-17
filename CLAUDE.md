@@ -129,6 +129,37 @@ Neither build is signed yet, and `productName` is still the placeholder
 
 ---
 
+## A fresh Windows checkout
+
+Four things the repo cannot install for you. `npm ci` exits 0, reports 0
+vulnerabilities, and is not finished.
+
+| missing | what you actually see | fix |
+|---|---|---|
+| Electron's binary | `node_modules/electron/dist/` empty. npm 11's allow-scripts gate withholds the postinstall, and its warning names only `electron-winstaller` and `esbuild` — **never `electron`**. `esbuild` needs nothing; its platform package ships the exe | `node node_modules/electron/install.js` |
+| Visual C++ Redistributable | *Cannot find native binding … npm bug 4828*, from `@electron-internal/extract-zip`. The message is wrong — `index.win32-x64-msvc.node` is present and bundled. `vcruntime140.dll` is not, so `dlopen` fails | `winget install Microsoft.VCRedist.2015+.x64` |
+| a real Python | the twelve sidecar tests fail with `SidecarError: The sidecar stopped (code 9009)`. 9009 is Windows for *command not found* — `python3` resolves to the Store App Execution Alias stub, which is not an interpreter | `winget install Python.Python.3.12` |
+| `FORGE_PYTHON` | still 9009 once Python is in. `client.ts` falls back to the literal `python3`, and the python.org installer creates `python.exe` and no `python3.exe`. CI passes only because `actions/setup-python` makes one | `setx FORGE_PYTHON "…\Python312\python.exe"` |
+
+The first two are independent, by elimination: a clean `npm ci` with the runtime
+already present still produced no `electron.exe`, and the manual installer still
+failed without it. Fixing either alone leaves you stuck.
+
+**The Electron one is not first-run setup — it recurs.** Every `npm ci` in this
+repo drops that binary again, silently, with a zero exit code. Check
+`node_modules/electron/dist/electron.exe` before trusting an install, and before
+`npm run pack:win`, which needs it and will not tell you why it failed.
+
+**The sidecar needs only a bare interpreter**, not `requirements.txt`. CI runs
+`setup-python` with no `pip install`, and one of the twelve tests is "reports a
+missing capability as degraded rather than crashing". Install the requirements
+when you want the capabilities, not to get the suite green.
+
+Each of these reports something other than its cause. None is discoverable by
+reading the code.
+
+---
+
 ## Working across two machines
 
 The repo is the only thing shared between the macOS and Windows checkouts —
@@ -140,5 +171,7 @@ Windows clone should show a clean `git status`. If it does not, stop and work
 out why before committing anything.
 
 On the macOS machine the assistant's sandbox blocks writes to `.git/`, so
-**commits and pushes are run by the user by hand**. That may not be true on
-Windows — check rather than assume.
+**commits and pushes are run by the user by hand**. On Windows it does not: the
+assistant commits and pushes directly. That machine has no global git identity,
+so `user.name` and `user.email` are set per-repo there — check `git config
+--local --list` if a commit lands under the wrong name.
