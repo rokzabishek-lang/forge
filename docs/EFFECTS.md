@@ -1716,10 +1716,10 @@ The third is a standing constraint and belongs here.
 
 ### `@ffmpeg-installer` ships a different ffmpeg per platform
 
-| platform | package | ffmpeg |
-|---|---|---|
-| macOS arm64 | 4.1.5 | **4.4** |
-| win32-x64 | 4.1.0 | **4.1 or older** |
+| platform | package | `ffmpeg` field | what it actually is |
+|---|---|---|---|
+| macOS arm64 | 4.1.5 | `92718-g092cb17983` | reports itself as **4.4** |
+| win32-x64 | 4.1.0 | `20181217-f22fcd4` | **master, 17 Dec 2018** |
 
 That is not a guess about Windows: every render there died with
 
@@ -1727,6 +1727,25 @@ That is not a guess about Windows: every render there died with
 
 and `anullsrc` gained its duration option in ffmpeg **4.2**. So the floor is
 below that.
+
+**But "4.1" is the wrong way to think about it, and thinking that way costs
+time.** The Windows binary is not the 4.1 *release* — the package's own `ffmpeg`
+field says `20181217-f22fcd4`, a static nightly of ffmpeg **master** taken a
+week after the 4.1 branch point. So the floor is a DATE: whatever had been
+merged to master by **2018-12-17**.
+
+`tpad` is the proof that the distinction matters. It first appears in the 4.2
+release, so "added in 4.2" says it cannot be used here — and `holdFilter` has
+emitted it since the beginning. It was merged on **30 October 2018**, before the
+snapshot, so it is in the Windows build, and Windows CI renders with it happily.
+An audit that judged by release number alone would have sent us rewriting code
+that works.
+
+The three that genuinely bite all landed in master *after* that December date,
+which is why they are absent even though they are "only" 4.2 features. The rule
+to apply: **an option is safe if it was MERGED before 2018-12-17**, whatever
+release first carried it — and the release number is only a first approximation
+of that.
 
 The immediate fix was small — the option was never needed, because the output
 already carries `-t`, which is what actually bounds the stream. Measured both
@@ -1845,3 +1864,42 @@ verified by mutation: putting `normalize=0` back fails three of its cases.
 
 If ffmpeg is ever unified across platforms, delete that file rather than
 maintaining it — the whole class goes with it.
+
+### 26. What a full platform audit found afterwards
+
+Five independent lenses over the codebase, each finding adversarially refuted by
+a second reader. **Four of eight claims survived.** The four that died are worth
+as much as the four that lived, because each was plausible:
+
+- **`tpad` is 4.2, so it breaks Windows** — refuted by the build-date fact
+  above. The most expensive wrong answer available.
+- **`minterpolate`'s `scd_threshold` defaults to 5.0 on the Windows build and
+  10.0 on 4.4, so slow motion judders there** — the version facts were correct
+  and the failure still did not reproduce. Rendering the real chain at both
+  thresholds gave *byte-identical* output for a whip pan, mandelbrot pans at
+  three speeds, testsrc2, per-frame noise, and a static-then-whip-pan at seven
+  speeds. The 5–10 band means an average luma change of 13–26 levels, which
+  ordinary motion never reaches.
+- **The sidecar's `python3` fallback breaks on Windows** — `service.ts` already
+  branches on win32, and nothing shipping reaches the fallback.
+- **The `.venv/bin/python` test gate skips the sidecar suites on Windows** —
+  true, but nothing creates that venv on *any* platform, so both runners skip
+  identically.
+
+What survived was smaller and duller than any of them, which is usually how it
+goes:
+
+| where | what |
+|---|---|
+| `maskTags.ts`, `stems.ts` | missing `windowsHide` — every other spawn in `src/main` has it. 412 console windows on a cold transition library |
+| `maskTags.ts` | seven `.svg` masks have no decoder; the failure was never cached, so they re-spawned ffmpeg **every launch, on both platforms** |
+| `Library.tsx`, `media.ts` | the renderer has no `node:path` and joined with a literal `/`, so a renderer-built path never string-equalled a `path.join` one on Windows and the audition dedup silently did nothing |
+
+The last one is the interesting shape: both spellings *open the same file*, so
+nothing broke — only the comparisons between them. `src/shared/assetPath.ts` now
+does that join, and its test asserts agreement with `path.win32.join` rather
+than asserting a literal, so the two sides of the IPC cannot drift apart.
+
+One lens — every regex that parses ffmpeg's stderr, where CRLF was the obvious
+suspect — read 46 files and found **nothing**. Worth recording, so nobody pays
+for that search twice.

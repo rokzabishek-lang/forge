@@ -5,10 +5,22 @@ import { emptyProject, type Clip, type MediaAsset, type Project } from '@shared/
 /*
  * Nothing in a filter graph may be newer than the OLDEST bundled ffmpeg.
  *
- * `@ffmpeg-installer` ships a different build per platform — 4.4 on macOS
- * arm64, 4.1-or-older on Windows — so an option added in 4.2 works perfectly
- * on the machine it is written on and kills every render on the machine it
- * ships to. That has now happened three times:
+ * `@ffmpeg-installer` ships a different build per platform, and the Windows one
+ * is not a release at all. `@ffmpeg-installer/win32-x64@4.1.0` declares
+ * `"ffmpeg": "20181217-f22fcd4"` — a static nightly of ffmpeg MASTER taken on
+ * **17 December 2018**, a week after the 4.1 branch point. (macOS arm64 is
+ * `92718-g092cb17983`, which reports itself as 4.4.)
+ *
+ * So the real floor is a DATE, not a version: whatever was merged to master by
+ * 2018-12-17. That distinction is not pedantry, and `tpad` is the proof —
+ * it first appears in the 4.2 release, so "added in 4.2" says it cannot be
+ * used, but it was merged on 30 October 2018 and is therefore present in the
+ * Windows build. `holdFilter` has emitted it all along and Windows CI renders
+ * fine. Judging by release number alone would have sent us rewriting working
+ * code.
+ *
+ * The rule that actually holds: an option works on Windows if it was MERGED
+ * before 2018-12-17, whatever release first carried it. Three have not been:
  *
  *     anullsrc  d=          4.2   every render died before a frame
  *     adelay    all=        4.2   and the naive fix was worse than the bug
@@ -24,7 +36,7 @@ import { emptyProject, type Clip, type MediaAsset, type Project } from '@shared/
  * maintaining it — the whole class of bug goes with it.
  */
 
-/** Option or filter, the version it arrived in, and where it would tempt us. */
+/** Option or filter, the release it first shipped in, and what to use instead. */
 const TOO_NEW: { pattern: RegExp; since: string; why: string }[] = [
   { pattern: /\bnormalize=/, since: '4.2', why: 'amix — pad the inputs and scale by N instead' },
   { pattern: /\bweights=/, since: '4.2', why: 'amix — no pre-4.2 equivalent; mix in stages' },
@@ -116,13 +128,14 @@ const SHAPES: { name: string; project: Project }[] = [
 
 describe('a filter graph runs on the oldest bundled ffmpeg', () => {
   for (const { name, project: p } of SHAPES) {
-    it(`uses nothing newer than 4.1 — ${name}`, () => {
+    it(`uses nothing merged after 2018-12-17 — ${name}`, () => {
       const graph = graphOf(p)
       for (const { pattern, since, why } of TOO_NEW) {
         const hit = pattern.exec(graph)
         expect(
           hit,
-          `"${hit?.[0]}" arrived in ffmpeg ${since}, which the Windows build predates — ${why}`
+          `"${hit?.[0]}" first shipped in ffmpeg ${since}, and was merged after ` +
+            `the Windows build's 2018-12-17 snapshot of master — ${why}`
         ).toBeNull()
       }
     })
