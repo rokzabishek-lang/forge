@@ -58,8 +58,23 @@ export interface MediaAsset {
 }
 
 export interface Transform {
-  /** Offset from centre, in project pixels. */
+  /**
+   * Offset from centre, as a fraction of HALF the canvas.
+   *
+   * So `1` is the full half-width — 960px at 1080p — and `0.5` is a quarter of
+   * the canvas across. Not pixels, which is what this said until an exporter
+   * was written against it: the units are three orders of magnitude apart at
+   * 1080p, and every position it produced would have been wrong without being
+   * obviously wrong.
+   *
+   * The unit is deliberate. It makes the value resolution-independent, which is
+   * what lets a clip keep its position when the project is re-framed from 16:9
+   * to 9:16 — and `clipBox` (render/plan.ts) is the single place it is turned
+   * back into pixels: `(x * canvas.width) / 2`. `gridCells` relies on exactly
+   * this when it derives `x: (2 * bx0 + boxW - canvas.width) / canvas.width`.
+   */
   x: number
+  /** As `x`, but a fraction of half the canvas HEIGHT. */
   y: number
   scale: number
   /**

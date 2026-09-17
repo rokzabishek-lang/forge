@@ -19,7 +19,30 @@ export default defineConfig({
       '@': resolve(__dirname, 'src/renderer/src')
     }
   },
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    /*
+     * Serve the harness at `/`.
+     *
+     * The dev root is `src/renderer`, so without this `/` resolves to
+     * index.html — the REAL app entry, whose fallback bridge has thirteen
+     * inert methods. It renders, then dies on the first call to anything the
+     * fallback does not stub, and the error it shows ("window.forge.<x> is not
+     * a function") reads exactly like a bug in the harness bridge rather than
+     * like the wrong page. That is a genuinely expensive ten minutes, and it is
+     * paid by whoever next types the obvious URL.
+     */
+    {
+      name: 'harness-at-root',
+      configureServer(server) {
+        server.middlewares.use((req, _res, next) => {
+          if (req.url === '/' || req.url === '/index.html') req.url = '/harness.html'
+          next()
+        })
+      }
+    }
+  ],
   define: { __BUILD_STAMP__: JSON.stringify('harness') },
   server: { port: 5199, strictPort: true, open: false }
 })
