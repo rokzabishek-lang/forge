@@ -31,6 +31,12 @@ import { loadCatalog, resolveAssetFile, assetsRootExists, assetsRoot } from './a
 import { preparePlaceableFile, placeableName } from './assets/place'
 import { readTitleSlots, renderSolid, renderText, renderTitle, writeTitleImage, writeTitleFrame, clearTitleFrames } from './titles'
 import { tagMasks } from './transitions/maskTags'
+import { downloadMedia, downloadsDir, type IngestHandle, type IngestOutcome } from './ingest/download'
+import { ensureYtDlp, ytDlpStatus } from './ingest/binary'
+import { CancelledError } from './ffmpeg/run'
+import type { IngestRequest } from '@shared/ingest/args'
+import { parseLink } from '@shared/ingest/url'
+import { QUALITIES } from '@shared/ingest/format'
 
 interface ExportRequest {
   project: Project
@@ -66,6 +72,49 @@ export function registerIpc(getWindow: () => BrowserWindow | null): JobQueue {
     return startRender(options, onProgress)
   }, 1)
 
+  /*
+   * Downloads get a queue of their own.
+   *
+   * The render queue runs one job at a time, because an export is CPU-bound
+   * and two at once are slower than two in a row. A download is network-bound:
+   * behind a twenty-minute export it would wait for nothing, and in front of
+   * one it would hold the export up for nothing. Two queues, one list — the
+   * renderer receives a single array and draws the same bar for both, so
+   * nothing over there has to learn that a job can be a download.
+   */
+  const ingests = new Map<string, { request: IngestRequest; outcome: IngestOutcome | null }>()
+  const downloads = new JobQueue((job, onProgress) => {
+    const entry = ingests.get(job.id)
+    if (!entry) throw new Error('This download is missing its request')
+
+    // The executor must hand back a handle synchronously, but finding (or
+    // fetching) yt-dlp is async. So the handle wraps a promise that does both,
+    // and cancel reaches whichever stage is running.
+    let inner: IngestHandle | null = null
+    let cancelled = false
+    const promise = (async (): Promise<void> => {
+      // The fetch message rides in the speed column, which is free text on
+      // screen — "downloading yt-dlp (~30MB, first time only)" is exactly what
+      // a user staring at 0% needs to read.
+      const tool = await ensureYtDlp((message) => onProgress(0, message))
+      if (cancelled) throw new CancelledError()
+      inner = downloadMedia(entry.request, { command: tool.path }, onProgress)
+      entry.outcome = await inner.promise
+    })()
+    return {
+      promise,
+      cancel: () => {
+        cancelled = true
+        inner?.cancel()
+      }
+    }
+  }, 2)
+
+  const allJobs = (): Job[] => [...queue.list(), ...downloads.list()]
+  const broadcast = (): void => {
+    getWindow()?.webContents.send('jobs:changed', allJobs())
+  }
+
   queue.on('changed', (jobs: Job[]) => {
     for (const job of jobs) {
       if (job.status === 'done' || job.status === 'failed' || job.status === 'cancelled') {
@@ -76,8 +125,9 @@ export function registerIpc(getWindow: () => BrowserWindow | null): JobQueue {
         }
       }
     }
-    getWindow()?.webContents.send('jobs:changed', jobs)
+    broadcast()
   })
+  downloads.on('changed', broadcast)
 
   /* ---------------------------------------------------------------- media */
 
@@ -603,16 +653,92 @@ export function registerIpc(getWindow: () => BrowserWindow | null): JobQueue {
 
   ipcMain.handle('render:cancel', (_e, id: unknown) => {
     if (typeof id !== 'string') throw new Error('Cancel expects a job id')
+    // One X button for both kinds of job. Cancelling an id a queue does not
+    // hold is a no-op, so both can simply be asked.
     queue.cancel(id)
+    downloads.cancel(id)
   })
 
   ipcMain.handle('graphics:selftest', () => runGraphicsSelfTest())
 
-  ipcMain.handle('jobs:list', () => queue.list())
+  ipcMain.handle('jobs:list', () => allJobs())
   ipcMain.handle('jobs:clearFinished', () => {
     queue.clearFinished()
+    downloads.clearFinished()
     for (const id of renders.keys()) {
       if (!queue.list().some((j) => j.id === id)) renders.delete(id)
+    }
+    for (const id of ingests.keys()) {
+      if (!downloads.list().some((j) => j.id === id)) ingests.delete(id)
+    }
+  })
+
+  /* --------------------------------------------------------------- ingest */
+
+  ipcMain.handle('ingest:status', () => ytDlpStatus())
+
+  ipcMain.handle('ingest:start', (_e, payload: unknown) => {
+    const raw = (payload ?? {}) as Partial<IngestRequest> & { range?: unknown }
+    if (typeof raw.url !== 'string') throw new Error('A download needs a link')
+    const link = parseLink(raw.url)
+    if (!link) throw new Error('That is not a link yt-dlp can read')
+
+    // Everything is re-validated here: the renderer proposes, main decides
+    // what is actually spawned.
+    const range =
+      raw.range &&
+      typeof raw.range === 'object' &&
+      Number.isFinite((raw.range as { startMs?: unknown }).startMs) &&
+      Number.isFinite((raw.range as { endMs?: unknown }).endMs)
+        ? {
+            startMs: (raw.range as { startMs: number }).startMs,
+            endMs: (raw.range as { endMs: number }).endMs
+          }
+        : null
+    const request: IngestRequest = {
+      url: link.url,
+      kind: raw.kind === 'audio' ? 'audio' : 'video',
+      quality: QUALITIES.includes(raw.quality as never) ? (raw.quality as IngestRequest['quality']) : '1080p',
+      audioFormat: raw.audioFormat === 'mp3' ? 'mp3' : 'm4a',
+      range,
+      exact: raw.exact === true
+    }
+
+    return downloads.add(
+      {
+        presetId: 'ingest',
+        input: link.url,
+        inputName: link.kind === 'youtube' ? `YouTube · ${link.videoId}` : link.url,
+        // The final path is unknown until yt-dlp says; the folder is what the
+        // "reveal" button can honestly point at meanwhile.
+        output: downloadsDir(),
+        params: {}
+      },
+      (id) => ingests.set(id, { request, outcome: null })
+    )
+  })
+
+  /**
+   * The finished download as an asset, named after the video rather than the
+   * file — the same split assets:place makes, so nothing downstream learns the
+   * clip came from a link. Pulled by the renderer once the job reads `done`,
+   * rather than pushed, so a reload between the two does not lose it.
+   */
+  ipcMain.handle('ingest:collect', async (_e, payload: unknown) => {
+    const { jobId, fps } = (payload ?? {}) as { jobId?: unknown; fps?: unknown }
+    if (typeof jobId !== 'string') throw new Error('Collecting a download needs its job id')
+    const entry = ingests.get(jobId)
+    if (!entry?.outcome) throw new Error('That download has not finished')
+
+    const projectFps = typeof fps === 'number' && fps > 0 ? fps : 30
+    const { ok, failed } = await probeMany([entry.outcome.path])
+    if (ok.length === 0) throw new Error(failed[0]?.error ?? 'Could not read the downloaded file')
+
+    return {
+      asset: toAsset({ ...ok[0], name: entry.outcome.title ?? basename(entry.outcome.path) }, projectFps),
+      cached: entry.outcome.cached,
+      approximateRange: entry.outcome.approximateRange,
+      requestedRange: entry.outcome.requestedRange
     }
   })
 

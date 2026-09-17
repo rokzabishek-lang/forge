@@ -108,9 +108,15 @@ stock-footage API.
 - "Download only mp3 of the link 'NO'. From youtube mp4 = Download, MP3 = 'YES'"
 - Boxed at the bottom: **"Download using YT-DLP"**
 
-**Status — not started.** The tab exists and is labelled "soon", with this
-quality ladder written into its description. Neither yt-dlp nor Demucs appears
-anywhere in the code or the Python sidecar.
+**Status — main process built, renderer not.** The line that used to be here —
+"neither yt-dlp nor Demucs appears anywhere" — was wrong about Demucs for some
+time: `audio.stems` has been wired end to end in the sidecar, with a mid/side
+fallback in `src/main/stems.ts`. Planning from that sentence would have rebuilt
+it. The download half is now real too: `src/shared/ingest/` (links, formats,
+progress, range clipping — pure, tested), `src/main/ingest/` (yt-dlp fetched on
+first use and checksum-verified, downloads as queue jobs with the same bar and
+cancel as exports), and the IPC. What remains is the body of the "soon" tab.
+See `docs/INGEST.md`.
 
 ---
 
@@ -229,10 +235,14 @@ play preview box. To the right:
 > "clip download ⇒ Mp4 ⇒ quality / MP3 = Download / Vocal only = Download /
 > Instruments = Download"
 
-**Status — not started.** Adds something sheet 5 does not: **clipping a range
-before the download**, which saves pulling an hour-long video for eight seconds
-of it. When YouTube ingest is built, build it with the range picker from the
-start.
+**Status — built into the download path, no UI yet.** Adds something sheet 5
+does not: **clipping a range before the download**, which saves pulling an
+hour-long video for eight seconds of it. It went into the args layer from the
+start rather than being bolted on: `src/shared/ingest/section.ts` offers both
+cuts, because they are genuinely different — *exact* re-encodes at the marks
+and is slow on 4K; *fast* copies streams and lands early by up to a keyframe,
+so it pads outward and the ends are placed precisely on the timeline instead.
+The two handles and the preview box are still to draw.
 
 ---
 

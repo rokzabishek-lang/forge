@@ -7,6 +7,7 @@ import type { HelloResult } from '@shared/sidecar/protocol'
 import type { AssetCatalog } from '@shared/assets/catalog'
 import type { TransitionDef } from '@shared/transitions/registry'
 import type { MusicAnalysis } from '@shared/automation/cutPlan'
+import type { IngestRequest } from '@shared/ingest/args'
 
 export interface ProbeResult {
   assets: MediaAsset[]
@@ -179,6 +180,32 @@ const api = {
     backend: string
     quality: 'separated' | 'emphasised'
   }> => ipcRenderer.invoke('audio:stems', { path, quality }),
+
+  /** Is yt-dlp on this machine — and if not, why not. Never fetches. */
+  ingestStatus: (): Promise<{
+    ready: boolean
+    tool: { path: string; source: 'env' | 'managed' | 'path'; version: string | null } | null
+    reason: string | null
+  }> => ipcRenderer.invoke('ingest:status'),
+
+  /**
+   * Start a download. It appears in the job list beside the exports, with the
+   * same bar and the same cancel; watch `onJobsChanged` for it to read `done`,
+   * then `collectIngest` it.
+   */
+  startIngest: (request: IngestRequest): Promise<Job> => ipcRenderer.invoke('ingest:start', request),
+
+  /** The finished file as an asset, named after the video rather than the file. */
+  collectIngest: (
+    jobId: string,
+    fps: number
+  ): Promise<{
+    asset: MediaAsset
+    cached: boolean
+    /** The fast range path was taken: the ends are loose and want trimming. */
+    approximateRange: boolean
+    requestedRange: { startMs: number; endMs: number } | null
+  }> => ipcRenderer.invoke('ingest:collect', { jobId, fps }),
 
   /** Which speech engines are usable, and why not when they are not. */
   voiceStatus: (): Promise<

@@ -26,7 +26,14 @@ export interface RunHandle {
 /** Keep the tail of stderr — ffmpeg's actual error is always in the last few lines. */
 const MAX_STDERR_LINES = 12
 
-function killProcess(child: ChildProcess): void {
+/**
+ * Kill a child and everything it spawned.
+ *
+ * Exported because yt-dlp needs the same treatment: it spawns its own ffmpeg to
+ * merge streams, and a plain `child.kill()` would leave that grandchild running
+ * to completion on a download the user cancelled.
+ */
+export function killProcess(child: ChildProcess): void {
   if (!child.pid || child.killed) return
   if (process.platform === 'win32') {
     // SIGTERM is not a real signal on Windows and leaves ffmpeg orphaned.

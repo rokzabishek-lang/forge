@@ -72,6 +72,22 @@ export function parseProgressLine(line: string): ProgressLine | null {
   }
 }
 
+/**
+ * Bytes per second as a person reads it, for the job list's speed column.
+ *
+ * ffmpeg's jobs show `2.3x` there; a download shows `1.2 MB/s`. Null when
+ * yt-dlp has not measured one yet, so the column falls back to the percentage
+ * rather than showing `0 B/s` for a transfer that is plainly moving.
+ */
+export function formatSpeed(bytesPerSecond: number | null): string | null {
+  if (bytesPerSecond === null || !Number.isFinite(bytesPerSecond) || bytesPerSecond <= 0) {
+    return null
+  }
+  if (bytesPerSecond < 1024) return `${Math.round(bytesPerSecond)} B/s`
+  if (bytesPerSecond < 1024 * 1024) return `${(bytesPerSecond / 1024).toFixed(0)} KB/s`
+  return `${(bytesPerSecond / (1024 * 1024)).toFixed(1)} MB/s`
+}
+
 export interface IngestProgress {
   /** 0..1, or null while nothing can honestly be said. */
   progress: number | null

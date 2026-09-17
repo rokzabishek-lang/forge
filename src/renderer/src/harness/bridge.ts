@@ -364,6 +364,10 @@ export function installHarnessBridge(): void {
       quality: 'emphasised' as const
     }),
 
+    ingestStatus: async () => ({ ready: false, tool: null, reason: 'harness: no yt-dlp' }),
+    startIngest: unsupported('Downloading'),
+    collectIngest: unsupported('Downloading'),
+
     voiceStatus: async () => [
       { id: 'kokoro' as const, label: 'Kokoro (on this machine)', kind: 'local' as const, ready: false, reason: 'harness: no sidecar' },
       { id: 'hosted' as const, label: 'Hosted API', kind: 'hosted' as const, ready: false, reason: 'harness: no network' }
