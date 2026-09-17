@@ -185,6 +185,8 @@ is the only place it can.
   range. Two clicks from paste to clip is the number to hit.
 - Nothing cleans `<userData>/downloads/`. It is the first cache in the app big
   enough for that to matter.
+- The first download on a packaged app fetches yt-dlp (~30MB). That step is
+  untested on a clean Windows machine — see `docs/PACKAGING.md`.
 
 ## Instrumental and vocal are inside the job
 

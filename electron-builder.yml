@@ -1,0 +1,105 @@
+# How Forge becomes something a person can install.
+#
+# Three things in this file are load-bearing, and every one of them is a rule
+# the CODE already depends on. Change one here and the app breaks on a user's
+# machine while working perfectly in `npm run dev`, which is the whole reason
+# packaging is the part that has to be got right rather than got done.
+#
+#   asarUnpack     `src/main/ffmpeg/paths.ts` rewrites `app.asar` to
+#                  `app.asar.unpacked` for the two binaries. Nothing can be
+#                  EXECUTED from inside an asar archive, so without this
+#                  `assertBinaries()` puts up its dialog and the app is inert.
+#
+#   extraResources `assetsRoot()` and `sidecarDir()` both resolve to
+#                  `process.resourcesPath/<name>` once packaged. Python cannot
+#                  import from inside an asar any more than ffmpeg can execute
+#                  from one, so the sidecar has to sit beside the app rather
+#                  than inside it.
+#
+#   the excludes   `sidecar/.venv` is 542MB of platform-specific interpreter,
+#                  and `sidecar/:memory:.ses` has a colon in its name — which
+#                  Windows forbids, so an installer carrying it would fail to
+#                  extract on the machine it is aimed at.
+#
+# BUILD EACH PLATFORM ON ITS OWN PLATFORM. `@ffmpeg-installer` ships the binary
+# as an OPTIONAL dependency per platform, so a Mac has only `darwin-arm64`
+# installed: `npm run pack:win` from macOS produces an installer with no ffmpeg
+# in it at all. CI does both — see `.github/workflows/ci.yml`.
+
+appId: in.syncpod.forge
+productName: Forge
+copyright: Copyright © 2026
+
+directories:
+  buildResources: build
+  output: dist
+
+# electron-vite compiles to `out/`; `package.json` names it as the entry point.
+# Production dependencies come in automatically — they are what
+# `externalizeDepsPlugin` deliberately left external.
+files:
+  - out/**
+  - package.json
+  - '!**/*.map'
+  - '!**/*.ts'
+
+asarUnpack:
+  - node_modules/@ffmpeg-installer/**
+  - node_modules/@ffprobe-installer/**
+  # sharp carries native bindings, which have the same "cannot run from an
+  # archive" problem as the two binaries above.
+  - node_modules/sharp/**
+  - node_modules/@img/**
+
+extraResources:
+  # The asset library — fonts, SFX, transitions, titles, props. ~81MB, and
+  # `scanAssets` reads it from here at startup.
+  - from: assets
+    to: assets
+
+  # The Python sidecar, without its virtualenv. A user's interpreter is their
+  # own; `docs/SIDECAR.md` covers setting one up, and until they do the sidecar
+  # reports every optional capability as degraded rather than failing to start.
+  - from: sidecar
+    to: sidecar
+    filter:
+      - '**/*'
+      - '!.venv'
+      - '!.venv/**'
+      - '!**/__pycache__/**'
+      - '!**/*.py[cod]'
+      # Illegal on Windows. Left behind by a test that was handed ':memory:' as
+      # a database path; it is gitignored, but it is still on disk here.
+      - '!**/*:memory:*'
+
+win:
+  # NSIS rather than a portable exe: the app writes to userData (downloads,
+  # stems, the fetched yt-dlp), and an installed app is the shape that has a
+  # sensible place for those.
+  target:
+    - target: nsis
+      arch: [x64]
+  artifactName: ${productName}-${version}-windows-${arch}.${ext}
+
+nsis:
+  # Not one-click. A first install on a machine nobody has tested is exactly
+  # when someone wants to see where it is going and be able to undo it.
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+
+mac:
+  category: public.app-category.video
+  target:
+    - target: dmg
+      arch: [arm64]
+  artifactName: ${productName}-${version}-mac-${arch}.${ext}
+  # Unsigned for now. macOS will refuse to open it without right-click > Open;
+  # signing needs a paid Developer ID and is a separate decision.
+  identity: null
+
+# Nothing is published from here. Releases are a deliberate act, not a
+# side effect of a build.
+publish: null

@@ -50,3 +50,49 @@ jobs:
       - run: npm test
 
       - run: npm run build
+
+  package:
+    name: installer (${{ matrix.os }})
+    # Only once the suite is green on BOTH platforms. An installer built from a
+    # red commit is a thing someone will install.
+    needs: test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            script: pack:win
+          - os: macos-latest
+            script: pack:mac
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      # The reason this job exists at all, and why it cannot run on one runner
+      # and cross-compile: `@ffmpeg-installer` ships the binary as an OPTIONAL
+      # dependency per platform, so `npm ci` on a Mac installs only
+      # darwin-arm64. Packing Windows from macOS yields an installer with no
+      # ffmpeg in it — the app then starts and puts up assertBinaries()'s
+      # dialog on the user's machine, which is the worst possible place to find
+      # out. Each platform packs itself.
+      - run: npm ci
+
+      - run: npm run ${{ matrix.script }}
+
+      # Uploaded rather than released. A release is a deliberate act; this is
+      # just "something to install on the Surface this afternoon".
+      - uses: actions/upload-artifact@v4
+        with:
+          name: forge-${{ matrix.os }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            dist/*.exe
+            dist/*.dmg
+            dist/*.zip

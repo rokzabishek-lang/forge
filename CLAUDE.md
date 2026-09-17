@@ -104,7 +104,7 @@ npm run dev         # electron-vite dev
 npm run typecheck   # both tsconfigs
 npm test            # vitest, integration tests included
 npm run build       # electron-vite build
-npm run pack:win    # electron-builder — no config yet, see below
+npm run pack:win    # electron-builder — must run ON Windows, see below
 ```
 
 CI runs typecheck, the **full** suite including the ffmpeg integration tests,
@@ -112,9 +112,20 @@ and the build, on macOS **and** Windows for every push. The integration tests ar
 in CI deliberately: a runner's `D:\a\forge\forge` path is exactly the shape that
 breaks filter arguments.
 
-**Known gap:** `pack:mac`/`pack:win` exist as scripts but there is no
-electron-builder configuration yet, and CI uploads no artifacts. Producing a
-real installer is unfinished work.
+**Packaging is configured** — `electron-builder.yml`, and a CI job that builds
+an installer on each platform and uploads it as an artifact. Read
+`docs/PACKAGING.md` before touching it; three paths in `src/main` only resolve
+because that config puts something where they look, and none of them can fail
+in development.
+
+**Each platform must build itself.** `@ffmpeg-installer` ships its binary as an
+optional dependency per platform, so `npm ci` on a Mac installs only
+`darwin-arm64` — `npm run pack:win` from macOS yields an installer with no
+ffmpeg at all, and the app greets the user with `assertBinaries()`'s dialog.
+Get the Windows installer from CI, or build it on the Surface.
+
+Neither build is signed yet, and `productName` is still the placeholder
+`Forge`.
 
 ---
 
