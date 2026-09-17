@@ -90,9 +90,22 @@ async function meanLuma(file: string, atSeconds: number): Promise<number> {
 
 describe('caption burn-in', () => {
   it('escapes filter paths so colons and spaces survive', () => {
+    /*
+     * This asserted a single backslash on the colon and on the apostrophe, and
+     * passed for months — because the form it encoded is the one every example
+     * shows, and because the damage it does is invisible on a Mac. A path in a
+     * filtergraph crosses two parsers: one backslash on a colon is consumed by
+     * the first, and everything before the colon is lost. On macOS that is
+     * nothing; on Windows it is `C`, and the export dies looking for a path on
+     * a drive that was never named.
+     *
+     * The counts are measured, not reasoned — see
+     * tests/integration/filterPath.int.test.ts, which renders a real file at a
+     * path containing each character and checks ffmpeg actually opens it.
+     */
     expect(escapeFilterPath('/Users/me/my project/a.ass')).toBe('/Users/me/my project/a.ass')
-    expect(escapeFilterPath('C:\\Users\\me\\a.ass')).toBe('C\\:/Users/me/a.ass')
-    expect(escapeFilterPath("/tmp/it's.ass")).toBe("/tmp/it\\'s.ass")
+    expect(escapeFilterPath('C:\\Users\\me\\a.ass')).toBe('C\\\\:/Users/me/a.ass')
+    expect(escapeFilterPath("/tmp/it's.ass")).toBe("/tmp/it\\\\\\'s.ass")
   })
 
   it('maps source time to timeline time for a trimmed clip', () => {

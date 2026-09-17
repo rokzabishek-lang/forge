@@ -114,13 +114,35 @@ export function buildTimelineCaptions(
  * layer of escaping.
  */
 export function escapeFilterPath(path: string): string {
-  const normalised = path.replace(/\\/g, '/')
-  return normalised
-    .replace(/'/g, "\\'")
-    .replace(/:/g, '\\:')
-    .replace(/\[/g, '\\[')
-    .replace(/\]/g, '\\]')
-    .replace(/,/g, '\\,')
+  /*
+   * A path inside a filtergraph passes TWO parsers, and they want different
+   * amounts of escaping. That is not a guess — every count below was measured
+   * against the bundled binary by creating a real file at a path containing the
+   * character and seeing which form actually loaded it:
+   *
+   *     ,  [  ]  ;    one backslash    graph-level separators
+   *     :  =          TWO              option separators; the graph parser
+   *                                    eats one backslash on the way past
+   *     '             THREE            a quote at both levels, and the escape
+   *                                    itself is consumed at each
+   *     space         none             passes through untouched
+   *
+   * One backslash on a colon — which is what this used to emit, and what every
+   * example on the internet shows — silently loses everything before it. On
+   * Windows that is the drive letter, so `C:/Users/…/captions.ass` reached
+   * ffmpeg as `/Users/…/captions.ass` and every export that touched a subtitle
+   * file, a LUT or a look failed with "No such file or directory". It could not
+   * happen on macOS, where no path starts with a drive letter, so the whole
+   * class of bug was invisible here until CI ran the suite on Windows.
+   *
+   * Order matters only in that the backslashes these rules emit must not be
+   * re-escaped by a later rule, and none of them match a backslash.
+   */
+  return path
+    .replace(/\\/g, '/')
+    .replace(/'/g, "\\\\\\'")
+    .replace(/([:=])/g, '\\\\$1')
+    .replace(/([,;[\]])/g, '\\$1')
 }
 
 /** Total timeline length as an ASS timestamp, for logs and diagnostics. */
