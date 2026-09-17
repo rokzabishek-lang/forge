@@ -245,7 +245,9 @@ describe('audio track mixing', () => {
   it('delays the clip to its timeline position', () => {
     const filters = argString(buildRenderPlan({ project: withMusic(), outputPath: '/o.mp4' }).args)
     // 30 frames at 30fps = 1000ms. Without adelay every clip stacks at zero.
-    expect(filters).toContain('adelay=1000:all=1')
+    // Repeated per channel rather than `:all=1`, which the Windows ffmpeg does
+    // not have. A bare `adelay=1000` would delay only the left channel.
+    expect(filters).toContain('adelay=1000|1000|1000|1000|1000|1000|1000|1000')
   })
 
   it('omits adelay for a clip that starts at zero', () => {

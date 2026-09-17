@@ -1732,6 +1732,21 @@ The immediate fix was small — the option was never needed, because the output
 already carries `-t`, which is what actually bounds the stream. Measured both
 ways on the same graph: 4.00s with it and 4.00s without.
 
+`adelay`'s `all` option went the same way, and that one had a trap in it.
+Dropping `all=1` and leaving `adelay=500` would have been *worse than the error
+it replaced*: a bare delay applies to the FIRST CHANNEL ONLY, so every clip with
+a timeline offset would have played its left channel late and its right on time
+— a desync that renders happily and sounds wrong. Measured on a stereo tone:
+
+| form | left | right |
+|---|---|---|
+| `adelay=500:all=1` | delayed | delayed |
+| `adelay=500\|500` | delayed | delayed |
+| `adelay=500` | delayed | **still playing at −24dB** |
+
+So the delay is repeated once per channel, eight times — enough for 5.1, and
+harmless on stereo where the extras are ignored.
+
 **The standing rule it leaves behind: anything reached for in a filter graph has
 to exist in the OLDEST bundled build, not the newest.** Developing on 4.4 and
 shipping 4.1 means a filter added in between works perfectly for months and then

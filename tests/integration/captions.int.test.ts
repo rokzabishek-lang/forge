@@ -81,7 +81,11 @@ async function meanLuma(file: string, atSeconds: number): Promise<number> {
   ])
   const { stdout } = await run(FFPROBE, [
     '-v', 'error', '-f', 'lavfi',
-    `-i`, `movie=${frame.replace(/:/g, '\\:')},signalstats`,
+    // `escapeFilterPath`, not a hand-rolled colon escape. This helper had its
+    // own one-backslash version — the same bug the real code had — which on
+    // Windows fed ffprobe a backslash path and a half-eaten drive letter:
+    // "Failed to avformat_open_input 'C'".
+    `-i`, `movie=${escapeFilterPath(frame)},signalstats`,
     '-show_entries', 'frame_tags=lavfi.signalstats.YAVG',
     '-of', 'default=nw=1:nk=1'
   ])

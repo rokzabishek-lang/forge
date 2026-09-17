@@ -1225,7 +1225,21 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
        */
       ...atempoChain(clipSpeed(clip)),
       volume === 1 ? null : `volume=${volume}`,
-      delayMs > 0 ? `adelay=${delayMs}:all=1` : null
+      /*
+       * One delay per channel, repeated — not `:all=1`.
+       *
+       * `all` arrived in ffmpeg 4.2, and `@ffmpeg-installer` ships an older
+       * build on Windows (docs/EFFECTS.md §25), where it is "Option not found"
+       * and the whole graph fails to initialise.
+       *
+       * Simply dropping it would be worse than the error it replaces: a bare
+       * `adelay=500` delays only the FIRST channel, so every clip with a
+       * timeline offset would play its left channel late and its right on time.
+       * Measured — L came back silent for the first 400ms and R still running
+       * at −24dB. Eight repeats cover 5.1 and are harmless on stereo, where the
+       * extras are ignored.
+       */
+      delayMs > 0 ? `adelay=${Array(8).fill(delayMs).join('|')}` : null
     ]
       .filter((x): x is string => x !== null)
       .join(',')
