@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { Clapperboard, DownloadCloud, Loader2, Upload } from 'lucide-react'
 import { useEditor, type SourceMode } from '../store'
+import { IngestPanel } from './IngestPanel'
 
 /**
  * Where material comes from.
@@ -10,9 +11,9 @@ import { useEditor, type SourceMode } from '../store'
  * what you choose AFTER pasting a link, along with the quality. Modelling them
  * as top-level tabs would make four of five lead to the same screen.
  *
- * Only the first is built. The other two say what they will do rather than
- * pretending: an entry point that quietly does nothing is the thing that made
- * half this app feel broken.
+ * Narration is still unbuilt and says what it will do rather than pretending:
+ * an entry point that quietly does nothing is the thing that made half this app
+ * feel broken.
  */
 
 const MODES: {
@@ -32,8 +33,7 @@ const MODES: {
     id: 'youtube',
     label: 'YouTube',
     icon: DownloadCloud,
-    hint: 'Paste a link, choose the quality, take the video or just the audio',
-    soon: 'Paste a link → pick 4K/1080/720/480 → video, audio, or the instrumental.'
+    hint: 'Paste a link, choose the quality, take the video or just the audio'
   },
   {
     id: 'narration',
@@ -87,7 +87,7 @@ export function SourceBar(): ReactNode {
         })}
 
         <div className="ml-auto">
-          {sourceMode === 'upload' ? (
+          {sourceMode === 'youtube' ? null : sourceMode === 'upload' ? (
             <button
               onClick={() => void pick()}
               disabled={busy}
@@ -101,6 +101,8 @@ export function SourceBar(): ReactNode {
           )}
         </div>
       </div>
+
+      {sourceMode === 'youtube' && <IngestPanel />}
 
       {current.soon && (
         <div className="border-t border-ink-850 px-3 py-1.5 text-[10.5px] leading-snug text-ink-600">

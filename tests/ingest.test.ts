@@ -1,12 +1,19 @@
 import { describe, it, expect } from 'vitest'
-import { parseLink, youtubeId } from '@shared/ingest/url'
+import { linkProblem, LINK_PROBLEM_TEXT, parseLink, youtubeId } from '@shared/ingest/url'
 import { formatFor, outputTemplate, QUALITIES } from '@shared/ingest/format'
 import {
   createIngestProgress,
   parseProgressLine,
   PROGRESS_TEMPLATE
 } from '@shared/ingest/progress'
-import { offsetIntoDownload, PAD_MS, sectionPlan } from '@shared/ingest/section'
+import {
+  formatMark,
+  offsetIntoDownload,
+  PAD_MS,
+  parseMark,
+  sectionPlan,
+  trimToRequestedRange
+} from '@shared/ingest/section'
 import { VIDEO_EXT, AUDIO_EXT } from '@shared/media'
 
 describe('reading a pasted link', () => {
@@ -454,5 +461,113 @@ describe('clipping a range before the download', () => {
   it('is finer than any frame rate, so a handle never lands between frames', () => {
     const plan = sectionPlan({ startMs: 1_001, endMs: 2_002 }, true)
     expect(plan.args[1]).toBe('*1.001-2.002')
+  })
+})
+
+describe('trimming the clip to what was marked', () => {
+  it('removes exactly the padding the fast path added', () => {
+    // 60s–90s at 30fps: the pad puts 10s in front, so the clip starts 300
+    // frames in and runs the 900 frames that were actually marked.
+    expect(trimToRequestedRange({ startMs: 60_000, endMs: 90_000 }, 1500, 30)).toEqual({
+      inPoint: 300,
+      duration: 900
+    })
+  })
+
+  it('only removes the padding that fitted, near the start of a video', () => {
+    // 2s in, so there was only 2s of room for a 10s pad.
+    expect(trimToRequestedRange({ startMs: 2_000, endMs: 8_000 }, 600, 30)).toEqual({
+      inPoint: 60,
+      duration: 180
+    })
+    expect(trimToRequestedRange({ startMs: 0, endMs: 5_000 }, 450, 30)).toEqual({
+      inPoint: 0,
+      duration: 150
+    })
+  })
+
+  it('never points past the end of a download shorter than the pad', () => {
+    /*
+     * The case that produced a clip showing nothing: an unclamped in-point ran
+     * past the media it was cut from. A short or truncated download must still
+     * yield a playable clip.
+     */
+    const short = trimToRequestedRange({ startMs: 60_000, endMs: 90_000 }, 30, 30)
+    expect(short.inPoint).toBeLessThan(30)
+    expect(short.inPoint + short.duration).toBeLessThanOrEqual(30)
+    expect(short.duration).toBeGreaterThanOrEqual(1)
+  })
+
+  it('never returns a zero-length clip', () => {
+    for (const total of [1, 2, 5, 60, 1500]) {
+      const t = trimToRequestedRange({ startMs: 60_000, endMs: 90_000 }, total, 30)
+      expect(t.duration, `total=${total}`).toBeGreaterThanOrEqual(1)
+      expect(t.inPoint, `total=${total}`).toBeGreaterThanOrEqual(0)
+    }
+  })
+
+  it('repairs a backwards range rather than producing a negative one', () => {
+    expect(trimToRequestedRange({ startMs: 90_000, endMs: 60_000 }, 1500, 30)).toEqual(
+      trimToRequestedRange({ startMs: 60_000, endMs: 90_000 }, 1500, 30)
+    )
+  })
+})
+
+describe('marks a person types', () => {
+  it('reads the shapes people actually write', () => {
+    expect(parseMark('90')).toBe(90_000)
+    expect(parseMark('1:30')).toBe(90_000)
+    expect(parseMark('1:30.5')).toBe(90_500)
+    expect(parseMark('01:02:03')).toBe(3_723_000)
+    expect(parseMark('  2:05  ')).toBe(125_000)
+    expect(parseMark('0')).toBe(0)
+  })
+
+  it('refuses what it cannot read instead of quietly meaning zero', () => {
+    /*
+     * `Number('1:30')` is NaN, and NaN milliseconds reaching
+     * --download-sections is how a range silently stops meaning anything. The
+     * field says so rather than becoming 0:00.
+     */
+    for (const bad of ['', '   ', 'abc', '1:', ':30', '1:2:3:4', '1:99', '-5', '1e3', '90s']) {
+      expect(parseMark(bad), bad).toBeNull()
+    }
+  })
+
+  it('round-trips through the formatter', () => {
+    for (const ms of [0, 1_500, 90_500, 125_000, 3_723_000]) {
+      expect(parseMark(formatMark(ms)), String(ms)).toBe(ms)
+    }
+  })
+
+  it('grows to hours only when there are hours to show', () => {
+    expect(formatMark(90_500)).toBe('1:30.5')
+    expect(formatMark(3_723_000)).toBe('1:02:03.0')
+  })
+})
+
+describe('what is wrong with a pasted link', () => {
+  it('gives one answer, which both the panel and the store use', () => {
+    expect(linkProblem('')).toBe('empty')
+    expect(linkProblem('   ')).toBe('empty')
+    expect(linkProblem('hello')).toBe('not-a-link')
+    expect(linkProblem('https://y')).toBe('not-a-link')
+    expect(linkProblem('https://www.youtube.com/playlist?list=PLabc')).toBe('collection')
+    expect(linkProblem('https://www.youtube.com/@channel/videos')).toBe('collection')
+    expect(linkProblem('https://youtu.be/dQw4w9WgXcQ')).toBeNull()
+  })
+
+  it('does not call a half-typed link a playlist', () => {
+    // The two callers used to decide separately and could contradict each
+    // other about the same text at the same moment.
+    for (const partial of ['h', 'http', 'https:/', 'https://', 'https://www.you']) {
+      expect(linkProblem(partial), partial).not.toBe('collection')
+    }
+  })
+
+  it('has a message for every problem it can report', () => {
+    for (const problem of ['empty', 'not-a-link', 'collection'] as const) {
+      expect(LINK_PROBLEM_TEXT[problem].length).toBeGreaterThan(10)
+    }
   })
 })

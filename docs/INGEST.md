@@ -5,8 +5,8 @@ on the timeline. `SHEETS.md` called this "the largest single hole, and upstream
 of everything that already works" — the lyric chain, beat sync and the grid all
 need music *in*, and until this there was no way to get it in.
 
-**Status:** the pure layer and the main process are built and tested. The body
-of the "soon" tab in the source bar is not yet drawn.
+**Status:** built end to end — pure layer, main process, IPC and the panel.
+Paste a link and press Get: two clicks to a clip on the timeline.
 
 ---
 
@@ -23,6 +23,8 @@ of the "soon" tab in the source bar is not yet drawn.
 | main | `ingest/binary.ts` | find or fetch yt-dlp, verified |
 | main | `ingest/download.ts` | spawn, parse, kill the tree, clean up, hand back the file |
 | main | `ipc.ts` | a second `JobQueue`, `ingest:status` / `start` / `collect` |
+| renderer | `components/IngestPanel.tsx` | the panel: link, what to take, the marks |
+| renderer | `store.ts` | `startIngest`, and collecting a finished job into a clip |
 
 Everything with a decision in it is in `shared/`, where it runs in a unit test
 with no binary, no network and no electron — 39 tests over the pure layer, and
@@ -208,3 +210,54 @@ success. Cancellation is checked on the signal first now, and never falls back.
 The asset's name says what it is — `Song (instrumental)` when Demucs answered,
 `Song (instrumental, mid/side)` when it did not — because "emphasised" must not
 be allowed to read as a clean stem in the media pool.
+
+
+---
+
+## The renderer half
+
+**The marks are typed, not dragged, and that was not the first design.** Two
+range sliders were the obvious control and the wrong one: the video's length is
+unknown until it has been fetched, so a slider has no scale to be drawn against.
+The first version derived the end slider's `max` from its own value, which made
+the track rescale under the pointer on every move — **a seven-pixel drag added
+four and a half minutes to the range**, measured in the browser by someone
+dragging it. Worse, the two sliders ran on different scales, so the start thumb
+drew to the right of the end thumb for any start past halfway.
+
+Typed marks have no scale to get wrong and reach an hour in as many keystrokes
+as a minute. `parseMark` reads `90`, `1:30`, `1:30.5` and `01:02:03`, and
+**refuses** what it cannot read rather than quietly becoming zero — `Number('1:30')`
+is `NaN`, and NaN milliseconds reaching `--download-sections` is how a range
+stops meaning anything.
+
+**Collection is keyed on the job, not on the window.** A finished download is
+turned into a clip when its job reaches `done`. Gating that on renderer state
+meant a reload — Cmd+R, which the app allows — silently orphaned a download
+that was still running. `presetId === 'ingest'` comes from main and survives
+anything the renderer does.
+
+**A download remembers which project it belongs to.** A 4K fetch is minutes;
+opening another project meanwhile used to append the asset, the clip and the
+trim to *that* one, mark it dirty and move its playhead. Now it says where the
+file was saved and leaves the wrong project alone.
+
+**One press of Get is one undo step.** The asset, the placement and the trim
+were three, so a single Cmd+Z left the untrimmed padded clip behind — which
+reads as the trim having failed rather than as undo working.
+
+**The trim arithmetic lives in `shared/`, not in the store.** This project has
+no renderer tests, so anything with a decision in it belongs where it can be
+checked. Moving it found a real bug on the way: an unclamped in-point pointed
+past the end of a download shorter than the pad, placing a clip that shows
+nothing.
+
+### The honest limit of a fast cut
+
+`trimToRequestedRange` removes the padding the fast path added, so the clip that
+lands matches the marks. But the downloaded file begins at the nearest keyframe
+*at or before* the padded mark, and how much earlier that is cannot be known
+from the renderer. `PAD_MS` is a lower bound on the head, so a fast cut can
+still carry a little unmarked pre-roll. That is the trade the fast path exists
+to make — and why the exact option, which re-encodes at the marks, is offered
+beside it rather than instead of it.

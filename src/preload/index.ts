@@ -200,6 +200,8 @@ const api = {
     jobId: string,
     fps: number
   ): Promise<{
+    /** Where the file actually is — not always inside the downloads folder. */
+    path: string
     asset: MediaAsset
     cached: boolean
     /** The fast range path was taken: the ends are loose and want trimming. */

@@ -1,6 +1,10 @@
 import { create } from 'zustand'
 import type { Job } from '@shared/types'
 import { samePath } from '@shared/assetPath'
+import { linkProblem, LINK_PROBLEM_TEXT, parseLink } from '@shared/ingest/url'
+import { trimToRequestedRange } from '@shared/ingest/section'
+import type { IngestWant, AudioFormat } from '@shared/ingest/args'
+import type { Quality } from '@shared/ingest/format'
 import type {
   Clip,
   ColorAdjust,
@@ -117,6 +121,21 @@ export type PreviewTool = 'select' | 'crop' | 'mask'
 
 /** Where material comes from. Only `upload` is built; see SourceBar. */
 export type SourceMode = 'upload' | 'youtube' | 'narration'
+
+/** Everything the YouTube panel holds between opening it and pressing Get. */
+export interface IngestForm {
+  url: string
+  kind: IngestWant
+  quality: Quality
+  audioFormat: AudioFormat
+  /** Whether the range handles apply at all. */
+  useRange: boolean
+  startMs: number
+  endMs: number
+  /** Re-encode at the marks. Slower, and exact. */
+  exact: boolean
+  busy: boolean
+}
 
 /**
  * Text edits in flight, coalesced per clip.
@@ -254,7 +273,25 @@ interface EditorState {
   sourceMode: SourceMode
   setSourceMode: (mode: SourceMode) => void
 
+  /** What the YouTube panel currently has in it, kept across tab switches. */
+  ingest: IngestForm
+  setIngest: (patch: Partial<IngestForm>) => void
+  /**
+   * Start a download. Returns once the job is QUEUED, not once it is done —
+   * the clip arrives later, when `setJobs` sees the job reach `done`.
+   */
+  startIngest: () => Promise<void>
+
   jobs: Job[]
+  /**
+   * Downloads waiting to be collected, and which project each belongs to.
+   *
+   * The project matters: a 4K download takes minutes, and opening a different
+   * one meanwhile used to land the clip in whichever happened to be open when
+   * it finished.
+   */
+  pendingIngests: Record<string, { projectPath: string | null }>
+  collectIngest: (jobId: string) => Promise<void>
   notices: Notice[]
 
   /** Per-asset transcription progress; presence means "in flight". */
@@ -514,6 +551,16 @@ interface EditorState {
 const HISTORY_LIMIT = 100
 let noticeId = 0
 
+/**
+ * Downloads being collected right now, and failures already reported.
+ *
+ * Module-level rather than store state: `setJobs` runs on every
+ * `jobs:changed` — several times a second during an export — and these are
+ * re-entry guards, not anything the interface draws.
+ */
+const collecting = new Set<string>()
+const reported = new Set<string>()
+
 export const useEditor = create<EditorState>((set, get) => ({
   project: emptyProject(),
   projectPath: null,
@@ -535,6 +582,51 @@ export const useEditor = create<EditorState>((set, get) => ({
     set((state) => (guide === 'thirds' ? { showThirds: !state.showThirds } : { showSafe: !state.showSafe })),
   sourceMode: 'upload',
   setSourceMode: (sourceMode) => set({ sourceMode }),
+
+  ingest: {
+    url: '',
+    kind: 'video',
+    quality: '1080p',
+    audioFormat: 'm4a',
+    useRange: false,
+    startMs: 0,
+    endMs: 30_000,
+    exact: false,
+    busy: false
+  },
+  setIngest: (patch) => set((s) => ({ ingest: { ...s.ingest, ...patch } })),
+
+  startIngest: async () => {
+    const { ingest, notify } = get()
+    const link = parseLink(ingest.url)
+    if (!link) {
+      // One diagnosis, shared with the panel's inline hint, so the two can
+      // never give contradictory answers about the same text.
+      notify(LINK_PROBLEM_TEXT[linkProblem(ingest.url) ?? 'not-a-link'])
+      return
+    }
+
+    set((s) => ({ ingest: { ...s.ingest, busy: true } }))
+    try {
+      const job = await window.forge.startIngest({
+        url: link.url,
+        kind: ingest.kind,
+        quality: ingest.quality,
+        audioFormat: ingest.audioFormat,
+        range: ingest.useRange ? { startMs: ingest.startMs, endMs: ingest.endMs } : null,
+        exact: ingest.exact
+      })
+      // Remember the job so `setJobs` knows this one is ours to collect, and
+      // clear the box so a second link can be pasted while this one runs.
+      set((s) => ({
+        pendingIngests: { ...s.pendingIngests, [job.id]: { projectPath: s.projectPath } },
+        ingest: { ...s.ingest, url: '', busy: false }
+      }))
+    } catch (err) {
+      set((s) => ({ ingest: { ...s.ingest, busy: false } }))
+      notify(err instanceof Error ? err.message : String(err))
+    }
+  },
   /*
    * The preview shows the OUTPUT by default.
    *
@@ -546,6 +638,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   splitRatio: 0,
 
   jobs: [],
+  pendingIngests: {},
   notices: [],
 
   transcribing: {},
@@ -2663,7 +2756,134 @@ export const useEditor = create<EditorState>((set, get) => ({
     set({ splitRatio: snapped ?? clamped })
   },
 
-  setJobs: (jobs) => set({ jobs }),
+  setJobs: (jobs) => {
+    set({ jobs })
+
+    /*
+     * A finished download becomes a clip here.
+     *
+     * Pulled on the job reaching `done` rather than pushed from main, because
+     * the renderer can be reloaded between the two and a pushed result would
+     * simply be lost. `pendingIngests` is what stops this firing for a job
+     * started before a reload, or twice for the same one.
+     */
+    for (const job of jobs) {
+      /*
+       * Anything MAIN stamped as an ingest, not only what this window started.
+       *
+       * Gating on `pendingIngests` alone meant a reload — Cmd+R, which the app
+       * allows — threw the claim away while the download carried on, so the
+       * finished file was silently never collected and nothing said so.
+       * `presetId` comes from main and survives anything the renderer does.
+       */
+      if (job.presetId !== 'ingest') continue
+      if (job.status === 'running' || job.status === 'queued') continue
+      if (collecting.has(job.id)) continue
+
+      if (job.status !== 'done') {
+        // `cancelled` is the user's own doing and needs no message; a failure
+        // already carries yt-dlp's own words. Said once, not once per broadcast
+        // — `setJobs` runs several times a second during an export.
+        if (job.status === 'failed' && job.error && !reported.has(job.id)) {
+          reported.add(job.id)
+          get().notify(job.error)
+        }
+        continue
+      }
+
+      // Claimed synchronously, before any await, so a second `jobs:changed` in
+      // the same tick cannot collect it as well.
+      collecting.add(job.id)
+      void get().collectIngest(job.id)
+    }
+  },
+
+  collectIngest: async (jobId) => {
+    const { notify } = get()
+    // Which project this belongs to. Absent after a reload, in which case the
+    // download is adopted by whatever is open — the best available answer, and
+    // better than dropping a file the user waited for.
+    const owner = get().pendingIngests[jobId]
+
+    try {
+      const result = await window.forge.collectIngest(jobId, get().project.settings.fps)
+
+      /*
+       * Refuse to land it in the wrong project.
+       *
+       * A 4K download is minutes; opening another project meanwhile used to
+       * append the asset, the clip and the trim to THAT one, mark it dirty and
+       * move its playhead. The file is on disk and the message says where, so
+       * only the automatic placement is lost.
+       */
+      if (owner && owner.projectPath !== get().projectPath) {
+        notify(
+          `That download finished under a different project. It is saved at ${result.path}`,
+          'info'
+        )
+        return
+      }
+
+      // One user action, one undo step. Without this the asset, the clip and
+      // the trim were three, so a single Cmd+Z left the untrimmed padded clip
+      // behind — which reads as the trim having failed rather than undo working.
+      get().begin()
+
+      // The same guard `importAssets` uses, for the same reason: a second
+      // download of one video must not add the asset twice.
+      const known = get().project.assets.find((a) => samePath(a.path, result.asset.path))
+      const asset = known ?? result.asset
+      if (!known) get().update((p) => ({ ...p, assets: [...p.assets, asset] }))
+
+      get().addAssetToTimeline(asset.id)
+
+      /*
+       * Trim to what was actually asked for.
+       *
+       * The fast range path pads outward by ten seconds so nothing marked is
+       * missing, which means the clip that lands is longer at both ends than
+       * the handles were. The exact frames are known, so the clip is trimmed
+       * to them here — the padding buys speed without the user ever seeing it.
+       */
+      if (result.approximateRange && result.requestedRange) {
+        const placed = [...get().project.clips].reverse().find((c) => c.assetId === asset.id)
+        if (placed) {
+          const { inPoint, duration } = trimToRequestedRange(
+            result.requestedRange,
+            asset.durationFrames,
+            get().project.settings.fps
+          )
+          get().update((p) => ({
+            ...p,
+            clips: p.clips.map((c) => (c.id === placed.id ? { ...c, inPoint, duration } : c))
+          }))
+        }
+      }
+      get().commit()
+
+      if (result.stems && result.stems.quality === 'emphasised') {
+        // Not an error, and worth saying once: mid/side is an emphasis, and the
+        // asset's name says so too. Silence here would let it pass as a stem.
+        notify('Demucs is not installed, so that is a mid/side split.', 'info')
+      }
+    } catch (err) {
+      /*
+       * A failed collect must stay collectable.
+       *
+       * The file is downloaded — the failure is in probing or placing it —
+       * so dropping the claim here would strand a finished download with no
+       * way to reach it. Releasing it lets the next `jobs:changed` retry.
+       */
+      collecting.delete(jobId)
+      notify(err instanceof Error ? err.message : String(err))
+    } finally {
+      set((st) => {
+        const rest = { ...st.pendingIngests }
+        delete rest[jobId]
+        return { pendingIngests: rest }
+      })
+    }
+  },
 
   setTranscribeProgress: (assetId, progress, message) =>
     set((s) => ({ transcribing: { ...s.transcribing, [assetId]: { progress, message } } })),

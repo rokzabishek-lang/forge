@@ -364,6 +364,11 @@ export function installHarnessBridge(): void {
       quality: 'emphasised' as const
     }),
 
+    /*
+     * Downloads cannot happen here, but the PANEL must still be clickable —
+     * it is renderer logic, which is exactly what the harness exists to check.
+     * So status answers honestly and the two actions refuse by name.
+     */
     ingestStatus: async () => ({ ready: false, tool: null, reason: 'harness: no yt-dlp' }),
     startIngest: unsupported('Downloading'),
     collectIngest: unsupported('Downloading'),

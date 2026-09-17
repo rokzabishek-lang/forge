@@ -122,6 +122,16 @@ export function parseLink(input: string): ParsedLink | null {
   }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null
   if (isCollection(parsed)) return null
+  /*
+   * A host with no dot in it is not a site.
+   *
+   * `https://y` parses perfectly well as a URL, so without this a half-typed
+   * address was accepted, queued, spawned, and came back "Unsupported URL"
+   * a second later — a job, a progress bar and an error to learn what the box
+   * could have said immediately. localhost is the one real exception.
+   */
+  const host = parsed.hostname.toLowerCase()
+  if (!host.includes('.') && host !== 'localhost') return null
 
   return { kind: 'generic', url: parsed.toString(), videoId: null, key: genericKey(parsed) }
 }
@@ -177,4 +187,38 @@ function shortDigest(text: string): string {
     b = Math.imul(b ^ text.charCodeAt(text.length - 1 - i), 0x01000193) >>> 0
   }
   return (a.toString(16).padStart(8, '0') + b.toString(16).padStart(8, '0')).slice(0, 8)
+}
+
+/** What is wrong with what has been typed so far, or null when nothing is. */
+export type LinkProblem = 'empty' | 'not-a-link' | 'collection'
+
+/**
+ * One answer for the panel's inline hint and the store's message.
+ *
+ * They used to decide separately — the panel on `/^https?:\/\//` and the store
+ * on the same test applied to different text — so a half-typed `https://y` was
+ * called "a playlist, channel or feed" by one and something else by the other,
+ * about the same input, at the same time.
+ */
+export function linkProblem(input: string): LinkProblem | null {
+  const trimmed = input.trim()
+  if (!trimmed) return 'empty'
+  if (parseLink(trimmed)) return null
+
+  let parsed: URL
+  try {
+    parsed = new URL(trimmed)
+  } catch {
+    return 'not-a-link'
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return 'not-a-link'
+  // It IS a URL and parseLink still refused it, so the shape is the problem.
+  return isCollection(parsed) ? 'collection' : 'not-a-link'
+}
+
+/** What to say about it, in one place so the two callers cannot diverge. */
+export const LINK_PROBLEM_TEXT: Record<LinkProblem, string> = {
+  empty: 'Paste a link to a video first.',
+  'not-a-link': 'That does not look like a link yet.',
+  collection: 'That is a playlist, channel or feed. Paste a link to one video.'
 }

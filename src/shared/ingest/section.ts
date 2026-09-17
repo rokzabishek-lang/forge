@@ -97,3 +97,64 @@ export function sectionPlan(range: Range | null, exact: boolean): SectionPlan {
 export function offsetIntoDownload(range: Range): number {
   return Math.min(PAD_MS, Math.max(0, range.startMs))
 }
+
+/**
+ * Where the requested range sits in the clip that was placed.
+ *
+ * Pure, and in shared/ rather than inline in the store, because the renderer
+ * has no tests and this is arithmetic with three ways to be wrong — one of
+ * which it was: when the asset turns out shorter than the offset, an unclamped
+ * `inPoint` points past the end of the media and the clip renders nothing.
+ *
+ * HONEST LIMIT, worth stating because the code cannot fix it: on the fast path
+ * the file begins at the nearest keyframe AT OR BEFORE the padded mark, and how
+ * much earlier that is cannot be known from here. `PAD_MS` is therefore a lower
+ * bound on the head, so a fast cut can still carry a little unmarked pre-roll.
+ * That is the trade the fast path exists to make — the exact option re-encodes
+ * at the marks precisely because it does not have this problem.
+ */
+export function trimToRequestedRange(
+  requested: Range,
+  assetDurationFrames: number,
+  fps: number
+): { inPoint: number; duration: number } {
+  const start = Math.min(requested.startMs, requested.endMs)
+  const end = Math.max(requested.startMs, requested.endMs)
+  const frames = (ms: number): number => Math.max(0, Math.round((ms / 1000) * fps))
+
+  const total = Math.max(1, Math.floor(assetDurationFrames))
+  // Never past the last frame: a download shorter than the pad would otherwise
+  // place a clip whose in-point is beyond its own media.
+  const inPoint = Math.min(frames(offsetIntoDownload({ startMs: start, endMs: end })), total - 1)
+  const duration = Math.max(1, Math.min(frames(end - start), total - inPoint))
+  return { inPoint, duration }
+}
+
+/**
+ * Read a mark a person typed: `90`, `1:30`, `1:30.5`, `01:02:03`.
+ *
+ * Returns null for anything it cannot read, so the field can say so rather
+ * than silently becoming zero — `Number('1:30')` is NaN, and NaN milliseconds
+ * reaching `--download-sections` is how a range stops meaning anything.
+ */
+export function parseMark(input: string): number | null {
+  const text = input.trim()
+  if (!text) return null
+  if (!/^\d{1,3}(:[0-5]?\d){0,2}(\.\d{1,3})?$/.test(text)) return null
+
+  const parts = text.split(':')
+  if (parts.length > 3) return null
+  const seconds = parts.reduce((total, part) => total * 60 + Number(part), 0)
+  return Number.isFinite(seconds) ? Math.round(seconds * 1000) : null
+}
+
+/** `1:05.2`, or `1:02:03.0` once there is an hour to show. */
+export function formatMark(ms: number): string {
+  const total = Math.max(0, ms) / 1000
+  const hours = Math.floor(total / 3600)
+  const minutes = Math.floor((total - hours * 3600) / 60)
+  const seconds = total - hours * 3600 - minutes * 60
+  const mm = hours > 0 ? String(minutes).padStart(2, '0') : String(minutes)
+  const ss = seconds.toFixed(1).padStart(4, '0')
+  return hours > 0 ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`
+}
