@@ -29,3 +29,12 @@ __pycache__/
 # makes the name illegal on Windows, and git cannot even check out a tree that
 # contains one: `error: invalid path`, exit 128, before a single test runs.
 *:memory:*
+
+# Reference recordings — other people's work, kept for study.
+#
+# Instagram reels and app screen-recordings that features were measured
+# against. They belong on this disk and not in a public repository: they are
+# not ours to redistribute, and they are a hundred megabytes of video. What
+# they TAUGHT us is written down in docs/REFERENCES.md, which is committed —
+# so the findings survive even if the files do not.
+/references/recordings/
