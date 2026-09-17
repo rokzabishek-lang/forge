@@ -25,8 +25,11 @@ beforeAll(async () => {
 
   await run(FFMPEG, ['-hide_banner', '-loglevel', 'error', '-y',
     '-f', 'lavfi', '-i', 'sine=frequency=440:duration=3', '-af', 'volume=6', tone])
+  // `-t` rather than anullsrc's `d=`: the duration option arrived in ffmpeg
+  // 4.2 and @ffmpeg-installer ships an older build on Windows, where `d=` is
+  // "Option not found". `-t` has bounded an infinite source forever.
   await run(FFMPEG, ['-hide_banner', '-loglevel', 'error', '-y',
-    '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=mono:d=3', silence])
+    '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=mono', '-t', '3', silence])
   // Quiet, then loud: peaks must reflect that, and averaging would hide it.
   await run(FFMPEG, ['-hide_banner', '-loglevel', 'error', '-y',
     '-f', 'lavfi', '-i', 'sine=frequency=440:duration=2:sample_rate=44100',

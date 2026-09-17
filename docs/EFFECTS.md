@@ -1700,3 +1700,76 @@ Two source files ended up with a literal NUL byte in them — the separator
 `speechKey` joins on, written by a script as a raw byte rather than an escape.
 It compiled, it passed, and it was invisible in review. Both are escapes now,
 and a sweep confirms nothing else in `src/` or `tests/` carries one.
+
+---
+
+## 25. The two ffmpegs
+
+The first CI run on Windows found three problems in a row, and only the third
+was interesting. The first two were packaging: a stray file named
+`sidecar/:memory:.ses`, whose colon is illegal on Windows and made `git
+checkout` fail outright with exit 128 — the code never ran at all — and a bare
+`assets` line in `.gitignore`, which matches at every level and had silently
+swallowed three real source files.
+
+The third is a standing constraint and belongs here.
+
+### `@ffmpeg-installer` ships a different ffmpeg per platform
+
+| platform | package | ffmpeg |
+|---|---|---|
+| macOS arm64 | 4.1.5 | **4.4** |
+| win32-x64 | 4.1.0 | **4.1 or older** |
+
+That is not a guess about Windows: every render there died with
+
+    [Parsed_anullsrc] Option 'd' not found
+
+and `anullsrc` gained its duration option in ffmpeg **4.2**. So the floor is
+below that.
+
+The immediate fix was small — the option was never needed, because the output
+already carries `-t`, which is what actually bounds the stream. Measured both
+ways on the same graph: 4.00s with it and 4.00s without.
+
+**The standing rule it leaves behind: anything reached for in a filter graph has
+to exist in the OLDEST bundled build, not the newest.** Developing on 4.4 and
+shipping 4.1 means a filter added in between works perfectly for months and then
+fails for every Windows user, with an error nobody on the team can reproduce.
+
+### Two escaping bugs that could only happen there
+
+A path inside a filtergraph crosses TWO parsers, and they want different amounts
+of escaping. Measured by creating a real file at a path containing each
+character and seeing which form actually opened it:
+
+| character | backslashes |
+|---|---|
+| `,` `[` `]` `;` | 1 — graph-level separators |
+| `:` `=` | 2 — the graph parser eats one on the way past |
+| `'` | 3 — a quote at both levels |
+| space | 0 |
+
+One backslash on a colon — the form every example shows, and the form this
+codebase used — silently drops everything before it. On macOS nothing precedes
+the first colon. On Windows it is the drive letter, so `C:/Users/…/captions.ass`
+reached ffmpeg as `/Users/…/captions.ass` and every export touching a subtitle
+file, a LUT or a look failed.
+
+The concat demuxer has its own, different rule: backslash is an escape character
+there, inside quotes as much as out, so `file 'C:\Users\…'` names a file with a
+tab in it. Forward slashes throughout, and `'\''` for a literal quote.
+
+An existing test asserted the broken escaping and had passed for months. That is
+the third test in this project found encoding the bug it was meant to guard.
+
+### What makes this class catchable now
+
+macOS allows a colon in a filename. So
+`tests/integration/filterPath.int.test.ts` reproduces the drive-letter case
+locally: it writes a real LUT at a path containing each awkward character and
+checks ffmpeg opens it. Reverting the fix fails 5 of its 7 cases on a Mac.
+
+The version floor has no such trick available — there is only one ffmpeg on this
+machine. CI is the enforcement, which is why it runs the integration tests
+rather than only the unit ones.

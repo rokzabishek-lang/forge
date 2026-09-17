@@ -1278,11 +1278,26 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
   const audioLabels = finalLabels
 
   if (audioLabels.length === 0) {
-    // Silence keeps the output shape identical whether or not anything has
-    // audio, so downstream tools never see a video-only file by surprise.
+    /*
+     * Silence keeps the output shape identical whether or not anything has
+     * audio, so downstream tools never see a video-only file by surprise.
+     *
+     * No `d=` on it, deliberately. `anullsrc` gained a duration option in
+     * ffmpeg 4.2, and `@ffmpeg-installer` ships a DIFFERENT ffmpeg per
+     * platform — 4.4 on macOS arm64, older on Windows. So the option is
+     * present on the machine this was written on and missing on the one it
+     * shipped to, where every single render died with "Option 'd' not found"
+     * before a frame was encoded.
+     *
+     * It was never needed anyway: the output already carries `-t`, which is
+     * what actually bounds the stream. Measured both ways on the same graph —
+     * 4.00s with the option and 4.00s without it.
+     *
+     * The wider lesson is in docs/EFFECTS.md §25: anything reached for here has
+     * to exist in the OLDEST bundled build, not the newest.
+     */
     filters.push(
-      `anullsrc=channel_layout=stereo:sample_rate=${project.settings.sampleRate}:` +
-        `d=${seconds(totalFrames, fps)}[aout]`
+      `anullsrc=channel_layout=stereo:sample_rate=${project.settings.sampleRate}[aout]`
     )
   } else if (audioLabels.length === 1) {
     filters.push(`${audioLabels[0]}anull[aout]`)

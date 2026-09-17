@@ -163,7 +163,9 @@
       "Bash(rm -f tests/zz_check.test.ts)",
       "Bash(npm ls *)",
       "Bash(git check-ignore *)",
-      "Bash(rm -f \"sidecar/:memory:.ses\")"
+      "Bash(rm -f \"sidecar/:memory:.ses\")",
+      "Bash(grep -rnoE \"\\(movie|amovie|subtitles|ass|lut3d|lut1d|haldclut|fontfile|fontsdir|sendcmd|drawtext\\)=[^'\\\\`\\\\\"]{0,40}\" --include=\"*.ts\" src/shared src/main)",
+      "Bash(./node_modules/@ffmpeg-installer/darwin-arm64/ffmpeg -hide_banner -h filter=anullsrc)"
     ]
   }
 }
