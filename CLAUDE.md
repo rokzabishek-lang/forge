@@ -72,6 +72,20 @@ spaces and the reserved names (CON, NUL, COM1-9…). This has bitten a committed
 file, a test fixture, and is a live risk anywhere a filename is built from a
 user's data — `Bride 5:30pm.jpg` is an ordinary wedding filename.
 
+**Assert on the basename, never the path.** The corollary, and it has its own
+scar: `expect(path).not.toMatch(/[<>:"|?*]/)` was written to prove no illegal
+character from a title reached a filename. Every absolute Windows path carries
+a drive-letter colon, so it could never pass there — and no `/Users/…` path has
+one, so it passed unconditionally here. Wrong in both directions at once, from
+the same confusion the escaping rule above already records: **a drive-letter
+colon is not content.** If an assertion is about a *name*, take `basename()`
+first.
+
+**A path ending in a separator is not portable.** `writeFile('…/dir/', '')`
+throws on macOS and SUCCEEDS on Windows, creating a file where a directory was
+about to go. A `.catch(() => undefined)` around setup turns that into dead code
+on one platform and a landmine on the other.
+
 **Spawning.** Every `execFile` of a bundled binary in `src/main` passes
 `windowsHide: true`. A packaged Electron app has no console of its own, so each
 console-subsystem child without it opens a visible window.
