@@ -1,17 +1,66 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import type React from 'react'
 import type { Clip, CropRect, MediaAsset, Project } from '@shared/timeline'
-import { clipEnd, framesToSeconds, sourceFrameFor, projectDuration } from '@shared/timeline'
+import {
+  clipCoversFrame,
+  clipEnd,
+  framesToSeconds,
+  sourceFrameFor,
+  projectDuration
+} from '@shared/timeline'
 import { ASPECTS, useEditor } from '../store'
 import { mediaUrl } from '../media'
+import { motionSourceRect } from '@shared/render/motion'
+import { clipBox, parallaxBakeFor, planeShare } from '@shared/render/plan'
+import { pathAt } from '@shared/render/path'
+import { valueAt } from '@shared/render/keyframes'
 import { CropOverlay } from './CropOverlay'
+import { TextOverlay } from './TextOverlay'
+import { TransformOverlay } from './TransformOverlay'
+import { MaskOverlay } from './MaskOverlay'
+import { forgetGrade, gradeRegion, gradedSource } from '../grade'
+import { forgetMatte, mattedSource } from '../matte'
+import { forgetMask, maskedSource } from '../maskPreview'
+import { forgetTextPreview, textPreviewCanvas } from '../textCanvas'
+import { clipSpeed } from '@shared/render/speed'
 import { activeCaptionStyle, captionAt, drawCaptions } from '../captionPreview'
+import { captionSourceClip } from '@shared/captions/timeline'
 import { useCatalog } from '../catalog'
 
 export interface ViewTransform {
   scale: number
   offsetX: number
   offsetY: number
+}
+
+/**
+ * Where the finished frame sits inside the preview box.
+ *
+ * Duplicated deliberately from the draw loop's own arithmetic so overlays can be
+ * positioned without reaching into canvas state — and kept in one exported
+ * function so the two cannot drift.
+ */
+export function outputFrame(
+  box: { width: number; height: number },
+  target: { width: number; height: number },
+  splitRatio: number
+): { x: number; y: number; width: number; height: number } | null {
+  const splitX = Math.round(box.width * splitRatio)
+  const gutter = splitX > 0 && splitX < box.width ? 1 : 0
+  const right = {
+    x: splitX + gutter,
+    y: 0,
+    width: box.width - splitX - gutter,
+    height: box.height
+  }
+  if (right.width <= 8) return null
+  const fit = fitTransform(target.width, target.height, right.width, right.height)
+  return {
+    x: right.x + fit.offsetX,
+    y: right.y + fit.offsetY,
+    width: target.width * fit.scale,
+    height: target.height * fit.scale
+  }
 }
 
 function fitTransform(sourceW: number, sourceH: number, boxW: number, boxH: number): ViewTransform {
@@ -23,8 +72,27 @@ function fitTransform(sourceW: number, sourceH: number, boxW: number, boxH: numb
   }
 }
 
+/** Fill the box and let the overflow spill — the caller clips it. */
+function coverTransform(sourceW: number, sourceH: number, boxW: number, boxH: number): ViewTransform {
+  const scale = Math.max(boxW / sourceW, boxH / sourceH)
+  return {
+    scale,
+    offsetX: (boxW - sourceW * scale) / 2,
+    offsetY: (boxH - sourceH * scale) / 2
+  }
+}
+
 /** Re-seek a media element only when it has drifted visibly. */
 const DRIFT_TOLERANCE = 0.18
+
+/**
+ * How far playing audio may drift before it is worth a glitch to correct.
+ *
+ * Deliberately large. Seeking audio mid-playback is audible, so this should only
+ * ever fire after a real jump — a scrub or a loop — never for the millisecond
+ * wander between a wall clock and an audio device.
+ */
+const AUDIO_RESYNC = 0.75
 
 type MediaElement = HTMLVideoElement | HTMLImageElement
 
@@ -34,6 +102,121 @@ interface Layer {
   element: MediaElement
   /** 0..1 — below 1 only while a transition is blending this clip in. */
   alpha: number
+  /** 0..1 across the clip, for the camera move. */
+  progress: number
+  /** Elapsed seconds into the clip; only shake needs it. */
+  elapsed: number
+  /**
+   * Animated values at this frame — the same curve the renderer compiles into
+   * an expression, evaluated here so the two cannot drift.
+   */
+  keyed: { zoom: number; rotation: number; opacity: number }
+  /** The shape this clip is shown through, when it has one. */
+  matteElement?: MediaElement
+  /**
+   * The shape's clip, kept so the draw loop can use its LIVE picture.
+   *
+   * A text shape has no file while it is being edited — the whole point of
+   * drawing text live — so resolving the matte from the element alone made
+   * "fill with the picture below" quietly stop working in the preview while the
+   * export, which bakes on its way out, still applied it. The two must agree.
+   */
+  matteClip?: Clip
+  /**
+   * Depth planes, far to near, when this clip renders as parallax.
+   *
+   * Drawn instead of the flat image, each with its own move amount — the same
+   * arithmetic the renderer compiles into zoompan, from the same table.
+   */
+  planes?: { element: HTMLImageElement; depth: number; width: number; height: number }[]
+}
+
+/**
+ * Load again without CORS if the CORS load fails.
+ *
+ * Asking for CORS is what lets the GPU grade read the picture, but if the
+ * request is ever refused the element loads nothing at all — and a preview that
+ * is entirely black while the audio plays is far worse than a preview that
+ * cannot show a grade. So the picture always wins: on failure the element
+ * re-loads plainly and the grade quietly stops previewing for that clip.
+ */
+function withoutCorsOnError(element: HTMLImageElement | HTMLVideoElement, url: string): void {
+  element.addEventListener(
+    'error',
+    () => {
+      if (element.dataset.forgePlain === '1') return
+      element.dataset.forgePlain = '1'
+      element.removeAttribute('crossorigin')
+      element.src = url
+    },
+    { once: true }
+  )
+}
+
+/**
+ * The source rectangle a keyframed zoom shows.
+ *
+ * Centred, matching the renderer's zoompan, which takes `iw/2-(iw/zoom/2)`.
+ */
+function zoomedRect(
+  width: number,
+  height: number,
+  zoom: number
+): { sx: number; sy: number; sw: number; sh: number } {
+  const z = Math.max(1, zoom)
+  const sw = width / z
+  const sh = height / z
+  return { sx: (width - sw) / 2, sy: (height - sh) / 2, sw, sh }
+}
+
+/**
+ * Composition guides, over the finished frame.
+ *
+ * Thirds for framing; title-safe and action-safe for anything that must survive
+ * a crop or an overscan. The safe percentages are SMPTE ST 2046-1: action at
+ * 93%, titles at 90% — the same numbers the text layout already uses, so what
+ * the guide promises and what the renderer does are the same promise.
+ */
+function drawGuides(
+  ctx: CanvasRenderingContext2D,
+  frame: { x: number; y: number; width: number; height: number },
+  thirds: boolean,
+  safe: boolean
+): void {
+  if (!thirds && !safe) return
+  ctx.save()
+  ctx.lineWidth = 1
+
+  if (thirds) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.22)'
+    ctx.beginPath()
+    for (let i = 1; i < 3; i++) {
+      const x = Math.round(frame.x + (frame.width * i) / 3) + 0.5
+      const y = Math.round(frame.y + (frame.height * i) / 3) + 0.5
+      ctx.moveTo(x, frame.y)
+      ctx.lineTo(x, frame.y + frame.height)
+      ctx.moveTo(frame.x, y)
+      ctx.lineTo(frame.x + frame.width, y)
+    }
+    ctx.stroke()
+  }
+
+  if (safe) {
+    const box = (fraction: number, colour: string): void => {
+      const inset = (1 - fraction) / 2
+      ctx.strokeStyle = colour
+      ctx.strokeRect(
+        Math.round(frame.x + frame.width * inset) + 0.5,
+        Math.round(frame.y + frame.height * inset) + 0.5,
+        Math.round(frame.width * fraction),
+        Math.round(frame.height * fraction)
+      )
+    }
+    box(0.93, 'rgba(255,255,255,0.2)')
+    box(0.9, 'rgba(249,122,75,0.55)')
+  }
+
+  ctx.restore()
 }
 
 /** Every video clip live at a frame, bottom track first. */
@@ -43,6 +226,9 @@ function activeVideoClips(project: Project, frame: number): { clip: Clip; asset:
     .filter((clip) => {
       const track = project.tracks.find((t) => t.id === clip.trackId)
       if (!track || track.kind !== 'video' || track.hidden) return false
+      // A matte shape is a stencil for another clip, not a picture of its own,
+      // and an adjustment layer is a grade rather than anything to draw.
+      if (clip.matteOnly || clip.adjustment) return false
       return frame >= clip.start && frame < clipEnd(clip)
     })
     .sort((a, b) => (order.get(a.trackId) ?? 0) - (order.get(b.trackId) ?? 0) || a.start - b.start)
@@ -61,6 +247,9 @@ export function Preview(): ReactNode {
   const setPlayhead = useEditor((s) => s.setPlayhead)
   const setPlaying = useEditor((s) => s.setPlaying)
   const loop = useEditor((s) => s.loop)
+  const showThirds = useEditor((s) => s.showThirds)
+  const showSafe = useEditor((s) => s.showSafe)
+  const previewTool = useEditor((s) => s.previewTool)
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const boxRef = useRef<HTMLDivElement | null>(null)
@@ -75,6 +264,37 @@ export function Preview(): ReactNode {
   const pool = useRef(new Map<string, MediaElement>())
   const audioRefs = useRef(new Map<string, HTMLAudioElement>())
   const clockRef = useRef<{ at: number; frame: number } | null>(null)
+  /** Report a blocked play() once, not sixty times a second. */
+  const audioWarned = useRef(false)
+
+  /*
+   * Bumped when a LUT finishes loading.
+   *
+   * The grade is applied on the GPU from a file read asynchronously, so the
+   * first frame drawn after a look is chosen has nothing to apply yet. Without
+   * this the picture stays ungraded until something else happens to repaint.
+   */
+  const [, setGradeTick] = useState(0)
+  /*
+   * Set whenever the picture could have changed.
+   *
+   * A ref rather than state: marking the canvas dirty must not itself cause a
+   * React render, or the flag becomes the very churn it exists to prevent.
+   */
+  const dirty = useRef(true)
+  /*
+   * Repaint marks the canvas dirty ITSELF rather than relying on a re-render.
+   *
+   * `draw` is memoised over the project, the playhead and the view settings,
+   * and none of those move when a LUT finishes loading or an image finishes
+   * decoding — so bumping state alone re-rendered the component and left the
+   * canvas exactly as it was. The old always-on loop covered for that; a loop
+   * that only paints on a change cannot.
+   */
+  const repaint = useCallback(() => {
+    dirty.current = true
+    setGradeTick((n) => n + 1)
+  }, [])
 
   const [box, setBox] = useState({ width: 0, height: 0 })
   const [transform, setTransform] = useState<ViewTransform>({ scale: 1, offsetX: 0, offsetY: 0 })
@@ -88,6 +308,31 @@ export function Preview(): ReactNode {
     void ensureFont(activeCaptionStyle(project).fontFamily)
   }, [project, ensureFont])
 
+  /*
+   * The faces the live text needs, and a repaint when they land.
+   *
+   * Text is drawn straight onto the canvas now, so a font that arrives after
+   * the first frame changes the picture without changing any state — and the
+   * draw loop only repaints on a change it can see. Keyed on the set of font
+   * names rather than on the project, so typing does not re-run it on every
+   * keystroke.
+   */
+  const textFonts = [
+    ...new Set(project.clips.map((c) => c.text?.font).filter((f): f is string => Boolean(f)))
+  ]
+    .sort()
+    .join('|')
+  useEffect(() => {
+    if (!textFonts) return
+    let alive = true
+    void Promise.all(textFonts.split('|').map((f) => ensureFont(f))).then(() => {
+      if (alive) repaint()
+    })
+    return () => {
+      alive = false
+    }
+  }, [textFonts, ensureFont, repaint])
+
   useLayoutEffect(() => {
     const element = boxRef.current
     if (!element) return
@@ -100,41 +345,144 @@ export function Preview(): ReactNode {
 
   /* --------------------------------------------------------- media pool */
 
+  /**
+   * Depth planes, pooled by file path rather than by clip.
+   *
+   * Two clips of the same photo share one bake, so they should share the decoded
+   * images too — a reel that cycles twelve photos across thirty shots would
+   * otherwise decode each plane three times over.
+   */
+  const planePool = useRef(new Map<string, HTMLImageElement>())
+  const planeFor = useCallback((file: string): HTMLImageElement => {
+    const existing = planePool.current.get(file)
+    if (existing) return existing
+    const image = new Image()
+    // Same as elementFor: a decode finishing is invisible to React.
+    image.addEventListener('load', repaint)
+    // See elementFor: without this the GPU grade silently refuses the texture.
+    image.crossOrigin = 'anonymous'
+    withoutCorsOnError(image, mediaUrl(file))
+    image.src = mediaUrl(file)
+    image.style.display = 'none'
+    holderRef.current?.appendChild(image)
+    planePool.current.set(file, image)
+    return image
+  }, [repaint])
+
   const elementFor = useCallback((clip: Clip, asset: MediaAsset): MediaElement => {
-    const existing = pool.current.get(clip.id)
+    // Generated artwork is overwritten in place, so the path alone cannot tell
+    // the pool that the image changed. Keying by version does — and the version
+    // has to reach the URL too, or the fresh element just re-reads Chromium's
+    // cached copy of the old bytes.
+    const version = clip.title?.version ?? clip.text?.version ?? clip.solid?.version
+    const key = version === undefined ? clip.id : `${clip.id}:${version}`
+    const existing = pool.current.get(key)
     if (existing) return existing
 
-    const url = mediaUrl(asset.path)
+    /*
+     * A generated card whose file has not been written yet.
+     *
+     * Text clips exist on the timeline before their PNG does — deliberately, so
+     * adding text is instant — and pointing an <img> at an empty path would
+     * fail to load, trip the no-CORS retry, and fail again on every frame. The
+     * element stays empty and unattached; the preview draws the type live and
+     * does not consult it.
+     */
+    const url = asset.path ? mediaUrl(asset.path, version) : ''
     let element: MediaElement
+    if (!url) {
+      const blank = new Image()
+      // Not pooled: the next call must build a real one once the path arrives.
+      return blank
+    }
+    /*
+     * CORS, or the grade does nothing.
+     *
+     * forge-media:// is a different origin from the app, so without an explicit
+     * crossOrigin the element is "cross-origin clean but not CORS-approved".
+     * Canvas 2D happily draws it, which is why everything looked fine — but
+     * WebGL's texImage2D refuses it outright, the grade pass caught the error
+     * and fell back to the ungraded element, and the brightness slider moved
+     * nothing with no error anywhere. The protocol already sends
+     * Access-Control-Allow-Origin; this is the half that asks for it.
+     */
     if (asset.kind === 'image') {
       const image = new Image()
+      image.crossOrigin = 'anonymous'
+      withoutCorsOnError(image, url)
       image.src = url
       element = image
     } else {
       const video = document.createElement('video')
+      video.crossOrigin = 'anonymous'
+      withoutCorsOnError(video, url)
       video.src = url
       video.preload = 'auto'
       video.playsInline = true
       element = video
     }
+    /*
+     * Wake the canvas when the picture arrives.
+     *
+     * The draw loop only repaints when something changed, and a decode
+     * finishing is a change nothing else can see: React does not re-render
+     * because an <img> loaded, so the frame would stay blank until the user
+     * happened to touch something. The old loop repainted sixty times a second
+     * regardless and hid this entirely — which is exactly how a cost like that
+     * survives, by covering for the wiring it makes unnecessary.
+     *
+     * `seeked` matters just as much: scrubbing a paused video changes the
+     * picture with no state change at all behind it.
+     */
+    if (element instanceof HTMLVideoElement) {
+      element.addEventListener('loadeddata', repaint)
+      element.addEventListener('seeked', repaint)
+      element.addEventListener('canplay', repaint)
+    } else {
+      element.addEventListener('load', repaint)
+    }
+
     // Kept in the DOM (hidden) because some browsers throttle decoding for
     // elements that were never attached.
     element.style.display = 'none'
     holderRef.current?.appendChild(element)
-    pool.current.set(clip.id, element)
+    pool.current.set(key, element)
     return element
-  }, [])
+  }, [repaint])
 
   // Discard elements for clips that no longer exist, or the pool grows forever.
   useEffect(() => {
-    const live = new Set(project.clips.map((c) => c.id))
+    const live = new Set(
+      project.clips.map((c) => {
+        const version = c.title?.version ?? c.text?.version ?? c.solid?.version
+        return version === undefined ? c.id : `${c.id}:${version}`
+      })
+    )
     for (const [clipId, element] of pool.current) {
       if (live.has(clipId)) continue
       if (element instanceof HTMLVideoElement) element.pause()
       element.remove()
       pool.current.delete(clipId)
+      // The graded copy is keyed by clip too, and is a full-size canvas.
+      forgetGrade(clipId)
+      forgetMatte(clipId)
+      // Three more full-size canvases: the mask keeps an output, an inner copy
+      // and a stencil, and none of them should outlive the clip.
+      forgetMask(clipId)
+      forgetTextPreview(clipId)
     }
-  }, [project.clips])
+
+    // Plane images outlive individual clips, so they are evicted against the
+    // bakes the project still holds rather than against the clip list.
+    const liveFiles = new Set(
+      Object.values(project.parallax ?? {}).flatMap((bake) => bake.layers.map((l) => l.file))
+    )
+    for (const [file, element] of planePool.current) {
+      if (liveFiles.has(file)) continue
+      element.remove()
+      planePool.current.delete(file)
+    }
+  }, [project.clips, project.parallax])
 
   useEffect(() => {
     const elements = pool.current
@@ -167,6 +515,16 @@ export function Preview(): ReactNode {
       if (!element) {
         element = new Audio(mediaUrl(asset.path))
         element.preload = 'auto'
+        /*
+         * Attach it, hidden.
+         *
+         * The video pool already does this, with a comment saying detached
+         * elements get their decoding throttled — and the audio pool did not,
+         * which is why a reel played silently except for a blip at each clip
+         * boundary while video played fine.
+         */
+        element.style.display = 'none'
+        holderRef.current?.appendChild(element)
         elements.set(clip.id, element)
       }
       element.volume = Math.max(0, Math.min(1, clip.volume ?? 1))
@@ -176,6 +534,7 @@ export function Preview(): ReactNode {
       if (wanted.has(id)) continue
       element.pause()
       element.removeAttribute('src')
+      element.remove()
       elements.delete(id)
     }
   }, [project.clips, project.tracks, project.assets])
@@ -195,6 +554,16 @@ export function Preview(): ReactNode {
         if (Math.abs(video.currentTime - target) > (isPlaying ? DRIFT_TOLERANCE : 0.02)) {
           video.currentTime = target
         }
+        /*
+         * Play at the clip's own rate.
+         *
+         * Without this a slowed clip would seek correctly and then run away at
+         * full speed between seeks, so the picture and the playhead would
+         * disagree until the drift grew large enough to force a correction —
+         * which reads as stuttering, not as slow motion.
+         */
+        const rate = clipSpeed(clip)
+        if (Math.abs(video.playbackRate - rate) > 0.001) video.playbackRate = rate
         if (isPlaying && video.paused) void video.play().catch(() => undefined)
         if (!isPlaying && !video.paused) video.pause()
       }
@@ -213,9 +582,46 @@ export function Preview(): ReactNode {
           continue
         }
         const target = framesToSeconds(sourceFrameFor(clip, frame), fps)
-        if (Math.abs(element.currentTime - target) > DRIFT_TOLERANCE) element.currentTime = target
-        if (isPlaying && element.paused) void element.play().catch(() => undefined)
-        if (!isPlaying && !element.paused) element.pause()
+        // The sound is stretched to match, the same way the export stretches it.
+        const audioRate = clipSpeed(clip)
+        if (Math.abs(element.playbackRate - audioRate) > 0.001) {
+          element.playbackRate = audioRate
+        }
+
+        if (!isPlaying) {
+          if (!element.paused) element.pause()
+          // Scrubbing: land exactly, since nothing is listening to a glitch.
+          if (Math.abs(element.currentTime - target) > 0.02) element.currentTime = target
+          continue
+        }
+
+        /*
+         * Never seek audio that is already playing.
+         *
+         * This used to assign currentTime on every drifted frame — sixty times a
+         * second — and each assignment restarts the decoder. The result was a
+         * continuous crackle, like a fan, while the exported file was clean.
+         *
+         * So seek once, when starting, and afterwards leave it alone. The wall
+         * clock and the audio device wander apart by tens of milliseconds over a
+         * reel, which is neither audible nor visible; only a real jump — a scrub
+         * or a loop — is worth the glitch of correcting.
+         *
+         * Driving the playhead FROM the audio instead was tried and deadlocked:
+         * `paused` flips false the instant play() is called, while currentTime
+         * is still the value the seek just wrote, so the clock pinned itself to
+         * a frame it had supplied and playback froze at zero.
+         */
+        if (element.paused) {
+          element.currentTime = target
+          void element.play().catch((err: unknown) => {
+            if (audioWarned.current) return
+            audioWarned.current = true
+            console.error('[forge] preview audio refused to play:', err)
+          })
+        } else if (Math.abs(element.currentTime - target) > AUDIO_RESYNC) {
+          element.currentTime = target
+        }
       }
     },
     [project, fps]
@@ -237,6 +643,17 @@ export function Preview(): ReactNode {
     (frame: number): Layer[] => {
       return activeVideoClips(project, frame).map(({ clip, asset }) => {
         const element = elementFor(clip, asset)
+        const into = frame - clip.start
+        const progress = clip.duration > 1 ? into / (clip.duration - 1) : 0
+        const elapsed = into / project.settings.fps
+
+        const bake = parallaxBakeFor(project, clip)
+        const planes = bake?.layers.map((layer) => ({
+          element: planeFor(layer.file),
+          depth: layer.depth,
+          width: bake.width,
+          height: bake.height
+        }))
 
         // During its transition the incoming clip is partially transparent, so
         // whatever it overlaps shows through — the same thing the render does.
@@ -248,10 +665,27 @@ export function Preview(): ReactNode {
             alpha = Math.max(0, Math.min(1, into / transition.durationFrames))
           }
         }
-        return { clip, asset, element, alpha }
+        const keyed = {
+          zoom: valueAt(clip.keyframes?.zoom ?? [], into, clip.duration, 1),
+          rotation: valueAt(clip.keyframes?.rotation ?? [], into, clip.duration, 0),
+          opacity: valueAt(clip.keyframes?.opacity ?? [], into, clip.duration, 1)
+        }
+        const shapeClip = clip.matte
+          ? project.clips.find((c) => c.id === clip.matte!.clipId)
+          : undefined
+        const shapeAsset = shapeClip
+          ? project.assets.find((a) => a.id === shapeClip.assetId)
+          : undefined
+        const matteElement =
+          shapeClip && shapeAsset ? elementFor(shapeClip, shapeAsset) : undefined
+
+        return {
+          clip, asset, element, alpha, progress, elapsed, planes, keyed,
+          matteElement, matteClip: shapeClip
+        }
       })
     },
-    [project, elementFor]
+    [project, elementFor, planeFor]
   )
 
   /* ---------------------------------------------------------- draw loop */
@@ -291,10 +725,56 @@ export function Preview(): ReactNode {
     const naturalW = top?.asset.width ?? 16
     const naturalH = top?.asset.height ?? 9
 
-    const ready = (element: MediaElement): boolean =>
+    /*
+     * Text never waits on a file.
+     *
+     * Its picture is drawn live, so a text clip is showable the instant it
+     * exists — gating it on the baked PNG having loaded is what made a new text
+     * clip appear a beat after it was asked for, and made every edit to the
+     * words wait for a disk write nobody was watching.
+     */
+    const elementReady = (element: MediaElement): boolean =>
       element instanceof HTMLVideoElement
         ? element.readyState >= 2
         : element.complete && element.naturalWidth > 0
+
+    const ready = (layer: Layer): boolean =>
+      layer.clip.text ? true : elementReady(layer.element)
+
+    /*
+     * Graded on the GPU before it is drawn.
+     *
+     * Returns the element itself when the clip has no grade, so an ungraded
+     * timeline — the overwhelming majority of clips — costs nothing.
+     */
+    /*
+     * Text is drawn live, never fetched.
+     *
+     * A text clip's asset is a PNG the app bakes for the export, and the
+     * preview used to wait for that file: every pause in typing cost a
+     * full-canvas PNG encode, an IPC hop, a disk write and a re-decode before a
+     * single letter changed on screen. The letters are drawn here instead, from
+     * the same shared layout the bake uses, so typing is immediate and the file
+     * is written in the background where nobody is waiting for it.
+     */
+    const sourceFor = (layer: Layer): MediaElement | HTMLCanvasElement => {
+      if (layer.clip.text) {
+        const live = textPreviewCanvas(
+          layer.clip.id,
+          layer.clip.text,
+          ASPECTS[aspect].width,
+          ASPECTS[aspect].height,
+          // Frames from the clip's own first frame, so an animation plays when
+          // the playhead reaches it rather than when the timeline starts.
+          { frame: playhead - layer.clip.start, fps }
+        )
+        if (live) return live
+      }
+      return layer.element
+    }
+
+    const picture = (layer: Layer): CanvasImageSource =>
+      gradedSource(sourceFor(layer), layer.clip.color, layer.clip.id, repaint)
 
     let sourceFit: ViewTransform = { scale: 1, offsetX: 0, offsetY: 0 }
 
@@ -309,13 +789,13 @@ export function Preview(): ReactNode {
       sourceFit = { ...fit, offsetX: fit.offsetX + leftBox.x, offsetY: fit.offsetY + leftBox.y }
 
       for (const layer of layers) {
-        if (!ready(layer.element)) continue
+        if (!ready(layer)) continue
         const w = layer.asset.width ?? naturalW
         const h = layer.asset.height ?? naturalH
         const layerFit = fitTransform(w, h, leftBox.width, leftBox.height)
         ctx.globalAlpha = layer.alpha
         ctx.drawImage(
-          layer.element,
+          picture(layer),
           leftBox.x + layerFit.offsetX,
           leftBox.y + layerFit.offsetY,
           w * layerFit.scale,
@@ -347,41 +827,248 @@ export function Preview(): ReactNode {
       ctx.rect(rightBox.x, rightBox.y, rightBox.width, rightBox.height)
       ctx.clip()
 
-      const fit = fitTransform(target.width, target.height, rightBox.width, rightBox.height)
-      const frame = {
-        x: rightBox.x + fit.offsetX,
-        y: rightBox.y + fit.offsetY,
-        width: target.width * fit.scale,
-        height: target.height * fit.scale
-      }
+      const frame = outputFrame(box, target, splitRatio)!
 
       ctx.fillStyle = '#000'
       ctx.fillRect(frame.x, frame.y, frame.width, frame.height)
 
+      /*
+       * Adjustment layers, flushed in track order.
+       *
+       * One grades everything BELOW it, so it has to run after the layers under
+       * it are drawn and before any layer above it — grading the finished frame
+       * at the end would wrongly catch a title sitting on top of it, which is
+       * exactly where titles usually sit.
+       */
+      const trackOrder = new Map(project.tracks.map((t, i) => [t.id, i]))
+      const pendingGrades = project.clips
+        .filter(
+          (c) =>
+            c.adjustment &&
+            playhead >= c.start &&
+            playhead < clipEnd(c) &&
+            !project.tracks.find((t) => t.id === c.trackId)?.hidden
+        )
+        .sort((a, b) => (trackOrder.get(a.trackId) ?? 0) - (trackOrder.get(b.trackId) ?? 0))
+
+      const flushGradesBelow = (limit: number): void => {
+        while (pendingGrades.length > 0 && (trackOrder.get(pendingGrades[0].trackId) ?? 0) < limit) {
+          const grade = pendingGrades.shift()!
+          gradeRegion(ctx, frame, grade.color, grade.id, repaint)
+        }
+      }
+
       for (const layer of layers) {
-        if (!ready(layer.element)) continue
+        flushGradesBelow(trackOrder.get(layer.clip.trackId) ?? 0)
         const w = layer.asset.width ?? naturalW
         const h = layer.asset.height ?? naturalH
         const crop: CropRect = layer.clip.crop ?? { x: 0, y: 0, width: w, height: h }
-        const inner = fitTransform(crop.width, crop.height, frame.width, frame.height)
-        ctx.globalAlpha = layer.alpha
-        ctx.drawImage(
-          layer.element,
-          crop.x, crop.y, crop.width, crop.height,
-          frame.x + inner.offsetX,
-          frame.y + inner.offsetY,
+        const motion = layer.clip.motion
+
+        /*
+         * The clip's own box, not the whole canvas.
+         *
+         * Scale, position and opacity live on Clip.transform and were rendered
+         * by nothing, in either path — which is why a prop dropped on a track
+         * covered the entire frame with no way to shrink it. The box comes from
+         * the same function the renderer uses.
+         */
+        const target = ASPECTS[aspect]
+        const boxOf = clipBox(layer.clip, { width: target.width, height: target.height })
+        const px = frame.width / target.width
+        const py = frame.height / target.height
+
+        // A path moves the clip relative to its resting box — the same offset
+        // the renderer compiles into the overlay expression.
+        const travel = layer.clip.path
+          ? pathAt(layer.clip.path, playhead - layer.clip.start, layer.clip.duration)
+          : null
+        const driftX = travel ? (travel.x * target.width) / 2 : 0
+        const driftY = travel ? (travel.y * target.height) / 2 : 0
+        const inner =
+          boxOf.fit === 'cover'
+            ? coverTransform(crop.width, crop.height, boxOf.width * px, boxOf.height * py)
+            : fitTransform(crop.width, crop.height, boxOf.width * px, boxOf.height * py)
+
+        ctx.globalAlpha = layer.alpha * boxOf.opacity * layer.keyed.opacity
+
+        const destination = [
+          frame.x + (boxOf.x + driftX) * px + inner.offsetX,
+          frame.y + (boxOf.y + driftY) * py + inner.offsetY,
           crop.width * inner.scale,
           crop.height * inner.scale
-        )
+        ] as const
+
+        /*
+         * Parallax: draw the planes, back to front, each at its own rate.
+         *
+         * Planes are baked at a capped working size, so the crop — which is in
+         * asset pixels — has to be scaled into plane space before the move is
+         * applied inside it.
+         */
+        if (layer.planes && motion) {
+          for (const [index, plane] of layer.planes.entries()) {
+            if (!plane.element.complete || plane.element.naturalWidth === 0) continue
+            const scale = plane.width / Math.max(1, w)
+            const region = {
+              x: crop.x * scale,
+              y: crop.y * scale,
+              width: crop.width * scale,
+              height: crop.height * scale
+            }
+            const rect = motionSourceRect(
+              motion,
+              layer.progress,
+              layer.elapsed,
+              region.width,
+              region.height,
+              planeShare(motion, motion.amount, plane.depth)
+            )
+            ctx.drawImage(
+              gradedSource(plane.element, layer.clip.color, `${layer.clip.id}:p${index}`, repaint),
+              region.x + rect.sx, region.y + rect.sy, rect.sw, rect.sh,
+              ...destination
+            )
+          }
+          continue
+        }
+
+        if (!ready(layer)) continue
+
+        /*
+         * Rotation, around the middle of where the clip lands.
+         *
+         * The preview never drew rotation at all — not even the static kind —
+         * so a turned prop looked upright on screen and turned in the export.
+         */
+        const turn = layer.clip.keyframes?.rotation ? layer.keyed.rotation : boxOf.rotation
+        const turned = Math.abs(turn) > 0.01
+        if (turned) {
+          ctx.save()
+          const cx = destination[0] + destination[2] / 2
+          const cy = destination[1] + destination[3] / 2
+          ctx.translate(cx, cy)
+          ctx.rotate((turn * Math.PI) / 180)
+          ctx.translate(-cx, -cy)
+        }
+
+        const clipped = boxOf.fit === 'cover'
+        if (clipped) {
+          ctx.save()
+          ctx.beginPath()
+          ctx.rect(
+            frame.x + (boxOf.x + driftX) * px,
+            frame.y + (boxOf.y + driftY) * py,
+            boxOf.width * px,
+            boxOf.height * py
+          )
+          ctx.clip()
+        }
+
+        // A flat move: the same rectangle the renderer's zoompan would show.
+        const rect = motion
+          ? motionSourceRect(motion, layer.progress, layer.elapsed, crop.width, crop.height)
+          : zoomedRect(crop.width, crop.height, layer.keyed.zoom)
+
+        /*
+         * The shape, live.
+         *
+         * A text shape is drawn from its spec like any other text, so retyping
+         * the word changes the hole in the picture immediately — which is the
+         * entire point of the feature — rather than after a file is written.
+         */
+        const matteShape = layer.matteClip?.text
+          ? textPreviewCanvas(
+              layer.matteClip.id,
+              layer.matteClip.text,
+              ASPECTS[aspect].width,
+              ASPECTS[aspect].height,
+              // The shape animates too — words that fly in carry the footage
+              // they are cut from with them.
+              { frame: playhead - layer.matteClip.start, fps }
+            )
+          : layer.matteElement && elementReady(layer.matteElement)
+            ? layer.matteElement
+            : null
+
+        const shaped =
+          matteShape
+            ? mattedSource(
+                layer.clip.id,
+                picture(layer),
+                matteShape,
+                { sx: crop.x + rect.sx, sy: crop.y + rect.sy, sw: rect.sw, sh: rect.sh },
+                destination[2],
+                destination[3]
+              )
+            : null
+
+        /*
+         * The mask, applied here and not inside the grade pass.
+         *
+         * This is the one point where the clip has been fitted to its box, and
+         * the box is the space a mask's fractions are measured in — the same
+         * space ffmpeg applies them in, after its own fit. Doing it earlier, on
+         * the source element, would put the shape in the wrong place for every
+         * clip that is cropped or scaled.
+         */
+        const mask = layer.clip.mask
+        // Grade mode needs the PLAIN picture underneath; if `picture` were the
+        // background, everything would already be graded and "only inside"
+        // would show nothing at all.
+        const overMatte = shaped !== null && mask?.mode !== 'grade'
+        const masked = mask
+          ? maskedSource(
+              layer.clip.id,
+              mask.mode === 'grade' ? layer.element : (overMatte ? shaped! : picture(layer)),
+              mask,
+              overMatte
+                ? null
+                : { sx: crop.x + rect.sx, sy: crop.y + rect.sy, sw: rect.sw, sh: rect.sh },
+              destination[2],
+              destination[3],
+              mask.mode === 'grade' ? picture(layer) : undefined
+            )
+          : null
+
+        if (masked) {
+          ctx.drawImage(masked, destination[0], destination[1], destination[2], destination[3])
+        } else if (shaped) {
+          // Already cut to size by the scratch canvas, so it draws whole.
+          ctx.drawImage(shaped, destination[0], destination[1], destination[2], destination[3])
+        } else {
+          ctx.drawImage(
+            picture(layer),
+            crop.x + rect.sx, crop.y + rect.sy, rect.sw, rect.sh,
+            ...destination
+          )
+        }
+        if (clipped) ctx.restore()
+        if (turned) ctx.restore()
       }
+      // Anything above every picture still applies.
+      flushGradesBelow(Number.POSITIVE_INFINITY)
       ctx.globalAlpha = 1
+
+      drawGuides(ctx, frame, showThirds, showSafe)
 
       // Captions are drawn here rather than only at export: judging a style by
       // rendering a video first is an unusable feedback loop.
-      if (project.captions.enabled && top) {
-        const style = activeCaptionStyle(project)
-        const caption = captionAt(project, top.clip, playhead, style)
-        if (caption) drawCaptions(ctx, frame, style, caption)
+      if (project.captions.enabled) {
+        /*
+         * The caption's source clip, chosen the way the EXPORT chooses it.
+         *
+         * This used to read `top` — the highest layer at the playhead — so
+         * putting a text card or a sticker over the picture made the captions
+         * disappear from the preview while they still burned into the exported
+         * file. Both sides ask the same shared function now.
+         */
+        const source = captionSourceClip(project, playhead)
+        if (source) {
+          const style = activeCaptionStyle(project)
+          const caption = captionAt(project, source, playhead, style)
+          if (caption) drawCaptions(ctx, frame, style, caption, fps)
+        }
       }
       ctx.restore()
     }
@@ -404,12 +1091,50 @@ export function Preview(): ReactNode {
         ? prev
         : sourceFit
     )
-  }, [aspect, splitRatio, box.width, box.height, playhead, layersAtFrame, project])
+    // showThirds/showSafe/previewTool belong here: without them the memoised
+    // draw closes over their opening values, the toolbox button lights up, and
+    // the picture never changes.
+  }, [
+    aspect,
+    splitRatio,
+    box.width,
+    box.height,
+    playhead,
+    layersAtFrame,
+    project,
+    showThirds,
+    showSafe,
+    previewTool,
+    repaint
+  ])
+
+  // Any change `draw` can see — a new project, a moved playhead, a toggled
+  // guide — gives it a new identity, and that is the signal to repaint.
+  useEffect(() => {
+    dirty.current = true
+  }, [draw])
 
   useEffect(() => {
     let raf = 0
     const tick = (): void => {
-      draw()
+      /*
+       * Repaint when something changed, or when it is moving. Not otherwise.
+       *
+       * This loop used to call draw() on every animation frame regardless —
+       * sixty full composites a second of every layer, every grade and every
+       * mask, forever, while the app sat idle on a still frame. That is a core
+       * of a laptop spent painting a picture identical to the one already on
+       * screen, and it is why everything ELSE felt heavy: each real interaction
+       * had to compete with it for the same main thread.
+       *
+       * `draw` is a useCallback over the project, the playhead and the view
+       * settings, so its identity changing IS the signal that the picture is
+       * stale. Playback is its own reason to keep going.
+       */
+      if (dirty.current || playing) {
+        dirty.current = false
+        draw()
+      }
 
       if (playing) {
         const layers = layersAtFrame(playhead)
@@ -430,7 +1155,14 @@ export function Preview(): ReactNode {
           }
         }
 
-        if (next !== null) {
+        /*
+         * Finite, not just non-null.
+         *
+         * A media element can report a NaN currentTime while it is still
+         * starting, and NaN survives every comparison below — the playhead
+         * freezes and the canvas goes blank with no error anywhere.
+         */
+        if (next !== null && Number.isFinite(next)) {
           const end = projectDuration(project)
           if (next >= end) {
             if (loop) {
@@ -455,8 +1187,58 @@ export function Preview(): ReactNode {
     return () => cancelAnimationFrame(raf)
   }, [draw, playing, playhead, fps, project, layersAtFrame, setPlayhead, setPlaying, syncMedia, loop])
 
+  /*
+   * The selected text clip, when the playhead is actually over it.
+   *
+   * Editing words that are not on screen would type into nothing.
+   */
+  const selectedClip = (() => {
+    const found = project.clips.find((c) => c.id === selectedClipId)
+    if (!found) return null
+    return clipCoversFrame(found, playhead) ? found : null
+  })()
+  const selectedTextClip = selectedClip?.text ? selectedClip : null
+  /*
+   * Handles go on everything except text.
+   *
+   * A text clip is a full-canvas transparent PNG, so scaling its transform would
+   * scale the whole frame rather than the words. TextOverlay moves and sizes the
+   * type itself, which is what the user is actually reaching for.
+   */
+  const selectedBoxClip = selectedClip && !selectedClip.text ? selectedClip : null
+  const outputRect = outputFrame(box, ASPECTS[aspect], splitRatio)
+
   const topLayer = layersAtFrame(playhead).at(-1) ?? null
+  /*
+   * The reframe rectangle follows the TOOL now, not the split view.
+   *
+   * It used to appear only when the source/output comparison was open, which is
+   * an odd home for it: comparing has nothing to do with choosing a crop, and
+   * anyone who never opened the split never found the tool at all.
+   */
+  /*
+   * A clip that is selected but not under the playhead.
+   *
+   * It is not being drawn, so it has no box and no handles — there is nothing
+   * on screen to grab. Meanwhile the Inspector's colour controls keep working,
+   * because they read the selection directly rather than the frame. That
+   * combination is genuinely confusing: it looks precisely like sizing and
+   * moving are broken while brightness is fine, which is how it was reported.
+   *
+   * Saying so, with one click to get there, is the difference between a tool
+   * that appears broken and a tool that is merely showing a different moment.
+   */
+  const offScreenClip = (() => {
+    if (!selectedClipId || selectedClip) return null
+    return project.clips.find((c) => c.id === selectedClipId) ?? null
+  })()
+
+  // The mask tool needs no layer under the pointer and no split view — the
+  // shape belongs to the selected clip wherever its pixels happen to be.
+  const showMask = previewTool === 'mask' && selectedClip?.mask !== undefined
+
   const showCrop =
+    previewTool === 'crop' &&
     splitRatio > 0.15 &&
     topLayer !== null &&
     topLayer.clip.id === selectedClipId &&
@@ -465,11 +1247,55 @@ export function Preview(): ReactNode {
   return (
     <div className="flex h-full flex-col bg-ink-950">
       <div ref={boxRef} className="relative flex-1 overflow-hidden">
-        <canvas ref={canvasRef} className="absolute inset-0" />
+        {/* Tagged so the style gallery can show a look over the real frame
+            rather than over an invented background. */}
+        <canvas ref={canvasRef} data-forge-preview="1" className="absolute inset-0" />
         <div ref={holderRef} className="hidden" />
 
         {showCrop && topLayer && (
           <CropOverlay clip={topLayer.clip} asset={topLayer.asset} transform={transform} />
+        )}
+
+        {/* Edit the words on the picture, not in a panel two columns away. */}
+        {selectedTextClip && outputRect && (
+          <TextOverlay
+            clip={selectedTextClip}
+            frame={outputRect}
+            canvas={ASPECTS[aspect]}
+          />
+        )}
+
+        {/* Move, scale and rotate anything else where you can see it. */}
+        {selectedBoxClip && outputRect && !showCrop && !showMask && (
+          <TransformOverlay
+            clip={selectedBoxClip}
+            frame={outputRect}
+            canvas={ASPECTS[aspect]}
+          />
+        )}
+
+        {/*
+         * The mask, on top of everything and instead of the transform box: two
+         * sets of drag handles over one picture is a coin toss about which one
+         * a drag will land on.
+         */}
+        {showMask && selectedClip?.mask && outputRect && (
+          <MaskOverlay
+            clip={selectedClip}
+            mask={selectedClip.mask}
+            frame={outputRect}
+            canvas={ASPECTS[aspect]}
+          />
+        )}
+
+        {offScreenClip && (
+          <button
+            onClick={() => setPlayhead(offScreenClip.start)}
+            className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-ink-700 bg-ink-900/95 px-3 py-1.5 text-[11px] text-ink-300 shadow-lg backdrop-blur transition-colors hover:border-ink-600 hover:text-ink-100"
+          >
+            The selected clip is not at this moment —{' '}
+            <span className="text-flame-400">go to it</span>
+          </button>
         )}
 
         {splitRatio > 0.02 && splitRatio < 0.98 && (

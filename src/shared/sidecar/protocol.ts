@@ -143,7 +143,19 @@ export const SIDECAR_METHODS = {
   /** Liveness probe. */
   ping: 'system.ping',
   /** Transcribe audio: { path, language?, model? } -> word-level timestamps. */
-  transcribe: 'asr.transcribe'
+  transcribe: 'asr.transcribe',
+  /** Beats and musical structure: { path, startMs?, endMs? }. */
+  beats: 'audio.beats',
+  /** Cut a photo into depth planes for parallax: { path, ffmpeg, ffprobe, layers? }. */
+  depthLayers: 'depth.layers',
+  /**
+   * Separate a song into a voice and an instrumental: { path, outDir? }.
+   *
+   * Optional, and degraded on most installs — it needs torch. The app falls
+   * back to mid/side in the main process, which gives a real instrumental and
+   * only an emphasised voice; the result's `quality` says which one answered.
+   */
+  stems: 'audio.stems'
 } as const
 
 export interface HelloResult {

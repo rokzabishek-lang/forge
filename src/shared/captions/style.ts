@@ -36,6 +36,22 @@ export interface CaptionStyle {
    * routes to the Chromium frame server (tier 2) instead of libass.
    */
   animated?: boolean
+  /**
+   * A look from the text style library — the same 42 the text clips use.
+   *
+   * Gradients, metallic fills, glows, extrusions and highlight blocks are all
+   * unexpressible in `.ass`, so choosing one routes the captions to tier 2,
+   * where the ordinary text painter draws them. Undefined keeps the flat look
+   * libass can burn in during the normal encode at no extra cost.
+   */
+  textStyleId?: string
+  /**
+   * How each line arrives, from the text animation library.
+   *
+   * Independent of the look, as everywhere else: any animation works with any
+   * style on any face. Also tier 2 only — ASS has no per-word easing.
+   */
+  animationId?: string
 }
 
 export const CAPTION_STYLES: CaptionStyle[] = [
@@ -133,6 +149,10 @@ export type StyleOverrides = Partial<
     | 'wordsPerLine'
     | 'highlightScale'
     | 'animated'
+    | 'textStyleId'
+    | 'animationId'
+    | 'bold'
+    | 'shadowDepth'
   >
 >
 

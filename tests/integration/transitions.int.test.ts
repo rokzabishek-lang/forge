@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { mkdtemp, rm } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg'
@@ -103,9 +104,31 @@ describe('transition model', () => {
     expect(projectDuration(roundTrip)).toBe(projectDuration(original))
   })
 
-  it('refuses a transition on the first clip of a track', () => {
-    const project = pair()
-    expect(addTransition(project, 'a', 'dissolve', 15)).toBe(project)
+  /*
+   * This used to assert the opposite, and the opposite was wrong.
+   *
+   * A transition on the first clip of a track is not a mistake: it blends
+   * against whatever is composited underneath, and against nothing at all it is
+   * a fade from black — one of the commonest edits there is. Refusing it meant
+   * a title over footage could be offered a transition that silently did
+   * nothing when clicked.
+   */
+  it('allows a transition on the first clip of a track', () => {
+    const applied = addTransition(pair(), 'a', 'dissolve', 15)
+    expect(applied.clips.find((c) => c.id === 'a')!.transitionIn).toEqual({
+      id: 'dissolve',
+      durationFrames: 15
+    })
+  })
+
+  it('takes no time from the timeline when there is nothing to overlap', () => {
+    const original = pair()
+    const applied = addTransition(original, 'a', 'dissolve', 15)
+    expect(applied.clips.find((c) => c.id === 'a')!.start).toBe(0)
+    expect(applied.clips.find((c) => c.id === 'b')!.start).toBe(
+      original.clips.find((c) => c.id === 'b')!.start
+    )
+    expect(projectDuration(applied)).toBe(projectDuration(original))
   })
 
   it('clamps a transition longer than the clips it joins', () => {
@@ -161,4 +184,77 @@ describe('transition rendering', () => {
     expect(args).not.toContain('fade=t=in')
     expect(args).toContain("overlay=x='0':y='0'")
   })
+})
+
+describe('luma mask wipes', () => {
+  const MASK = join(process.cwd(), 'assets/transitions/extra/barr_ripple_1.jpg')
+  const hasMask = existsSync(MASK)
+  const maybe = hasMask ? it : it.skip
+
+  const withMask = (): Project => {
+    const project = addTransition(pair(), 'b', 'mask-test', 30)
+    return project
+  }
+
+  const extras = [
+    {
+      id: 'mask-test',
+      label: 'Ripple',
+      family: 'smooth' as const,
+      tier: 1 as const,
+      defaultFrames: 30,
+      mask: 'transitions/extra/barr_ripple_1.jpg'
+    }
+  ]
+
+  maybe('adds one input per masked transition and merges it as alpha', () => {
+    const args = buildRenderPlan({
+      project: withMask(),
+      outputPath: '/o.mp4',
+      extraTransitions: extras,
+      resolveAsset: (p) => join(process.cwd(), 'assets', p)
+    }).args.join(' ')
+
+    expect(args).toContain('barr_ripple_1.jpg')
+    // The mask must outlive the wipe or alphamerge runs out of frames.
+    expect(args).toContain('-loop 1')
+    expect(args).toContain('format=gray')
+    expect(args).toContain('geq=lum=')
+    expect(args).toContain('alphamerge')
+  })
+
+  maybe('renders a real wipe that is mid-blend part-way through', async () => {
+    const out = join(dir, 'luma.mp4')
+    const plan = buildRenderPlan({
+      project: withMask(),
+      outputPath: out,
+      extraTransitions: extras,
+      resolveAsset: (p) => join(process.cwd(), 'assets', p)
+    })
+
+    await run(FFMPEG, plan.args, { maxBuffer: 16 * 1024 * 1024 })
+
+    const before = await centrePixel(out, 0.3)
+    const after = await centrePixel(out, 2.6)
+    expect(before[2]).toBeGreaterThan(120) // blue first
+    expect(after[0]).toBeGreaterThan(120) // red after
+
+    // Somewhere in the overlap the frame must contain BOTH colours — a wipe
+    // reveals progressively, so a mid frame is part blue and part red.
+    const { stdout } = await run(
+      FFMPEG,
+      ['-hide_banner', '-loglevel', 'error', '-ss', '1.5', '-i', out,
+       '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1'],
+      { encoding: 'buffer', maxBuffer: 32 * 1024 * 1024 }
+    )
+    const frame = stdout as unknown as Buffer
+    let reddish = 0
+    let bluish = 0
+    for (let i = 0; i < frame.length; i += 3) {
+      if (frame[i] > 120 && frame[i + 2] < 90) reddish++
+      if (frame[i + 2] > 120 && frame[i] < 90) bluish++
+    }
+    expect(reddish).toBeGreaterThan(0)
+    expect(bluish).toBeGreaterThan(0)
+  }, 180_000)
 })

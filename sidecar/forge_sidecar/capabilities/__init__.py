@@ -12,7 +12,18 @@ from typing import Callable
 from ..rpc import Server
 
 # (method name reported when unavailable, module name)
-OPTIONAL = [("asr.transcribe", "asr")]
+OPTIONAL = [
+    ("asr.transcribe", "asr"),
+    ("audio.beats", "beats"),
+    ("depth.layers", "depth"),
+    # Optional in the strongest sense: the app can already split a song with
+    # mid/side and the bundled ffmpeg, so this being absent costs quality
+    # rather than the feature. See stems.py.
+    ("audio.stems", "stems"),
+    # Speech, the local half. Absent, the app uses whatever hosted endpoint the
+    # user configured — see src/shared/voice/provider.ts.
+    ("voice.speak", "voice"),
+]
 
 
 def register_all(server: Server) -> None:

@@ -4,6 +4,7 @@ import { framesToSeconds } from '@shared/timeline'
 import { buildRenderPlan, type RenderRequest } from '@shared/render/plan'
 import { runFfmpeg } from '../ffmpeg/run'
 import type { ExecutionHandle } from '../queue'
+import type { TransitionDef } from '@shared/transitions/registry'
 
 export interface RenderOptions {
   project: Project
@@ -13,6 +14,9 @@ export interface RenderOptions {
   preset?: string
   subtitlesPath?: string
   fontsDir?: string
+  captionOverlay?: { listPath: string; y: number; height: number }
+  resolveAsset?: (relativePath: string) => string
+  extraTransitions?: TransitionDef[]
 }
 
 /**

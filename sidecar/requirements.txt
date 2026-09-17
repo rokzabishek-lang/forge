@@ -5,3 +5,21 @@
 # (soundfile has no cp314 wheel) and keeps one ffmpeg version across the app.
 
 faster-whisper==1.2.1
+
+# Beat and onset detection.
+#
+# docs/STACK.md chose madmom, but madmom 0.16.1 has no cp314 wheel and does not
+# build on modern Python — it predates several numpy removals. librosa is the
+# working backend on this interpreter. Beat This! (MIT) remains the quality
+# upgrade and slots in behind the same capability.
+librosa==1.0.0
+
+# Depth planes for 2.5D parallax on stills (docs/PARALLAX.md).
+#
+# Depth Anything V2 Small via ONNX Runtime — Apache-2.0, ~27MB quantised,
+# downloaded on first use rather than bundled. scipy comes with librosa and
+# does the clustering, morphology and hole filling, so no opencv is needed;
+# image decode and encode go through the bundled ffmpeg for the same reason
+# audio does.
+onnxruntime==1.30.0
+huggingface-hub==1.31.0

@@ -6,6 +6,7 @@ import { searchEntries } from '@shared/assets/catalog'
 import { useCatalog } from '../catalog'
 import { useEditor } from '../store'
 import { assetUrl } from '../media'
+import { setDragPayload } from '../dragPayload'
 
 const KINDS: { id: AssetKind; label: string }[] = [
   { id: 'font', label: 'Fonts' },
@@ -207,6 +208,18 @@ function Tile({
 
   const url = seen ? assetUrl(root, entry.file) : ''
 
+  const dragProps = {
+    draggable: true,
+    onDragStart: (e: React.DragEvent) => {
+      setDragPayload(e, {
+        kind: entry.kind,
+        file: entry.file,
+        name: entry.name,
+        ...(entry.kind === 'transition' ? { transitionId: entry.id } : {})
+      })
+    }
+  }
+
   if (entry.kind === 'font') {
     const meta = entry.meta as FontMeta
     return (
@@ -254,6 +267,7 @@ function Tile({
     return (
       <button
         ref={ref as unknown as React.RefObject<HTMLButtonElement>}
+        {...dragProps}
         onClick={() => {
           // Auditioning loads it into the waveform below, where it can be heard
           // and trimmed before it is placed.
@@ -279,8 +293,13 @@ function Tile({
   return (
     <div
       ref={ref}
-      title={`${entry.name}${title ? ` · ${title.textSlots} text slot${title.textSlots === 1 ? '' : 's'}` : ''}`}
-      className="group flex flex-col gap-1 overflow-hidden rounded-md border border-ink-700 bg-white p-1 shadow-sm transition-colors hover:border-flame-500"
+      {...dragProps}
+      title={
+        entry.kind === 'transition'
+          ? `${entry.name} — drag onto a clip to apply it`
+          : `${entry.name} — drag onto the timeline${title ? ` · ${title.textSlots} text slot${title.textSlots === 1 ? '' : 's'}` : ''}`
+      }
+      className="group flex cursor-grab flex-col gap-1 overflow-hidden rounded-md border border-ink-700 bg-white p-1 shadow-sm transition-colors hover:border-flame-500 active:cursor-grabbing"
     >
       <div className="flex aspect-square items-center justify-center overflow-hidden rounded-sm bg-white">
         {url ? (

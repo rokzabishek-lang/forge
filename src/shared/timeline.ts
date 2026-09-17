@@ -1,4 +1,7 @@
 import type { MediaKind } from './types'
+import type { KeyframeTracks } from './render/keyframes'
+import { isNeutralCurves, type Curves } from './render/colourCurve'
+import type { Mask } from './render/mask'
 import type { Transcript } from './transcript'
 
 /**
@@ -37,6 +40,21 @@ export interface MediaAsset {
   hasVideo: boolean
   hasAudio: boolean
   size: number
+  /**
+   * Baked frames, when the editor DREW this asset moving.
+   *
+   * Animated text is the only producer today: the renderer paints the frames
+   * that actually move and writes them numbered, and `path` stays the settled
+   * still so anything wanting one picture still finds one. The export reads the
+   * sequence and holds its last frame for the rest of the clip, so what it costs
+   * is set by how long the movement lasts rather than by how long the words are
+   * on screen.
+   */
+  frames?: {
+    /** An ffmpeg image2 pattern, e.g. `…/clip.seq/%05d.png`, numbered from 0. */
+    pattern: string
+    count: number
+  }
 }
 
 export interface Transform {
@@ -44,14 +62,65 @@ export interface Transform {
   x: number
   y: number
   scale: number
+  /**
+   * Vertical scale, when it differs from `scale`.
+   *
+   * A filmstrip panel is a quarter of the frame wide and all of it tall, which
+   * one uniform scale cannot say. Absent means square with `scale`, so every
+   * existing clip is unaffected.
+   */
+  scaleY?: number
+  /**
+   * How the source fills its box.
+   *
+   * `contain` (the default, and what every clip did before) letterboxes to fit.
+   * `cover` fills the box and crops the overflow — which is the only sensible
+   * thing for a narrow panel, since a landscape photo letterboxed into a tall
+   * strip is a thin band floating in black.
+   */
+  fit?: 'contain' | 'cover'
   rotation: number
   opacity: number
 }
 
+/**
+ * The grade on a clip.
+ *
+ * The three sliders match ffmpeg's `eq` exactly — brightness is an offset around
+ * 0, contrast and saturation are multipliers around 1 — so the neutral state is
+ * also the identity and a clip that has never been graded costs no filter.
+ */
 export interface ColorAdjust {
+  /** -1..1, an offset. */
   brightness: number
+  /** 0..3, a multiplier. 1 is untouched. */
   contrast: number
+  /** 0..3, a multiplier. 0 is greyscale. */
   saturation: number
+  /**
+   * Per-channel curves — the grading tool, before any look.
+   *
+   * Lift the shadows, roll off the highlights, put a little blue in the blacks.
+   * Applied after the three sliders and before the LUT, which is the order every
+   * grading tool uses: correct, shape, then style.
+   */
+  curves?: Curves
+  /**
+   * A 3D LUT laid over the top, as every grading tool ships them.
+   *
+   * Applied after the three sliders, which is the order Resolve and CapCut both
+   * use: correct the picture first, then put the look on it.
+   */
+  lut?: LutRef
+}
+
+export interface LutRef {
+  /** Absolute path to a .cube file. */
+  file: string
+  /** For the UI — a filename is not always the name of the look. */
+  name?: string
+  /** 0..1. CapCut calls this Intensity; a look at full strength is rare. */
+  intensity: number
 }
 
 /**
@@ -69,6 +138,28 @@ export interface CropRect {
 export const DEFAULT_TRANSFORM: Transform = { x: 0, y: 0, scale: 1, rotation: 0, opacity: 1 }
 export const DEFAULT_COLOR: ColorAdjust = { brightness: 0, contrast: 1, saturation: 1 }
 
+/** True when a grade would change nothing, so the render can skip it entirely. */
+export function isNeutralGrade(color: ColorAdjust | undefined): boolean {
+  if (!color) return true
+  if (color.lut?.file && color.lut.intensity > 0) return false
+  if (!isNeutralCurves(color.curves)) return false
+  return (
+    Math.abs(color.brightness) < 0.001 &&
+    Math.abs(color.contrast - 1) < 0.001 &&
+    Math.abs(color.saturation - 1) < 0.001
+  )
+}
+
+/** True when only the LUT is doing anything — the eq filter can be skipped. */
+export function isNeutralEq(color: ColorAdjust | undefined): boolean {
+  if (!color) return true
+  return (
+    Math.abs(color.brightness) < 0.001 &&
+    Math.abs(color.contrast - 1) < 0.001 &&
+    Math.abs(color.saturation - 1) < 0.001
+  )
+}
+
 export interface Clip {
   id: string
   assetId: string
@@ -85,12 +176,360 @@ export interface Clip {
   /** Static reframe rectangle. Keyframed crop paths arrive with the NLE. */
   crop?: CropRect
   /**
+   * Playback rate. 1 is untouched; below 1 is slow motion.
+   *
+   * The source range stays where it is and `duration` changes instead, which is
+   * what makes half speed show the same footage over twice the time. See
+   * render/speed.ts — the frames consumed are always `duration × speed`.
+   */
+  speed?: number
+  /**
+   * Invent the in-between frames rather than repeating them.
+   *
+   * Only meaningful below 1× — speeding up discards frames and has nothing to
+   * interpolate. Measured at 41× the render cost, so it is never the default.
+   */
+  smoothSlow?: boolean
+  /**
+   * A shape on the picture, and something that happens only inside it.
+   *
+   * Distinct from `matte`, which takes its shape from another clip on the
+   * timeline: this one is a drawn region belonging to this clip alone, and it
+   * carries a verb — blur inside, colour inside, or show only inside. See
+   * render/mask.ts for why a video editor's toolbox is a mask toolbox and not a
+   * paint toolbox.
+   */
+  mask?: Mask
+  /**
    * Transition into this clip. The clip genuinely overlaps the one before it by
    * `durationFrames` — that overlap IS the transition, and the compositor draws
    * this clip over the previous one for its duration.
    */
   transitionIn?: { id: string; durationFrames: Frames }
+  /**
+   * A title card generated from an SVG template.
+   *
+   * The clip's asset points at a PNG rendered from this; `version` increments on
+   * every edit so the preview knows the bytes changed even though the path did
+   * not.
+   */
+  title?: { template: string; texts: string[]; version: number }
+  /**
+   * Plain text, with no template behind it.
+   *
+   * The title system needs an SVG file with placeholders in it, which meant
+   * there was no way to simply write a word — and so nothing to put behind a
+   * subject, which is what the whole sandwich exists for. `version` increments
+   * on every edit so the preview knows the PNG changed although its path did
+   * not.
+   */
+  text?: TextSpec
+  /**
+   * A flat card of colour.
+   *
+   * Text needs something to sit on when there is no footage under it, and a
+   * matte or a colour wash between shots is an ordinary editing move. Cheaper
+   * and clearer as a real clip than as a special case in the renderer.
+   */
+  solid?: SolidSpec
+  /**
+   * Set when an automation rule created this clip.
+   *
+   * Re-running a rule replaces its previous output rather than stacking a second
+   * copy on top, and it lets the UI show *why* something appeared — which is
+   * what keeps an automated edit auditable rather than mysterious.
+   */
+  generatedBy?: { rule: string; reason: string }
+  /**
+   * Camera move across a still.
+   *
+   * Without it a photo reel is a slideshow: a static image held for two seconds
+   * reads as dead air however well the cut lands on the beat. Two moves are not
+   * enough either — alternating push/pull down a reel is itself a pattern the
+   * eye picks up within four shots, which is why the repertoire is wide.
+   */
+  motion?: Motion
+  /**
+   * Animated position, as points the clip travels between.
+   *
+   * Position only, deliberately. Overlay `x`/`y` take expressions in `t` and
+   * the transition system already relies on that, so this is proven ground.
+   * Animated SIZE is not here: `scale` with `eval=frame` re-evaluates but does
+   * not follow its own expression — measured, a width that should have grown
+   * from 192px to 495px shrank to 138px instead. That is the same trap as
+   * `crop` resolving w/h once, and it is not something to build on.
+   *
+   * `frame` is relative to the clip's own start, so moving a clip does not
+   * rewrite its path.
+   */
+  path?: PathPoint[]
+  /**
+   * Values that change over the clip — zoom, rotation, opacity.
+   *
+   * Position is not here: the motion path already animates it and has presets,
+   * and two mechanisms for one property would be two things to disagree.
+   */
+  keyframes?: KeyframeTracks
+  /**
+   * Take this clip's alpha from another clip's brightness.
+   *
+   * Text as a window onto footage — the trailer look where a photograph moves
+   * inside block letters. The mechanism is `alphamerge`, the same filter the
+   * mask transitions already use; what is new is that the mask is a clip on the
+   * timeline rather than a file in the library, so it can be typed and moved.
+   */
+  matte?: { clipId: string }
+  /**
+   * This clip is only a shape for another clip's matte, never drawn itself.
+   *
+   * It stays an ordinary clip on the timeline — visible, selectable, editable —
+   * because the whole point is being able to retype the word and see the fill
+   * follow.
+   */
+  matteOnly?: boolean
+  /**
+   * A grade applied to everything on the tracks BELOW it.
+   *
+   * Resolve's adjustment clip, and the shape of it is the elegant part: the
+   * track position decides which layers are included, the horizontal duration
+   * decides when. One object carrying two different meanings on two axes.
+   *
+   * It is never drawn itself — it has no picture — so the clip's own colour is
+   * the grade, and its media is a transparent card that exists only to make it
+   * an ordinary, draggable, trimmable clip like everything else.
+   */
+  adjustment?: boolean
+  /**
+   * Which depth planes this clip draws.
+   *
+   * Text behind a person needs the background and the subject to sit on either
+   * side of the text in the compositing order, and a clip is one stream — so
+   * the photo becomes TWO ordinary clips: one drawing `background`, one drawing
+   * `front`, with the text on a track between them.
+   *
+   * Ordinary, visible, deletable clips rather than a hidden mode: you can see
+   * why the text is behind the subject by looking at the timeline, and you undo
+   * it by deleting a clip. See docs/AUTOMATION.md §6.
+   */
+  planes?: 'background' | 'front'
 }
+
+export interface TextSpec {
+  content: string
+  /** Font family name, resolved against the catalogue's fonts. */
+  font: string
+  /** Cap height as a fraction of canvas height, so it scales with the canvas. */
+  size: number
+  color: string
+  align: 'left' | 'center' | 'right'
+  /** Where the block sits vertically. `lower` is the lower-third convention. */
+  position: 'top' | 'center' | 'lower'
+  weight: number
+  /**
+   * Letter spacing, as a fraction of the font size.
+   *
+   * The single biggest lever on whether type reads as cinematic. Wide tracking
+   * with capitals is the film-title look; tight tracking builds tension. A
+   * default of zero is what makes text look like a caption rather than a title.
+   */
+  tracking: number
+  /** Capitals pressurise; lowercase is approachable. */
+  uppercase: boolean
+  /**
+   * Soft drop shadow opacity, 0..1.
+   *
+   * Preferred over an outline: the craft guidance is that thick shadows and
+   * harsh strokes both look poor, and that a soft semi-transparent shadow is
+   * what lifts letters off a busy background.
+   */
+  shadow: number
+  /** Outline width as a fraction of the font size; 0 for none. */
+  stroke: number
+  strokeColor: string
+  /**
+   * A look from the style library: gradient fill, glow, outline, metallic.
+   *
+   * Separate from `font` on purpose — a style is a recipe and a font is a face,
+   * and keeping them independent is what turns two dozen styles across fifty
+   * faces into twelve hundred looks instead of twelve hundred presets. See
+   * render/textStyle.ts.
+   */
+  styleId?: string
+  /**
+   * How the words arrive, from the animation library.
+   *
+   * Independent of the style and the font, like everything else here: any
+   * animation works with any look. See render/textAnimation.ts — only the
+   * moving frames are baked for the export, and the last of them is held.
+   */
+  animationId?: string
+  /**
+   * The word being spoken, for captions.
+   *
+   * Deliberately not part of a style: the index moves every few frames, and it
+   * rides ON TOP of whatever style the line has, so a gradient caption keeps its
+   * gradient and only the active word changes colour and size. `word` counts
+   * from zero across the whole content; -1 highlights nothing.
+   */
+  highlight?: { word: number; color?: string; scale?: number }
+  /**
+   * Side margin as a fraction of the width, when it is not the title-safe one.
+   *
+   * Captions hold a wider boundary than titles do — a subtitle at the very edge
+   * of a phone frame sits under the interface.
+   */
+  margin?: number
+  /**
+   * Nudge away from the anchored position, as a fraction of the canvas.
+   *
+   * `position` and `align` put the block somewhere sensible; these let it be
+   * dragged anywhere from there. Optional so projects saved before free
+   * positioning existed still open.
+   */
+  offsetX?: number
+  offsetY?: number
+  /** Bumped on every edit — the path stays the same, the bytes do not. */
+  version: number
+}
+
+export interface SolidSpec {
+  color: string
+  /** 0..1; a translucent card is a wash over what is underneath. */
+  opacity: number
+  version: number
+}
+
+export const DEFAULT_TEXT: Omit<TextSpec, 'version'> = {
+  content: 'YOUR TEXT',
+  font: 'sans-serif',
+  size: 0.1,
+  // Not pure white: #fff on a bright frame clips and loses its edges. A touch
+  // off it keeps the contrast without the glare.
+  color: '#f5f2ec',
+  align: 'center',
+  position: 'center',
+  weight: 700,
+  tracking: 0.14,
+  uppercase: true,
+  shadow: 0.55,
+  stroke: 0,
+  strokeColor: '#000000',
+  offsetX: 0,
+  offsetY: 0
+}
+
+/**
+ * The margin type must stay inside, as a fraction of each edge.
+ *
+ * SMPTE ST 2046-1 puts the title-safe area at 90% of width and height — a 5%
+ * margin — and has done since 2009. Text outside it risks being cropped by a
+ * player, and more immediately just looks wrong jammed against the edge.
+ */
+export const TITLE_SAFE = 0.05
+
+/** One waypoint. x and y are fractions of a half-canvas, as in Transform. */
+export interface PathPoint {
+  frame: Frames
+  x: number
+  y: number
+}
+
+/**
+ * Named camera moves.
+ *
+ * `in`/`out` are centred; `in*`/`out*` drift while zooming; `pan*` holds the
+ * zoom and translates. Kept as names rather than raw numbers so a saved project
+ * stays readable and the renderer owns the expressions.
+ */
+export type MotionMove =
+  | 'in'
+  | 'out'
+  | 'inLeft'
+  | 'inRight'
+  | 'inUp'
+  | 'inDown'
+  | 'outLeft'
+  | 'outRight'
+  | 'panLeft'
+  | 'panRight'
+  | 'panUp'
+  | 'panDown'
+
+export type Motion =
+  | { kind: 'kenburns'; direction: MotionMove; amount: number }
+  /**
+   * Oscillating offset at a held zoom — for impacts, not for whole shots.
+   *
+   * `decay` is the seconds the wobble takes to die away. A drop is an impact:
+   * it should hit hard and settle. Without this the shake ran for the whole
+   * shot — 2.23 seconds of continuous rattle on a rendered reel, which reads as
+   * a fault rather than a hit.
+   *
+   * `anchor: 'subject'` shakes the world and holds the subject still, using the
+   * depth planes. It reads as force applied to the scene rather than to the
+   * camera.
+   */
+  | {
+      kind: 'shake'
+      amount: number
+      hz?: number
+      decay?: number
+      anchor?: 'camera' | 'subject'
+    }
+  /**
+   * The same move, but run on baked depth planes so near things travel faster
+   * than far ones. Falls back to `kenburns` at render time when the photo has
+   * no bake — see docs/PARALLAX.md.
+   */
+  | { kind: 'parallax'; direction: MotionMove; amount: number }
+
+/**
+ * One photograph cut into depth planes, keyed by asset id on the project.
+ *
+ * Per-asset rather than per-clip: two clips of the same photo share one bake,
+ * and a cleared cache invalidates one map instead of N clips.
+ */
+export interface ParallaxBake {
+  width: number
+  height: number
+  /** False when the photo is too flat to separate; render falls back. */
+  separated: boolean
+  /** Distance between the nearest and farthest plane, 0..1. */
+  spread: number
+  /**
+   * True when the front plane is a real subject cutout rather than a depth band.
+   *
+   * It is what makes an anchored shake hold a person perfectly still, and it is
+   * the same cutout text-behind-subject needs.
+   */
+  subject?: boolean
+  /**
+   * Where the subject is, normalised 0..1 against the photograph.
+   *
+   * Knowing that there IS a person is enough to hold them still in a shake.
+   * Knowing WHERE they are is what lets a crop be a close-up rather than a
+   * guess — framed on the middle of the picture, a close-up on a standing
+   * figure lands on their waist. Absent on bakes made before it was recorded.
+   */
+  subjectBox?: { x: number; y: number; width: number; height: number }
+  /** Ordered far to near. */
+  layers: { file: string; index: number; depth: number; coverage: number }[]
+}
+
+export const MOTION_MOVES: MotionMove[] = [
+  'in',
+  'out',
+  'inLeft',
+  'inRight',
+  'inUp',
+  'inDown',
+  'outLeft',
+  'outRight',
+  'panLeft',
+  'panRight',
+  'panUp',
+  'panDown'
+]
 
 export interface Track {
   id: string
@@ -99,6 +538,13 @@ export interface Track {
   muted: boolean
   hidden: boolean
   locked: boolean
+  /**
+   * Duck this track under dialogue.
+   *
+   * Audio tracks only. The render sidechains it against the picture's own audio,
+   * so music drops while someone is speaking and recovers when they stop.
+   */
+  duck?: boolean
 }
 
 export interface Project {
@@ -114,6 +560,12 @@ export interface Project {
    * re-running ASR.
    */
   transcripts: Record<string, Transcript>
+  /**
+   * Depth-plane bakes keyed by asset id.
+   *
+   * Optional so that every project written before parallax existed still loads.
+   */
+  parallax?: Record<string, ParallaxBake>
   captions: CaptionSettings
 }
 
@@ -149,6 +601,25 @@ export function clipEnd(clip: Clip): Frames {
   return clip.start + clip.duration
 }
 
+/**
+ * Is this clip on screen at this frame?
+ *
+ * Half-open, so a clip ending at 90 and one starting at 90 never both claim
+ * frame 90 — the cut belongs to the incoming clip, which is what makes butted
+ * clips render as one continuous picture instead of flickering at every join.
+ *
+ * Worth having as a named rule rather than an inequality written out wherever
+ * it is needed: the preview draws a clip by it, and its on-picture handles only
+ * exist over a frame that is actually drawn. When a sticker was added away from
+ * the playhead it was selected but not covered, so it had no box and nothing to
+ * drag — while the Inspector's colour controls kept working, because those read
+ * the selection rather than the frame. The two had to agree, and now they read
+ * from the same function.
+ */
+export function clipCoversFrame(clip: Clip, frame: Frames): boolean {
+  return frame >= clip.start && frame < clipEnd(clip)
+}
+
 export function projectDuration(project: Project): Frames {
   return project.clips.reduce((max, clip) => Math.max(max, clipEnd(clip)), 0)
 }
@@ -157,6 +628,25 @@ export function clipsOnTrack(project: Project, trackId: string): Clip[] {
   return project.clips
     .filter((c) => c.trackId === trackId)
     .sort((a, b) => a.start - b.start)
+}
+
+/**
+ * Tracks in the order a timeline should DISPLAY them, top row first.
+ *
+ * Both the renderer and the preview composite in `tracks` order, so the first
+ * video track is the BOTTOM layer. Listing them in that same order put V1 at the
+ * top of the screen while it sat underneath everything in the picture — a
+ * sticker dropped on the track visibly above the video rendered behind it.
+ *
+ * Video therefore displays reversed, highest layer first, exactly as Resolve,
+ * Premiere and CapCut all show it. Audio follows underneath in its own order.
+ * This is presentation only: nothing about the composite changes.
+ */
+export function laneOrder(tracks: Track[]): Track[] {
+  return [
+    ...tracks.filter((t) => t.kind === 'video').reverse(),
+    ...tracks.filter((t) => t.kind !== 'video')
+  ]
 }
 
 /** The clip covering `frame` on a track, if any. */
@@ -178,7 +668,16 @@ export function clipsAtFrame(project: Project, frame: Frames): Clip[] {
 
 /** Source frame the clip is showing when the playhead is at `frame`. */
 export function sourceFrameFor(clip: Clip, frame: Frames): Frames {
-  return clip.inPoint + (frame - clip.start)
+  /*
+   * Speed is part of this mapping, not a separate concern.
+   *
+   * The preview seeks with this and the caption timing reads from it, so a
+   * slowed clip whose seek ignored speed would show the wrong frame and say the
+   * wrong word — drifting further the deeper into the clip you scrubbed. One
+   * multiplication here keeps every caller right.
+   */
+  const rate = typeof clip.speed === 'number' && clip.speed > 0 ? clip.speed : 1
+  return Math.round(clip.inPoint + (frame - clip.start) * rate)
 }
 
 export function assetById(project: Project, id: string): MediaAsset | null {
@@ -222,6 +721,52 @@ export function findFreeSlot(
     start = Math.max(...hits.map(clipEnd))
   }
   return start
+}
+
+/**
+ * Where an overlay should land: the same moment, one track higher.
+ *
+ * `findFreeSlot` slides a clip LATER until it fits, which is right for a cut —
+ * two shots on one track are a sequence. It is wrong for anything that is meant
+ * to sit ON something: a second line of text, a sticker over a face, a colour
+ * wash. Reported as "it adds on the side of it of the same track, but the actual
+ * layers work different, its on top of each other be it any N layers", which is
+ * exactly the distinction.
+ *
+ * So this climbs instead. The asked-for track first, then each video track above
+ * it in compositing order, and null when they are all busy — which the caller
+ * answers by making a new one. The time never moves: an overlay dropped at a
+ * moment belongs at that moment.
+ */
+export function stackedSlot(
+  project: Project,
+  trackId: string,
+  desired: Frames,
+  duration: Frames
+): { trackId: string; start: Frames } | null {
+  const start = Math.max(0, desired)
+  const from = project.tracks.find((t) => t.id === trackId)
+  if (!from) return null
+
+  // Within the track's own kind: pictures stack for compositing order, sounds
+  // stack because two pieces of music at once is a mix, not a queue.
+  const lanes = project.tracks.filter((t) => t.kind === from.kind)
+  const at = lanes.findIndex((t) => t.id === trackId)
+  if (at < 0) return null
+
+  for (let i = at; i < lanes.length; i++) {
+    const track = lanes[i]
+    if (track.locked) continue
+    if (overlapsOn(project, track.id, start, duration).length === 0) {
+      return { trackId: track.id, start }
+    }
+  }
+  return null
+}
+
+/** True when the project cannot hold another track. */
+export function trackLimitReached(project: Project): boolean {
+  return project.tracks.length >= MAX_TRACKS
 }
 
 /**
@@ -285,7 +830,18 @@ export function addTrack(project: Project, kind: Track['kind']): Project {
   if (project.tracks.length >= MAX_TRACKS) return project
 
   const track: Track = {
-    id: `${kind === 'video' ? 'v' : 'a'}${Date.now().toString(36)}`,
+    /*
+     * A random suffix, like every clip id.
+     *
+     * This was a bare millisecond timestamp, which was fine while the only way
+     * to make a track was clicking `+ Video`. Overlays now add one themselves
+     * when every layer is busy, and several can be added inside a single tick —
+     * at which point two tracks share an id, and clips land on whichever the
+     * lookup happens to find first.
+     */
+    id: `${kind === 'video' ? 'v' : 'a'}${Date.now().toString(36)}${Math.random()
+      .toString(36)
+      .slice(2, 6)}`,
     kind,
     name: nextTrackName(project.tracks, kind),
     muted: false,
@@ -315,8 +871,50 @@ export function removeTrack(project: Project, trackId: string): Project {
 }
 
 /** Longest transition that still leaves a frame of each clip un-blended. */
-export function maxTransitionFrames(previous: Clip, next: Clip): Frames {
+export function maxTransitionFrames(previous: Clip | null, next: Clip): Frames {
+  /*
+   * A layered clip has no previous clip to borrow frames from.
+   *
+   * It blends against whatever is already on the canvas underneath it, and that
+   * layer runs its own length regardless — so the only limit is how long this
+   * clip is on screen. Treating a missing previous clip as "no room" is what
+   * made a slow grid reveal over a photograph impossible to set.
+   */
+  if (!previous) return Math.max(0, next.duration - 1)
   return Math.max(0, Math.min(previous.duration - 1, next.duration - 1))
+}
+
+/**
+ * What a transition on this clip blends in FROM.
+ *
+ * Two different things can be underneath. The ordinary case is the clip before
+ * it on the same track — an edit point, where a dissolve eats into both. The
+ * other is a layer: a clip on a lower track that is on screen at the same time,
+ * which is how a grid reveal of one photograph over another is built.
+ *
+ * Returning null means there is genuinely nothing underneath and a transition
+ * would blend in from black.
+ */
+export function transitionBase(
+  project: Project,
+  clip: Clip
+): { clip: Clip; kind: 'cut' | 'layer' } | null {
+  const previous = clipBefore(project, clip)
+  if (previous) return { clip: previous, kind: 'cut' }
+
+  const trackIndex = project.tracks.findIndex((t) => t.id === clip.trackId)
+  if (trackIndex < 0) return null
+
+  // Lower index composites first, so those are the layers beneath this one.
+  for (let i = trackIndex - 1; i >= 0; i--) {
+    const track = project.tracks[i]
+    if (track.kind !== 'video' || track.hidden) continue
+    const under = clipsOnTrack(project, track.id).find(
+      (c) => c.start < clipEnd(clip) && clipEnd(c) > clip.start
+    )
+    if (under) return { clip: under, kind: 'layer' }
+  }
+  return null
 }
 
 /**
@@ -338,11 +936,29 @@ export function addTransition(
   const onTrack = clipsOnTrack(project, clip.trackId)
   const index = onTrack.findIndex((c) => c.id === clipId)
   const previous = index > 0 ? onTrack[index - 1] : null
-  // A transition needs something to transition from.
-  if (!previous) return project
 
   const already = clip.transitionIn?.durationFrames ?? 0
   const frames = Math.max(1, Math.min(durationFrames, maxTransitionFrames(previous, clip)))
+
+  /*
+   * A layered clip has nothing before it on its own track, and does not need
+   * anything: it blends against whatever is composited underneath, which runs
+   * its own length regardless. So nothing overlaps and nothing shifts — the
+   * clip simply gains a transition where it already sits.
+   *
+   * This used to `return project` unchanged. The panel offered the transition,
+   * the click did nothing, and no error was raised anywhere — which read as the
+   * whole transition feature being broken for text.
+   */
+  if (!previous) {
+    if (clip.transitionIn?.id === transitionId && already === frames) return project
+    return {
+      ...project,
+      clips: project.clips.map((c) =>
+        c.id === clipId ? { ...c, transitionIn: { id: transitionId, durationFrames: frames } } : c
+      )
+    }
+  }
   // Shift by the delta so changing an existing transition does not stack.
   const shift = frames - already
   if (frames === already && clip.transitionIn?.id === transitionId) return project
@@ -364,10 +980,82 @@ export function addTransition(
   }
 }
 
+/**
+ * A transition that moves nothing.
+ *
+ * `addTransition` closes the timeline up around the overlap: the incoming clip
+ * slides back to meet the outgoing one, and everything after it follows. That
+ * is right for a hand-cut timeline, where a transition consumes time and the
+ * rest of the edit closes up behind it.
+ *
+ * It is wrong for anything cut to music, and quietly so. Every shot in a reel
+ * has a start that was computed against a beat, a drop or a sung word — and
+ * rippling drags all of them off it, by more and more as the reel goes on. With
+ * a majority of cuts carrying a treatment at seven frames each, a thirty-shot
+ * reel finishes nearly four seconds adrift of the track it was cut to. Nothing
+ * reports it, because each individual transition is doing exactly what it says.
+ *
+ * So the overlap is taken from the OUTGOING clip's tail instead: the previous
+ * clip plays a few frames longer and the incoming one stays exactly where the
+ * music put it. The two clips overlap by the same amount over the same frames
+ * of the incoming clip, so the renderer sees no difference at all — the
+ * transition simply begins on the beat rather than finishing near it.
+ */
+export function anchorTransition(
+  project: Project,
+  clipId: string,
+  transitionId: string,
+  durationFrames: Frames
+): Project {
+  const clip = project.clips.find((c) => c.id === clipId)
+  if (!clip) return project
+
+  const onTrack = clipsOnTrack(project, clip.trackId)
+  const index = onTrack.findIndex((c) => c.id === clipId)
+  const previous = index > 0 ? onTrack[index - 1] : null
+
+  const frames = Math.max(1, Math.min(durationFrames, maxTransitionFrames(previous, clip)))
+  if (clip.transitionIn?.id === transitionId && clip.transitionIn.durationFrames === frames) {
+    return project
+  }
+
+  // Layered: nothing to borrow from and nothing to lengthen — it blends against
+  // whatever is composited underneath, which runs its own length regardless.
+  const already = clip.transitionIn?.durationFrames ?? 0
+  const grow = previous ? frames - already : 0
+
+  return {
+    ...project,
+    clips: project.clips.map((c) => {
+      if (c.id === clipId) {
+        return { ...c, transitionIn: { id: transitionId, durationFrames: frames } }
+      }
+      if (previous && c.id === previous.id) {
+        return { ...c, duration: Math.max(1, c.duration + grow) }
+      }
+      return c
+    })
+  }
+}
+
 /** Remove a transition and restore the time it consumed. */
 export function removeTransition(project: Project, clipId: string): Project {
   const clip = project.clips.find((c) => c.id === clipId)
   if (!clip?.transitionIn) return project
+
+  // A layered transition consumed no time, so removing it must give none back.
+  const onTrack = clipsOnTrack(project, clip.trackId)
+  if (onTrack.findIndex((c) => c.id === clipId) === 0) {
+    return {
+      ...project,
+      clips: project.clips.map((c) => {
+        if (c.id !== clipId) return c
+        const { transitionIn: _removed, ...rest } = c
+        return rest
+      })
+    }
+  }
+
   const shift = clip.transitionIn.durationFrames
 
   return {
@@ -381,6 +1069,57 @@ export function removeTransition(project: Project, clipId: string): Project {
       return c.start > clip.start ? { ...c, start: c.start + shift } : c
     })
   }
+}
+
+/**
+ * The clip whose incoming edge is nearest a frame, for dropping a transition.
+ *
+ * "Between two clips" is ambiguous by a pixel: landing just left of a boundary
+ * targets the outgoing clip, just right targets the incoming one. Snapping to
+ * the nearest cut — and only cuts that can actually take a transition — makes
+ * the gesture mean what it looks like.
+ */
+export function nearestTransitionTarget(
+  project: Project,
+  trackId: string,
+  frame: Frames,
+  toleranceFrames: number
+): { clip: Clip; reason?: undefined } | { clip: null; reason: string } {
+  const onTrack = clipsOnTrack(project, trackId)
+  if (onTrack.length === 0) return { clip: null, reason: 'There are no clips on this track' }
+
+  // Cuts are the starts of every clip that has something before it.
+  const cuts = onTrack.slice(1)
+  if (cuts.length === 0) {
+    return {
+      clip: null,
+      reason: 'A transition needs a clip before it — this track has only one clip'
+    }
+  }
+
+  let best: Clip | null = null
+  let bestDistance = Infinity
+  for (const candidate of cuts) {
+    const distance = Math.abs(candidate.start - frame)
+    if (distance < bestDistance) {
+      bestDistance = distance
+      best = candidate
+    }
+  }
+
+  if (best && bestDistance <= toleranceFrames) return { clip: best }
+
+  // Nothing close enough: fall back to whatever sits under the cursor, so a
+  // deliberate drop onto a clip body still works.
+  const under = onTrack.find((c) => frame >= c.start && frame < clipEnd(c))
+  if (under && cuts.some((c) => c.id === under.id)) return { clip: under }
+  if (under) {
+    return {
+      clip: null,
+      reason: 'This is the first clip on its track, so there is nothing to transition from'
+    }
+  }
+  return { clip: null, reason: 'Drop a transition on or near a cut between two clips' }
 }
 
 /** The clip a transition blends from, if any. */

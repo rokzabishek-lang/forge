@@ -1,0 +1,52 @@
+name: CI
+
+# Both platforms, every push. The point of this file is that Windows gets
+# tested when nobody is sitting at a Windows machine — most of what breaks
+# there breaks in paths, process handling and line endings, and all three are
+# invisible from a Mac until someone runs the app.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Never cancel Windows because macOS failed. When a run goes red the
+      # useful question is "on which platform", and that needs both answers.
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      # The sidecar degrades every optional capability, so a bare interpreter
+      # is enough for the handshake tests. Installing torch and friends on
+      # every push would cost minutes for capabilities the suite already skips.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # `npm ci` rather than `npm install`: it honours the lockfile exactly, so
+      # a run that passes here means the versions on disk are the ones tested.
+      # It also fetches the per-platform ffmpeg binary, which is the whole
+      # reason the integration tests can run on a runner at all.
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      # Integration tests included on purpose. They shell out to ffmpeg with
+      # real paths, and a runner's Windows path — C:\a\forge\forge — is exactly
+      # the shape that breaks filter arguments and concat lists.
+      - run: npm test
+
+      - run: npm run build

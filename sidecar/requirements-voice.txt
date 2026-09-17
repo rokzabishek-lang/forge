@@ -1,0 +1,20 @@
+# Local speech — optional.
+#
+# Kokoro-82M through ONNX Runtime, which the depth model already brought with
+# it, so this costs a model file rather than a stack. Every other TTS worth
+# using wants torch; this does not.
+#
+#   pip install -r sidecar/requirements-voice.txt
+#
+# The two model files are fetched separately and live in
+# ~/.cache/forge/models (or $FORGE_MODELS_DIR):
+#
+#   kokoro-v1.0.onnx
+#   voices-v1.0.bin
+#
+# Without this the sidecar reports `voice.speak` degraded and the app falls back
+# to the hosted provider, which serves the same shape — Kokoro-FastAPI exposes
+# this very model over an OpenAI-compatible endpoint, so "local or hosted" is a
+# question about where the compute happens rather than about which voice.
+
+kokoro-onnx==0.4.9

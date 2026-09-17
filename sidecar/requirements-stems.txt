@@ -1,0 +1,20 @@
+# Real source separation — optional.
+#
+# The app can already split a song without any of this: src/main/stems.ts does
+# it with mid/side and the ffmpeg already bundled, and the instrumental that
+# comes out is genuinely good (29dB of rejection on the centred voice, measured).
+# What mid/side cannot give you is the voice ON ITS OWN — the mid signal keeps
+# every hard-panned instrument at half level, so it is an emphasis, not a stem.
+#
+# Demucs does the real thing and brings torch with it: several hundred megabytes
+# for one feature, which is why it is not in requirements.txt. Install it only if
+# you want clean vocals — for lyric-synced cutting the emphasis is usually
+# enough, because speech recognition needs the words legible rather than the
+# stem pristine.
+#
+#   pip install -r sidecar/requirements-stems.txt
+#
+# The sidecar reports `audio.stems` as degraded until this is present, and the
+# app falls back to mid/side without being asked.
+
+demucs==4.0.1

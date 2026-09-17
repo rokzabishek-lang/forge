@@ -9,6 +9,9 @@ import { Preview } from './components/Preview'
 import { Timeline } from './components/Timeline'
 import { Transport } from './components/Transport'
 import { Inspector } from './components/Inspector'
+import { Toolbox } from './components/Toolbox'
+import { SourceBar } from './components/SourceBar'
+import { CurvePanel } from './components/CurvePanel'
 
 function Divider({ vertical = false }: { vertical?: boolean }): ReactNode {
   return (
@@ -108,6 +111,14 @@ export default function App(): ReactNode {
 
   useEffect(
     () =>
+      window.forge.onParallaxProgress(({ assetId, progress, message }) =>
+        useEditor.getState().setBakeProgress(assetId, progress, message)
+      ),
+    []
+  )
+
+  useEffect(
+    () =>
       window.forge.onSidecarStatus((status) => {
         const state = useEditor.getState()
         if (status.state === 'ready') state.setSidecar(true, null)
@@ -191,6 +202,8 @@ export default function App(): ReactNode {
     <div className="relative flex h-full flex-col overflow-hidden bg-ink-950 text-ink-200">
       <Header />
 
+      <SourceBar />
+
       <Group orientation="vertical" className="flex-1">
         <Panel defaultSize="62" minSize="30">
           <Group orientation="horizontal">
@@ -199,7 +212,13 @@ export default function App(): ReactNode {
             </Panel>
             <Divider />
             <Panel defaultSize="60" minSize="30">
-              <Preview />
+              {/* The tool strip belongs to the picture, so it travels with it. */}
+              <div className="flex h-full">
+                <Toolbox />
+                <div className="min-w-0 flex-1">
+                  <Preview />
+                </div>
+              </div>
             </Panel>
             <Divider />
             <Panel defaultSize="21" minSize="15" maxSize="34">
@@ -211,12 +230,24 @@ export default function App(): ReactNode {
         <Divider vertical />
 
         <Panel defaultSize="38" minSize="18">
-          <div className="flex h-full flex-col">
-            <Transport />
-            <div className="min-h-0 flex-1">
-              <Timeline />
-            </div>
-          </div>
+          {/*
+            The curve sits beside the timeline, on the same horizontal axis, so
+            the shape of a move and the clip it belongs to line up.
+          */}
+          <Group orientation="horizontal">
+            <Panel defaultSize="72" minSize="40">
+              <div className="flex h-full flex-col">
+                <Transport />
+                <div className="min-h-0 flex-1">
+                  <Timeline />
+                </div>
+              </div>
+            </Panel>
+            <Divider />
+            <Panel defaultSize="28" minSize="16" maxSize="45">
+              <CurvePanel />
+            </Panel>
+          </Group>
         </Panel>
       </Group>
 

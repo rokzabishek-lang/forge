@@ -8,6 +8,8 @@
  * find. See docs/PLAN.md §3.
  */
 
+import type { TextSpec } from '../timeline'
+
 export type Easing = 'linear' | 'easeIn' | 'easeOut' | 'easeInOut' | 'backOut'
 
 export interface Keyframe {
@@ -62,7 +64,39 @@ export interface ImageLayer {
   transform: Transform2D
 }
 
-export type GraphicsLayer = TextLayer | ImageLayer
+/**
+ * A caption line, drawn by the ordinary text painter.
+ *
+ * The other layer kinds describe a picture; this one carries a whole `TextSpec`
+ * and leaves the drawing to `drawTextOnto` — the same function that paints text
+ * clips, style tiles and baked frames. That is the entire point: captions get
+ * the 42 styles and the 9 animations because they are drawn by the code that
+ * has them, not by a second painter that would have to grow its own.
+ *
+ * What cannot be baked into the spec is the highlight, which moves: `wordFrames`
+ * says when each word starts, and the page resolves the active one per frame.
+ */
+export interface CaptionLayer {
+  id: string
+  kind: 'caption'
+  startFrame: number
+  endFrame: number
+  /** The line, without a highlight — that is per-frame. */
+  spec: TextSpec
+  /** Timeline frame each word becomes the spoken one, in reading order. */
+  wordFrames: number[]
+  /** Applied to whichever word is active. Absent means no highlight at all. */
+  highlight?: { color: string; scale: number }
+}
+
+export type GraphicsLayer = TextLayer | ImageLayer | CaptionLayer
+
+/** A face the page has to register itself — it has no preload and no store. */
+export interface GraphicsFont {
+  family: string
+  /** `data:font/...;base64,…`. Bytes rather than a path: no fetch, no CORS. */
+  dataUrl: string
+}
 
 export interface GraphicsSpec {
   width: number
@@ -70,6 +104,7 @@ export interface GraphicsSpec {
   fps: number
   durationFrames: number
   layers: GraphicsLayer[]
+  fonts?: GraphicsFont[]
 }
 
 export const IDENTITY_TRANSFORM: Transform2D = {

@@ -75,6 +75,15 @@ export function groupWords(segments: Segment[], words: Word[], perLine: number):
   return groups
 }
 
+/**
+ * How much of the frame's width a subtitle keeps clear, each side.
+ *
+ * Shared with the preview so the wrap point is the same in both. Six percent is
+ * comfortably inside the action-safe area and clear of the interface a phone
+ * paints over the bottom corners.
+ */
+export const CAPTION_MARGIN = 0.06
+
 export function buildAss(segments: Segment[], words: Word[], options: AssOptions): string {
   const { width, height, style } = options
   const offset = options.offsetMs ?? 0
@@ -86,14 +95,23 @@ export function buildAss(segments: Segment[], words: Word[], options: AssOptions
   const outline = Math.max(0, Math.round(style.outlineWidth * scale))
   const shadow = Math.max(0, Math.round(style.shadowDepth * scale))
   const marginV = Math.round(style.marginV * scale)
-  const marginH = Math.round(width * 0.06)
+  const marginH = Math.round(width * CAPTION_MARGIN)
 
   const header = [
     '[Script Info]',
     'ScriptType: v4.00+',
     `PlayResX: ${Math.round(width)}`,
     `PlayResY: ${Math.round(height)}`,
-    'WrapStyle: 2',
+    /*
+     * 0, not 2.
+     *
+     * WrapStyle 2 tells libass NOT to wrap, so a long subtitle ran past the
+     * margins it had just been given and off the edge of the frame. 0 is smart
+     * wrapping: lines are broken inside the margins and balanced in length,
+     * which is what a subtitle is supposed to do. The preview wraps to the same
+     * margin, so the two agree.
+     */
+    'WrapStyle: 0',
     'ScaledBorderAndShadow: yes',
     'YCbCr Matrix: TV.709',
     '',

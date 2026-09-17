@@ -72,12 +72,25 @@ export function runFfmpeg(options: RunOptions): RunHandle {
       reject(new Error(`Could not start ffmpeg: ${err.message}`))
     })
 
+    /*
+     * Finish only once the truncated file is actually gone.
+     *
+     * This used to fire the unlink and reject in the same tick, so the job was
+     * reported cancelled while a half-written video was still on disk — and
+     * whoever looked first won. Rejecting from the unlink's continuation makes
+     * "this job ended" mean "there is nothing broken left behind".
+     */
+    const discard = (error: Error): void => {
+      void unlink(outputPath)
+        .catch(() => undefined)
+        .then(() => reject(error))
+    }
+
     child.on('close', (code) => {
       if (cancelled) {
         // A cancelled job leaves a truncated output file behind. Remove it so the
         // user is never handed a half-written video that looks like a success.
-        void unlink(outputPath).catch(() => undefined)
-        reject(new CancelledError())
+        discard(new CancelledError())
         return
       }
       if (code === 0) {
@@ -86,8 +99,7 @@ export function runFfmpeg(options: RunOptions): RunHandle {
         return
       }
       const detail = stderrLines.join('\n').trim()
-      void unlink(outputPath).catch(() => undefined)
-      reject(new Error(detail || `ffmpeg exited with code ${code}`))
+      discard(new Error(detail || `ffmpeg exited with code ${code}`))
     })
   })
 

@@ -34,6 +34,43 @@ function fontsDir(): string | undefined {
  * Returns null when there is nothing to burn, which leaves the render plan
  * without a subtitles filter at all.
  */
+/**
+ * Where a bake's pictures and its concat list live.
+ *
+ * One folder, emptied before each bake, so a shorter edit cannot leave a longer
+ * edit's frames behind for ffmpeg to find.
+ */
+function bakeDir(): string {
+  return join(app.getPath('userData'), 'caption-bake')
+}
+
+/** One distinct caption picture. Returns the path the concat list will name. */
+export async function writeCaptionFrame(index: number, bytes: Buffer): Promise<string> {
+  const dir = bakeDir()
+  await mkdir(dir, { recursive: true })
+  const target = join(dir, `${String(index).padStart(5, '0')}.png`)
+  await writeFile(target, bytes)
+  return target
+}
+
+/**
+ * The concat list ffmpeg reads.
+ *
+ * Written last, after every picture it names exists, so a cancelled bake leaves
+ * no list pointing at files that were never finished.
+ */
+export async function writeCaptionList(text: string): Promise<string> {
+  const dir = bakeDir()
+  await mkdir(dir, { recursive: true })
+  const target = join(dir, 'captions.txt')
+  await writeFile(target, text, 'utf8')
+  return target
+}
+
+export async function clearCaptionFrames(): Promise<void> {
+  await rm(bakeDir(), { recursive: true, force: true }).catch(() => undefined)
+}
+
 export async function prepareCaptions(
   project: Project,
   canvas: { width: number; height: number }

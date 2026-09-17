@@ -65,17 +65,63 @@ describe('buildRenderPlan', () => {
       outputPath: '/out.mp4'
     })
     const filters = argString(plan.args)
-    expect(filters).toContain('crop=1080:1080:420:0')
+    expect(filters).toContain("crop=w='min(1080,in_w)'")
+    expect(filters).toContain("x='max(0,min(420,in_w-out_w))'")
     // Cropping after scaling would crop the wrong region entirely.
     expect(filters.indexOf('crop=')).toBeLessThan(filters.indexOf('scale='))
   })
 
-  it('forces even crop dimensions for H.264', () => {
+  /*
+   * The crop is emitted as EXPRESSIONS, not numbers.
+   *
+   * It used to be numbers, and a user's export died on
+   *   Invalid too big or non positive size for width '3210' or height '1808'
+   * because the dimensions were rounded to the NEAREST even number, which
+   * rounds an odd number up — so a 3209-wide source was asked for 3210 pixels.
+   * Swept over every realistic source size and all three aspects, HALF of them
+   * produced a crop reaching outside the frame.
+   *
+   * Rounding down fixed that arithmetic, but not the other ways the app's idea
+   * of a source's size can be wrong: rotation metadata the probe never reads, a
+   * parallax plane composite that has already been scaled, a file re-exported
+   * at a different resolution under the same path. `in_w`/`in_h` are measured
+   * from what actually arrives, so the filter now clamps itself.
+   */
+  it('rounds crop dimensions DOWN to even, never up', () => {
     const plan = buildRenderPlan({
       project: project({ clips: [clip({ crop: { x: 0, y: 0, width: 1081, height: 607 } })] }),
       outputPath: '/out.mp4'
     })
-    expect(argString(plan.args)).toContain('crop=1082:608:0:0')
+    const args = argString(plan.args)
+    expect(args).toContain('min(1080,in_w)')
+    expect(args).toContain('min(606,in_h)')
+    expect(args).not.toContain('1082')
+    expect(args).not.toContain('608')
+  })
+
+  it('clamps itself against the real stream, not the believed size', () => {
+    const plan = buildRenderPlan({
+      project: project({ clips: [clip({ crop: { x: 0, y: 0, width: 1919, height: 1079 } })] }),
+      outputPath: '/out.mp4'
+    })
+    const args = argString(plan.args)
+    // Whatever number is asked for, in_w/in_h bound it at render time.
+    expect(args).toMatch(/crop=w='min\(\d+,in_w\)':h='min\(\d+,in_h\)'/)
+  })
+
+  it('keeps an off-edge crop its size and slides it inside', () => {
+    // Shrinking it instead would change the shape the user framed: a 400x400
+    // square at x=1800 became a 120x80 sliver in the first version of this.
+    const plan = buildRenderPlan({
+      project: project({ clips: [clip({ crop: { x: 1800, y: 1000, width: 400, height: 400 } })] }),
+      outputPath: '/out.mp4'
+    })
+    const args = argString(plan.args)
+    expect(args).toContain('min(400,in_w)')
+    expect(args).toContain('min(400,in_h)')
+    // 1920-400 and 1080-400: the origin moved, the size did not.
+    expect(args).toContain('min(1520,in_w-out_w)')
+    expect(args).toContain('min(680,in_h-out_h)')
   })
 
   it('renders to an overridden canvas, so one edit exports at several aspects', () => {
@@ -291,5 +337,144 @@ describe('multi-track compositing', () => {
     // Longest clip ends at 150 frames = 5s.
     expect(plan.durationFrames).toBe(150)
     expect(plan.args).toContain('5.000000')
+  })
+})
+
+describe('ken burns motion', () => {
+  const withMotion = (direction: 'in' | 'out'): Project =>
+    project({
+      assets: [asset({ id: 'img', kind: 'image', hasAudio: false, path: '/m/p.jpg' })],
+      clips: [clip({ assetId: 'img', duration: 60, motion: { kind: 'kenburns', direction, amount: 0.12 } })]
+    })
+
+  it('uses zoompan, since crop cannot animate its dimensions', () => {
+    const args = argString(buildRenderPlan({ project: withMotion('in'), outputPath: '/o.mp4' }).args)
+    // crop evaluates w/h once at configuration; only zoompan animates per frame.
+    expect(args).toContain('zoompan=')
+    expect(args).toContain('d=60')
+  })
+
+  it('drives the move from the output frame index', () => {
+    const args = argString(buildRenderPlan({ project: withMotion('in'), outputPath: '/o.mp4' }).args)
+    expect(args).toContain('on/59')
+  })
+
+  it('pushes in and pulls out differently', () => {
+    const push = argString(buildRenderPlan({ project: withMotion('in'), outputPath: '/o.mp4' }).args)
+    const pull = argString(buildRenderPlan({ project: withMotion('out'), outputPath: '/o.mp4' }).args)
+    expect(push).not.toBe(pull)
+    expect(pull).toContain('*(1-on/')
+  })
+
+  it('runs motion before the fit, so the move is in source pixels', () => {
+    const args = argString(buildRenderPlan({ project: withMotion('in'), outputPath: '/o.mp4' }).args)
+    expect(args.indexOf('zoompan=')).toBeLessThan(args.indexOf('scale='))
+  })
+
+  it('adds nothing for a clip without motion', () => {
+    const args = argString(buildRenderPlan({ project: project(), outputPath: '/o.mp4' }).args)
+    expect(args).not.toContain('zoompan=')
+  })
+})
+
+/*
+ * Animated text.
+ *
+ * The editor draws the frames that MOVE and nothing else — a third of a second
+ * of a three-second caption — so the render has to read a numbered sequence and
+ * then hold its last frame for the rest of the clip. Everything downstream in
+ * the graph assumes a stream of exactly `duration` frames, so the hold is not a
+ * nicety; without it the caption would vanish part-way through.
+ */
+describe('a drawn animation', () => {
+  const animated = (over: Partial<Clip> = {}): Project =>
+    project({
+      assets: [
+        asset({
+          id: 'txt',
+          kind: 'image',
+          hasAudio: false,
+          path: '/titles/c.png',
+          frames: { pattern: '/titles/c.seq/%05d.png', count: 12 }
+        })
+      ],
+      clips: [clip({ assetId: 'txt', duration: 90, inPoint: 0, text: undefined, ...over })]
+    })
+
+  it('reads the sequence rather than the still', () => {
+    const args = buildRenderPlan({ project: animated(), outputPath: '/o.mp4' }).args
+    expect(args).toContain('/titles/c.seq/%05d.png')
+    expect(args).not.toContain('/titles/c.png')
+  })
+
+  it('numbers the sequence from zero', () => {
+    // image2 starts looking at 1 by default. A build that did not guess would
+    // silently drop the first frame of every animation — the one that matters.
+    const args = buildRenderPlan({ project: animated(), outputPath: '/o.mp4' }).args
+    const i = args.indexOf('/titles/c.seq/%05d.png')
+    expect(args.slice(0, i)).toContain('-start_number')
+    expect(args[args.indexOf('-start_number') + 1]).toBe('0')
+  })
+
+  it('reads the frames at the project rate', () => {
+    const args = buildRenderPlan({ project: animated(), outputPath: '/o.mp4' }).args
+    const i = args.indexOf('/titles/c.seq/%05d.png')
+    expect(args[i - 1]).toBe('-i')
+    expect(args[i - 3]).toBe('-framerate')
+    expect(args[i - 2]).toBe('30')
+  })
+
+  it('never loops a sequence — it is held, not repeated', () => {
+    // -loop 1 would replay the movement over and over for the whole caption.
+    const args = buildRenderPlan({ project: animated(), outputPath: '/o.mp4' }).args
+    expect(args).not.toContain('-loop')
+  })
+
+  it('holds the last frame across the rest of the clip', () => {
+    const args = argString(buildRenderPlan({ project: animated(), outputPath: '/o.mp4' }).args)
+    expect(args).toContain('tpad=stop_mode=clone:stop_duration=3.000000')
+    expect(args).toContain('trim=duration=3.000000')
+  })
+
+  it('holds before anything else reads the stream', () => {
+    // Speed, motion, the fit and every transition read clip-relative time and
+    // assume a full-length stream.
+    const args = argString(buildRenderPlan({ project: animated(), outputPath: '/o.mp4' }).args)
+    expect(args.indexOf('tpad=')).toBeLessThan(args.indexOf('scale='))
+  })
+
+  it('holds a matte shape too, or the hole closes part-way through', () => {
+    // Footage seen through animated words: the shape is the sequence, and a
+    // shape that ran out would leave the footage with no alpha at all.
+    const shaped = project({
+      assets: [
+        asset({ id: 'a1' }),
+        asset({
+          id: 'txt',
+          kind: 'image',
+          hasAudio: false,
+          path: '/titles/c.png',
+          frames: { pattern: '/titles/c.seq/%05d.png', count: 12 }
+        })
+      ],
+      clips: [
+        clip({ id: 'shape', assetId: 'txt', duration: 90, inPoint: 0, matteOnly: true }),
+        clip({ id: 'shot', duration: 90, matte: { clipId: 'shape' } })
+      ]
+    })
+    const args = argString(buildRenderPlan({ project: shaped, outputPath: '/o.mp4' }).args)
+    expect(args).toContain('tpad=stop_mode=clone:stop_duration=3.000000,trim')
+    expect(args).toContain('format=gray')
+  })
+
+  it('leaves an ordinary still looping as it always did', () => {
+    const still = project({
+      assets: [asset({ id: 'img', kind: 'image', hasAudio: false, path: '/m/p.jpg' })],
+      clips: [clip({ assetId: 'img', duration: 60 })]
+    })
+    const args = argString(buildRenderPlan({ project: still, outputPath: '/o.mp4' }).args)
+    expect(args).toContain('-loop 1')
+    expect(args).not.toContain('tpad=')
+    expect(args).not.toContain('-start_number')
   })
 })

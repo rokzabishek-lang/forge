@@ -1,4 +1,5 @@
 import { useCallback, useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import { safeCrop } from '@shared/render/crop'
 import type { Clip, CropRect, MediaAsset } from '@shared/timeline'
 import { useEditor } from '../store'
 import type { ViewTransform } from './Preview'
@@ -84,12 +85,26 @@ export function CropOverlay({
       x = Math.max(0, Math.min(x, sourceW - width))
       y = Math.max(0, Math.min(y, sourceH - height))
 
-      setCrop(clip.id, {
-        x: Math.round(x),
-        y: Math.round(y),
-        width: Math.round(width),
-        height: Math.round(height)
-      })
+      /*
+       * Stored as the renderer will use it.
+       *
+       * The clamping above happens in floating point and is rounded afterwards,
+       * so a rectangle dragged to the very edge could round back out past it —
+       * and the handles then showed numbers the export silently disagreed with.
+       * Running the result through the same function the render plan uses means
+       * what the overlay draws is what gets cut.
+       */
+      const source = { width: sourceW, height: sourceH }
+      // null means "this covers the whole frame", which the renderer answers by
+      // emitting no crop at all. Mid-drag the rectangle still has to be drawn,
+      // so it becomes the full frame rather than disappearing under the pointer.
+      const safe = safeCrop({ x, y, width, height }, source) ?? {
+        x: 0,
+        y: 0,
+        width: sourceW,
+        height: sourceH
+      }
+      setCrop(clip.id, safe)
     },
     [clip.id, crop, setCrop, sourceW, sourceH, transform.scale]
   )

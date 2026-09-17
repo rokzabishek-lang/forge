@@ -8,6 +8,8 @@
  * second pipeline. See docs/AUTOMATION.md §5.
  */
 
+import type { MaskTag } from './classify'
+
 export type TransitionFamily =
   | 'dissolve'
   | 'slide'
@@ -26,10 +28,43 @@ export interface TransitionContext {
   canvasHeight: number
 }
 
+/**
+ * Softness of a luma wipe's edge, in luma levels.
+ *
+ * A hard threshold gives a jagged, aliased boundary that crawls; a band of
+ * partial alpha around it reads as a clean moving edge. Too wide and the wipe
+ * becomes an unfocused dissolve.
+ */
+export const LUMA_SOFTNESS = 28
+
+/**
+ * geq expression driving a luma wipe's alpha.
+ *
+ * At time T the threshold sweeps from below the darkest level to above the
+ * brightest, so every pixel flips from transparent to opaque in the order its
+ * mask brightness dictates — which is exactly what a luma wipe is. Saturating
+ * past the transition length matters: the mask input outlives the wipe, and
+ * without saturation the clip would fade back out again.
+ */
+export function lumaAlphaExpression(duration: number, softness = LUMA_SOFTNESS): string {
+  const d = Math.max(0.0001, duration).toFixed(4)
+  const s = Math.max(1, softness)
+  // progress sweeps 0 -> 1 over the transition, then keeps climbing (clipped).
+  return `clip((((T/${d})*(255+${s}) - p(X,Y)) / ${s}) * 255, 0, 255)`
+}
+
 export interface TransitionDef {
   id: string
   label: string
   family: TransitionFamily
+  /**
+   * What the mask actually does, measured from its pixels.
+   *
+   * The filename is the only other description a mask has, so without these the
+   * library's 120 grid reveals are unfindable unless you already know one is
+   * called `luminous_boxes_17`. See shared/transitions/classify.
+   */
+  tags?: MaskTag[]
   /** 1 = plain ffmpeg. 2 = needs the Chromium frame server or a mask. */
   tier: 1 | 2
   defaultFrames: number
@@ -40,8 +75,15 @@ export interface TransitionDef {
   incoming?: (ctx: TransitionContext) => string[]
   /** Overlay placement expressions; t is timeline seconds, S the clip's start. */
   position?: (ctx: TransitionContext) => { x: string; y: string }
-  /** Mask file for tier 2, relative to the assets root. */
+  /**
+   * Luma mask, relative to the assets root.
+   *
+   * Masks stay on tier 1: alphamerge with a geq-animated mask is plain ffmpeg,
+   * so 405 extra transitions cost nothing beyond one more input per wipe.
+   */
   mask?: string
+  /** Edge softness in luma levels; only meaningful with a mask. */
+  softness?: number
 }
 
 /** alpha=1 fades the alpha channel rather than toward black. */
@@ -132,14 +174,73 @@ export const TRANSITIONS: TransitionDef[] = [
     family: 'zoom',
     tier: 1,
     defaultFrames: 12,
+    /*
+     * Sized against the stream it is handed, never against the canvas.
+     *
+     * A transition's filters run inside the clip's own chain, where the stream
+     * is the clip's box — which equals the canvas only for a clip that fills
+     * the frame. Written in canvas pixels, this blew a picture-in-picture up to
+     * full size the moment it was zoomed on, and it broke the renderer's
+     * arithmetic outright for a turned clip, whose frame is grown to keep its
+     * corners: the plan offsets the overlay by half that growth, and a clip that
+     * came out canvas-sized instead landed half the growth away from where it
+     * belonged.
+     *
+     * `iw`/`ih` are whatever arrives, so both cases are simply right. The
+     * trunc-to-even keeps the intermediate width legal for the yuva420p chain.
+     */
     incoming: (ctx) => [
       `fade=t=in:st=0:d=${ctx.duration.toFixed(4)}:alpha=1`,
-      // zoompan runs on the clip's own frames, so d is in frames not seconds.
-      `scale=${Math.round(ctx.canvasWidth * 1.15)}:-2`,
-      `crop=${ctx.canvasWidth}:${ctx.canvasHeight}`
+      `scale=trunc(iw*1.15/2)*2:-2`,
+      `crop=iw/1.15:ih/1.15`
     ]
   }
 ]
+
+/**
+ * Build transition entries from catalog mask files.
+ *
+ * The library is browsed as a curated set of families rather than a flat list of
+ * 405 — nobody chooses from 405. Each mask becomes a member of a family inferred
+ * from its filename, and the picker offers families.
+ */
+export function transitionsFromMasks(
+  masks: { id: string; name: string; file: string; tags?: MaskTag[] }[]
+): TransitionDef[] {
+  return masks.map((mask) => ({
+    id: mask.id,
+    label: mask.name,
+    family: familyForMaskName(mask.name),
+    tier: 1 as const,
+    defaultFrames: 14,
+    mask: mask.file,
+    ...(mask.tags ? { tags: mask.tags } : {})
+  }))
+}
+
+/** Every transition carrying a tag, for the picker's filter row. */
+export function transitionsWithTag(all: TransitionDef[], tag: MaskTag): TransitionDef[] {
+  return all.filter((t) => t.tags?.includes(tag))
+}
+
+export function availableTags(all: TransitionDef[]): MaskTag[] {
+  const seen = new Set<MaskTag>()
+  for (const t of all) for (const tag of t.tags ?? []) seen.add(tag)
+  return [...seen]
+}
+
+/** Group masks by what their filenames suggest, so the picker stays navigable. */
+export function familyForMaskName(name: string): TransitionFamily {
+  const text = name.toLowerCase()
+  if (/ripple|wave|water|liquid/.test(text)) return 'smooth'
+  if (/glitch|noise|static|digital|pixel/.test(text)) return 'glitch'
+  if (/burn|flare|light|glow|flash|lens/.test(text)) return 'light'
+  if (/film|grain|reel|burn/.test(text)) return 'film'
+  if (/zoom|blur|radial/.test(text)) return 'zoom'
+  if (/whip|swipe|dash|speed/.test(text)) return 'whip'
+  if (/square|bar|box|grid|shape|circle|star|heart/.test(text)) return 'wipe'
+  return 'dissolve'
+}
 
 export const TRANSITIONS_BY_ID: Record<string, TransitionDef> = Object.fromEntries(
   TRANSITIONS.map((t) => [t.id, t])

@@ -44,7 +44,20 @@ export class JobQueue extends EventEmitter {
     return this.order.map((id) => this.jobs.get(id)!).filter(Boolean)
   }
 
-  add(job: Omit<Job, 'id' | 'status' | 'progress' | 'speed' | 'error' | 'startedAt' | 'finishedAt'>): Job {
+  /**
+   * Queue a job.
+   *
+   * `register` runs with the new job's id BEFORE the executor can start, and
+   * that ordering is the whole point of it existing. The queue pumps
+   * synchronously, so a caller that does `const job = add(...)` and only then
+   * records anything under `job.id` is already too late — the executor has run
+   * and failed looking for it. That is exactly how every export came to fail
+   * with "This export is missing its render settings".
+   */
+  add(
+    job: Omit<Job, 'id' | 'status' | 'progress' | 'speed' | 'error' | 'startedAt' | 'finishedAt'>,
+    register?: (id: string) => void
+  ): Job {
     const full: Job = {
       ...job,
       id: randomUUID(),
@@ -57,6 +70,7 @@ export class JobQueue extends EventEmitter {
     }
     this.jobs.set(full.id, full)
     this.order.push(full.id)
+    register?.(full.id)
     this.changed()
     this.pump()
     return full

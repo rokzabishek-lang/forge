@@ -87,6 +87,20 @@ export interface Settings {
   concurrency: number
   overwrite: boolean
   lastPresetId: string | null
+  /** Which speech engine to use. `auto` prefers the local one. */
+  voiceProvider?: 'auto' | 'kokoro' | 'hosted'
+  /**
+   * The user's own endpoint and key, for the hosted voice.
+   *
+   * Sent only to the endpoint named here, never logged, and stripped out of any
+   * error message before it reaches the screen.
+   */
+  voiceHosted?: {
+    baseUrl: string
+    model: string
+    voice: string
+    apiKey: string
+  }
 }
 
 export interface JobRequest {

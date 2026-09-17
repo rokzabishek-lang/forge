@@ -1,7 +1,7 @@
-import { app, BrowserWindow, dialog, net, protocol, shell } from 'electron'
+import { app, BrowserWindow, dialog, protocol, shell } from 'electron'
 import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
 import { registerIpc } from './ipc'
+import { registerMediaProtocol } from './mediaProtocol'
 import { assertBinaries } from './ffmpeg/paths'
 import { startSidecar, stopSidecar, type SidecarStatus } from './sidecar/service'
 
@@ -15,35 +15,25 @@ let mainWindow: BrowserWindow | null = null
 protocol.registerSchemesAsPrivileged([
   {
     scheme: 'forge-media',
-    privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true }
+    /*
+     * corsEnabled, or the GPU grade cannot see the picture.
+     *
+     * WebGL refuses a texture from an element that was not fetched with CORS
+     * approval, so the preview elements ask for it — and without this flag
+     * Chromium fails that request outright rather than consulting the
+     * Access-Control-Allow-Origin header the handler already sends. The result
+     * was every image failing to load at all: a black preview with the audio
+     * still playing.
+     */
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      stream: true,
+      corsEnabled: true
+    }
   }
 ])
-
-function registerMediaProtocol(): void {
-  protocol.handle('forge-media', async (request) => {
-    // The path travels as a query parameter so Windows drive letters and
-    // backslashes never have to survive URL path encoding.
-    const target = new URL(request.url).searchParams.get('p')
-    if (!target) return new Response('Missing path', { status: 400 })
-
-    const response = await net.fetch(pathToFileURL(target).toString(), {
-      bypassCustomProtocolHandlers: true
-    })
-
-    // Fonts are ALWAYS fetched in CORS mode, unlike images and video. Without an
-    // allow-origin header every FontFace.load() fails with an opaque "network
-    // error" even though the file is served fine — which is exactly what it did.
-    const headers = new Headers(response.headers)
-    headers.set('Access-Control-Allow-Origin', '*')
-    headers.set('Cross-Origin-Resource-Policy', 'cross-origin')
-
-    return new Response(response.body, {
-      status: response.status,
-      statusText: response.statusText,
-      headers
-    })
-  })
-}
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -63,6 +53,42 @@ function createWindow(): void {
   })
 
   mainWindow.on('ready-to-show', () => mainWindow?.show())
+
+  /*
+   * Say something when the renderer dies or stops responding.
+   *
+   * Without these a crashed or wedged renderer is just a window that stopped
+   * repainting: no error, no log, nothing to report — which is indistinguishable
+   * from the app working slowly, and impossible to debug from a description.
+   */
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    console.error(`[forge] renderer gone: ${details.reason} (exit ${details.exitCode})`)
+    dialog.showErrorBox(
+      'Forge stopped responding',
+      `The window crashed (${details.reason}). Your project was not saved automatically.\n\n` +
+        'Reopen the app and use Cmd+S early next time.'
+    )
+  })
+
+  mainWindow.on('unresponsive', () => {
+    console.error('[forge] renderer is unresponsive — still working, or stuck')
+  })
+  mainWindow.on('responsive', () => {
+    console.error('[forge] renderer responsive again')
+  })
+
+  mainWindow.webContents.on('preload-error', (_event, preloadPath, error) => {
+    // A preload that throws leaves window.forge undefined, so every IPC call in
+    // the UI fails at once and the app looks frozen rather than broken.
+    console.error(`[forge] preload failed (${preloadPath}):`, error)
+    dialog.showErrorBox('Forge could not start', `The preload script failed:\n\n${error.message}`)
+  })
+
+  // In dev, open the inspector: an exception in the renderer is otherwise
+  // invisible from outside the window.
+  if (process.env.ELECTRON_RENDERER_URL) {
+    mainWindow.webContents.openDevTools({ mode: 'detach' })
+  }
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url)

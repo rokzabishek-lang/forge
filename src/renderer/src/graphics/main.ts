@@ -1,11 +1,13 @@
 import {
   layersAt,
   transformAt,
+  type CaptionLayer,
   type GraphicsSpec,
   type GraphicsLayer,
   type TextLayer,
   type ImageLayer
 } from '@shared/graphics/spec'
+import { drawTextOnto } from '@shared/render/textPaint'
 
 /**
  * The graphics layer page.
@@ -20,6 +22,18 @@ let spec: GraphicsSpec | null = null
 const stage = document.getElementById('stage') as HTMLDivElement
 const nodes = new Map<string, HTMLElement>()
 
+/*
+ * Captions are painted, not laid out in the DOM.
+ *
+ * One canvas over the stage, drawn by `drawTextOnto` — the same function that
+ * paints text clips and bakes their frames. Gradients, glows, extrusions and
+ * per-word highlights come along for free, which is the whole reason captions
+ * come through here at all; the previous approach built words out of `<p>`
+ * elements and could express none of them.
+ */
+let captionCanvas: HTMLCanvasElement | null = null
+let captionCtx: CanvasRenderingContext2D | null = null
+
 function setSpec(next: GraphicsSpec): void {
   spec = next
   stage.style.width = `${next.width}px`
@@ -28,6 +42,55 @@ function setSpec(next: GraphicsSpec): void {
   document.body.style.height = `${next.height}px`
   stage.replaceChildren()
   nodes.clear()
+
+  captionCanvas = document.createElement('canvas')
+  captionCanvas.width = next.width
+  captionCanvas.height = next.height
+  captionCanvas.style.position = 'absolute'
+  captionCanvas.style.left = '0'
+  captionCanvas.style.top = '0'
+  stage.appendChild(captionCanvas)
+  captionCtx = captionCanvas.getContext('2d')
+}
+
+/**
+ * Which word of a caption line is being spoken at a frame.
+ *
+ * The spoken word holds until the next begins rather than going dark in the gap
+ * between words — a highlight that blinks off mid-sentence reads as broken.
+ */
+function activeWord(layer: CaptionLayer, frame: number): number {
+  let active = -1
+  for (let i = 0; i < layer.wordFrames.length; i++) {
+    if (frame >= layer.wordFrames[i]) active = i
+  }
+  return active
+}
+
+function drawCaptions(frame: number, visible: GraphicsLayer[]): void {
+  const ctx = captionCtx
+  if (!ctx || !spec) return
+  ctx.clearRect(0, 0, spec.width, spec.height)
+
+  for (const layer of visible) {
+    if (layer.kind !== 'caption') continue
+    const word = activeWord(layer, frame)
+    drawTextOnto(
+      ctx,
+      {
+        ...layer.spec,
+        highlight:
+          layer.highlight && word >= 0
+            ? { word, color: layer.highlight.color, scale: layer.highlight.scale }
+            : undefined
+      },
+      spec.width,
+      spec.height,
+      // Frames from the line's own first frame, so an animation plays as the
+      // line arrives rather than once at the start of the video.
+      { frame: frame - layer.startFrame, fps: spec.fps }
+    )
+  }
 }
 
 function createNode(layer: GraphicsLayer): HTMLElement {
@@ -65,7 +128,10 @@ function draw(frame: number): void {
   const visible = layersAt(spec, frame)
   const seen = new Set<string>()
 
+  drawCaptions(frame, visible)
+
   for (const layer of visible) {
+    if (layer.kind === 'caption') continue
     seen.add(layer.id)
     let node = nodes.get(layer.id)
     if (!node) {
@@ -110,7 +176,25 @@ function renderFrame(frame: number): Promise<number> {
   })
 }
 
+/**
+ * Register the faces the spec carries, then wait for them.
+ *
+ * This window has no preload and no store, so it cannot ask the app for a font
+ * the way the editor does. The bytes arrive inside the spec as a data URL —
+ * which also means no fetch and no protocol handler to satisfy. A face that
+ * fails to load falls back rather than failing the render: a caption in the
+ * wrong face is recoverable, a black export is not.
+ */
 async function waitForFonts(): Promise<void> {
+  for (const font of spec?.fonts ?? []) {
+    try {
+      const face = new FontFace(font.family, `url(${font.dataUrl})`)
+      await face.load()
+      document.fonts.add(face)
+    } catch (err) {
+      console.warn('Graphics font failed to load', font.family, err)
+    }
+  }
   try {
     await document.fonts.ready
   } catch {

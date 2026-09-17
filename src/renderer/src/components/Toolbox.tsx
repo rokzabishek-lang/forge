@@ -1,0 +1,153 @@
+import { type ReactNode } from 'react'
+import { Crop, Grid3x3, MousePointer2, Scan, Brush, Circle, Droplet } from 'lucide-react'
+import { useEditor } from '../store'
+import { defaultMask, type MaskMode } from '@shared/render/mask'
+
+/**
+ * The tool strip, beside the picture.
+ *
+ * Tools that change what the pointer does, or what is drawn over the frame —
+ * distinct from the left panel, which is about what goes ON the timeline. A
+ * reframe rectangle was previously reachable only by opening the split view,
+ * which is an odd home for it: comparing source against output has nothing to
+ * do with choosing a crop.
+ *
+ * The unbuilt tools are shown greyed and say so when hovered rather than being
+ * hidden. A tool strip that grows a new icon every week is harder to learn than
+ * one whose shape is visible from the start — but a button that silently does
+ * nothing is worse than either, so these are visibly not ready.
+ */
+
+interface Tool {
+  id: string
+  label: string
+  hint: string
+  icon: typeof Crop
+  /** Absent while the tool has nothing behind it yet. */
+  onClick?: () => void
+  active?: boolean
+  soon?: string
+}
+
+export function Toolbox(): ReactNode {
+  const previewTool = useEditor((s) => s.previewTool)
+  const setPreviewTool = useEditor((s) => s.setPreviewTool)
+  const showThirds = useEditor((s) => s.showThirds)
+  const showSafe = useEditor((s) => s.showSafe)
+  const toggleGuide = useEditor((s) => s.toggleGuide)
+  const selectedClipId = useEditor((s) => s.selectedClipId)
+  const selected = useEditor((s) => s.project.clips.find((c) => c.id === s.selectedClipId) ?? null)
+  const setMask = useEditor((s) => s.setMask)
+
+  /*
+   * One button both opens the tool and puts a shape on the picture.
+   *
+   * Reaching for Blur and getting an editing mode but no visible shape is the
+   * version of this that reads as broken — so pressing it always leaves
+   * something on screen to drag. Pressing it again when that mode is already
+   * running takes the mask off, which is the only obvious way back out.
+   */
+  const startMask = (mode: MaskMode) => (): void => {
+    if (!selectedClipId || !selected) return
+    if (selected.mask?.mode === mode && previewTool === 'mask') {
+      setMask(selectedClipId, undefined)
+      setPreviewTool('select')
+      return
+    }
+    setMask(selectedClipId, selected.mask ? { ...selected.mask, mode } : defaultMask(mode))
+    setPreviewTool('mask')
+  }
+
+  const tools: Tool[] = [
+    {
+      id: 'select',
+      label: 'Select',
+      hint: 'Move, scale and rotate on the picture',
+      icon: MousePointer2,
+      active: previewTool === 'select',
+      onClick: () => setPreviewTool('select')
+    },
+    {
+      id: 'crop',
+      label: 'Reframe',
+      hint: 'Drag the crop rectangle on the picture',
+      icon: Crop,
+      active: previewTool === 'crop',
+      onClick: () => setPreviewTool('crop')
+    },
+    {
+      id: 'thirds',
+      label: 'Thirds',
+      hint: 'Rule-of-thirds guides',
+      icon: Grid3x3,
+      active: showThirds,
+      onClick: () => toggleGuide('thirds')
+    },
+    {
+      id: 'safe',
+      label: 'Safe areas',
+      hint: 'Title-safe and action-safe, per SMPTE ST 2046-1',
+      icon: Scan,
+      active: showSafe,
+      onClick: () => toggleGuide('safe')
+    },
+    {
+      id: 'mask',
+      label: 'Mask',
+      hint: selected
+        ? 'Show this clip only inside a shape'
+        : 'Select a clip first — a mask belongs to one clip',
+      icon: Circle,
+      active: previewTool === 'mask' && selected?.mask?.mode === 'reveal',
+      onClick: selected ? startMask('reveal') : undefined,
+      soon: 'select a clip first'
+    },
+    {
+      id: 'blur',
+      label: 'Blur',
+      hint: selected
+        ? 'Blur inside a shape — invert it for a blurred background'
+        : 'Select a clip first — a blur belongs to one clip',
+      icon: Droplet,
+      active: previewTool === 'mask' && selected?.mask?.mode === 'blur',
+      onClick: selected ? startMask('blur') : undefined,
+      soon: 'select a clip first'
+    },
+    {
+      id: 'paint',
+      label: 'Paint',
+      hint: 'Painting pixels frame by frame',
+      icon: Brush,
+      soon: 'stills only, and a long way off'
+    }
+  ]
+
+  return (
+    <div className="flex h-full w-9 shrink-0 flex-col items-center gap-0.5 border-r border-ink-850 bg-ink-900 py-2">
+      {tools.map((tool, index) => {
+        const Icon = tool.icon
+        const ready = tool.onClick !== undefined
+        return (
+          <div key={tool.id} className="contents">
+            {/* A rule between what works and what does not. */}
+            {index === 6 && <div className="my-1 h-px w-5 bg-ink-800" />}
+            <button
+              onClick={tool.onClick}
+              disabled={!ready}
+              title={ready ? `${tool.label} — ${tool.hint}` : `${tool.label} — ${tool.soon}`}
+              className={`flex size-7 items-center justify-center rounded-md transition-colors ${
+                tool.active
+                  ? 'bg-flame-500 text-ink-950'
+                  : ready
+                    ? 'text-ink-400 hover:bg-ink-800 hover:text-ink-200'
+                    : 'cursor-not-allowed text-ink-700'
+              }`}
+            >
+              <Icon size={14} strokeWidth={1.8} />
+            </button>
+          </div>
+        )
+      })}
+    </div>
+  )
+}

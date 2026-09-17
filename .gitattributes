@@ -1,0 +1,33 @@
+# Line endings, settled once rather than per checkout.
+#
+# Git on Windows converts LF to CRLF by default. Left alone that means every
+# file looks modified the moment the repo is cloned on the Surface, every diff
+# is noise, and anything that cares about its own bytes — a shell script, a
+# snapshot, an ffmpeg concat list written by a test — behaves differently on
+# one machine than the other.
+#
+# So: normalised in the repository, LF in the working tree everywhere. Windows
+# tooling has handled LF for years; the conversion is the thing causing trouble.
+* text=auto eol=lf
+
+# Binary, and must never be touched by any of the above. A CRLF conversion
+# inside a PNG is not a diff, it is a corrupt file.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.icns binary
+*.mp4 binary
+*.mov binary
+*.mp3 binary
+*.wav binary
+*.m4a binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.onnx binary
+*.bin binary
+*.cube binary

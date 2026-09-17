@@ -1,7 +1,6 @@
-/** Local files reach the renderer through the privileged forge-media scheme. */
-export function mediaUrl(path: string): string {
-  return `forge-media://local/?p=${encodeURIComponent(path)}`
-}
+import { mediaUrl } from '@shared/mediaUrl'
+
+export { mediaUrl }
 
 /**
  * URL for a catalog entry, built client-side.

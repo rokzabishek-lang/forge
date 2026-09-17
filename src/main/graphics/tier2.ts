@@ -1,14 +1,55 @@
 import { join } from 'node:path'
-import { rm, mkdir } from 'node:fs/promises'
+import { rm, mkdir, readFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { app } from 'electron'
 import { buildGraphicsSpec, needsFrameServer } from '@shared/graphics/fromTimeline'
+import type { GraphicsFont, GraphicsSpec } from '@shared/graphics/spec'
+import { fontFamilies, type FontMeta } from '@shared/assets/catalog'
+import { loadCatalog, resolveAssetFile } from '../assets/scan'
 import { FrameServer } from './frameServer'
 import { compositeGraphics } from './compositor'
 import type { ExecutionHandle } from '../queue'
 import { startRender, type RenderOptions } from '../render/renderJob'
 
 export { needsFrameServer }
+
+/**
+ * The faces a spec asks for, as bytes.
+ *
+ * The graphics window has no preload and no catalogue, so it cannot fetch a
+ * font itself. Resolving them here — once, before the window opens — is also the
+ * only point in the pipeline that knows both which families the captions use and
+ * where the catalogue keeps them.
+ *
+ * A missing family is skipped rather than fatal: the page falls back to a system
+ * face, which is wrong but legible. Losing the whole export over a font would
+ * not be.
+ */
+async function fontsFor(spec: GraphicsSpec): Promise<GraphicsFont[]> {
+  const families = new Set<string>()
+  for (const layer of spec.layers) {
+    if (layer.kind === 'caption') families.add(layer.spec.font)
+    else if (layer.kind === 'text') families.add(layer.fontFamily)
+  }
+  if (families.size === 0) return []
+
+  const catalog = await loadCatalog().catch(() => null)
+  if (!catalog) return []
+
+  const fonts: GraphicsFont[] = []
+  for (const entry of fontFamilies(catalog)) {
+    const family = (entry.meta as FontMeta).family
+    if (!families.has(family)) continue
+    try {
+      const bytes = await readFile(resolveAssetFile(entry.file))
+      const type = entry.file.toLowerCase().endsWith('.otf') ? 'font/otf' : 'font/ttf'
+      fonts.push({ family, dataUrl: `data:${type};base64,${bytes.toString('base64')}` })
+    } catch {
+      // Skipped, not fatal — see above.
+    }
+  }
+  return fonts
+}
 
 /**
  * Two-pass export: base picture, then graphics composited over it.
@@ -54,7 +95,8 @@ export function startTier2Render(
       if (cancelled) throw new Error('Cancelled')
 
       /* ---- pass 2: graphics over it ---- */
-      const spec = buildGraphicsSpec(options.project, canvas)
+      const built = buildGraphicsSpec(options.project, canvas)
+      const spec = built ? { ...built, fonts: await fontsFor(built) } : null
       if (!spec) {
         // Nothing for tier 2 to draw after all — the base render is the answer.
         const { rename } = await import('node:fs/promises')

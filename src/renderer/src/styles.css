@@ -1,16 +1,33 @@
 @import "tailwindcss";
 
+/*
+ * The palette.
+ *
+ * Neutral greys rather than blue-tinted ones, layered the way macOS layers its
+ * own: the window darkest, panels above it, controls above those. Apple's dark
+ * greys are almost perfectly neutral, and the blue cast the old palette carried
+ * is what made the app read as "a dark theme" rather than as a surface.
+ *
+ * Text is a small set of weights on one colour, not a set of colours — primary,
+ * secondary, tertiary — which is the single biggest thing that makes an
+ * interface look considered rather than assembled.
+ *
+ * The accent stays flame, because it is the product's, but slightly off full
+ * saturation and used on almost nothing: the selected thing, and the thing you
+ * are dragging. Colour means something only when it is rare.
+ */
 @theme {
-  --color-ink-950: #0b0d10;
-  --color-ink-900: #11151a;
-  --color-ink-850: #161b22;
-  --color-ink-800: #1c222b;
-  --color-ink-700: #2a323d;
-  --color-ink-600: #3a4552;
-  --color-ink-400: #7d8b9c;
-  --color-ink-200: #c3cdd8;
-  --color-flame-500: #f97341;
-  --color-flame-400: #fb8f65;
+  --color-ink-950: #0e0e10;
+  --color-ink-900: #151518;
+  --color-ink-850: #1b1b1f;
+  --color-ink-800: #232328;
+  --color-ink-700: #2f2f35;
+  --color-ink-600: #46464d;
+  --color-ink-400: #8b8b93;
+  --color-ink-200: #e9e9ec;
+  --color-flame-500: #ef7a4b;
+  --color-flame-400: #f59a75;
+  --color-flame-300: #f9bda4;
 }
 
 html,
@@ -23,10 +40,15 @@ body {
   margin: 0;
   background: var(--color-ink-950);
   color: var(--color-ink-200);
-  font-family: ui-sans-serif, -apple-system, "Segoe UI", system-ui, sans-serif;
+  /* -apple-system first: on a Mac this is the system face, which is most of
+     what makes an interface feel native before anything else is done. */
+  font-family: -apple-system, BlinkMacSystemFont, ui-sans-serif, "Segoe UI", system-ui, sans-serif;
   font-size: 13px;
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Type set at small sizes reads better slightly tightened. */
+  letter-spacing: -0.005em;
 }
 
 /* The macOS traffic lights sit over the header; keep it draggable. */
@@ -37,19 +59,130 @@ body {
   -webkit-app-region: no-drag;
 }
 
+/*
+ * Scrollbars, out of the way.
+ *
+ * Thin, transparent until the pointer is near, and never a hard edge — a
+ * scrollbar is a status indicator, not a control to look at.
+ */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 9px;
+  height: 9px;
 }
 ::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*:hover::-webkit-scrollbar-thumb {
   background: var(--color-ink-700);
-  border-radius: 5px;
-  border: 2px solid var(--color-ink-950);
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-ink-600) !important;
+  background-clip: content-box !important;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 
+/*
+ * Sliders.
+ *
+ * A hairline track with a round, slightly raised thumb — the shape macOS uses
+ * everywhere. The thumb grows a little under the pointer, which is the whole of
+ * what makes a control feel responsive rather than merely functional.
+ */
 input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 16px;
+  background: transparent;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 999px;
+  background: var(--color-ink-700);
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4.5px;
+  border-radius: 50%;
+  background: #f2f2f4;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.5),
+    0 0 0 0.5px rgba(0, 0, 0, 0.25);
+  transition: transform 120ms ease;
+}
+input[type="range"]:hover::-webkit-slider-thumb {
+  transform: scale(1.15);
+}
+input[type="range"]:active::-webkit-slider-thumb {
+  transform: scale(1.05);
+}
+input[type="range"]:disabled {
+  cursor: default;
+}
+input[type="range"]:disabled::-webkit-slider-thumb {
+  background: var(--color-ink-600);
+  box-shadow: none;
+  transform: none;
+}
+
+/* Checkboxes and colour wells, in the same restrained register. */
+input[type="checkbox"] {
   accent-color: var(--color-flame-500);
+}
+input[type="color"] {
+  -webkit-appearance: none;
+  appearance: none;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+input[type="color"]::-webkit-color-swatch {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 5px;
+}
+
+/*
+ * One focus ring for everything.
+ *
+ * Keyboard users get a visible ring; pointer users never see it. Browsers give
+ * this for free through :focus-visible, and the default ring is the wrong
+ * colour in a dark interface.
+ */
+:focus {
+  outline: none;
+}
+:focus-visible {
+  outline: 2px solid var(--color-flame-500);
+  outline-offset: 1px;
+  border-radius: 4px;
+}
+
+/* Motion, kept to what confirms an action rather than decorating it. */
+button {
+  transition:
+    background-color 120ms ease,
+    color 120ms ease,
+    border-color 120ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }

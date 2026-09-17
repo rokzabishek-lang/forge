@@ -1,9 +1,10 @@
 import type { Project } from '../timeline'
 import { clipsOnTrack, framesToSeconds, secondsToFrames } from '../timeline'
-import { groupWords, REFERENCE_HEIGHT } from '../captions/ass'
+import { groupWords } from '../captions/ass'
+import { captionSpec } from '../captions/line'
 import { resolveStyle, type CaptionStyle, type StyleOverrides } from '../captions/style'
-import type { GraphicsSpec, TextLayer } from './spec'
-import { popIn } from './spec'
+import type { CaptionLayer, GraphicsSpec } from './spec'
+import { captionTrack } from '../captions/timeline'
 
 /**
  * Compile a timeline into a graphics spec for the frame server.
@@ -18,32 +19,64 @@ export interface GraphicsBuildOptions {
   height: number
 }
 
-/** Frames a word's pop-in takes, at the reference frame rate. */
-const POP_FRAMES = 5
-
 /**
  * True when the project needs the frame server at all.
  *
  * Deliberately a property of the request rather than of the feature: "captions"
  * is not a tier, *these* captions with *these* options are.
  */
-export function needsFrameServer(project: Project): boolean {
+export function needsFrameServer(_project: Project): boolean {
+  /*
+   * Nothing does, any more.
+   *
+   * Captions were the only thing that ever went to the offscreen browser, and
+   * they are baked in the renderer now — one pass instead of two, and no
+   * `capturePage()` per frame. Kept as a function rather than deleted because
+   * the frame server itself still works and is where a future graphics layer
+   * that genuinely needs a DOM would go; what changed is that captions are not
+   * that thing. See docs/EFFECTS.md §13.
+   */
+  return false
+}
+
+/** Whether these captions have to be drawn rather than burned in by libass. */
+export function captionsNeedBaking(project: Project): boolean {
   if (!project.captions?.enabled) return false
-  const style = resolveStyle(
-    project.captions.styleId,
-    project.captions.overrides as StyleOverrides | undefined
+  if (Object.keys(project.transcripts).length === 0) return false
+  return captionNeedsCanvas(
+    resolveStyle(
+      project.captions.styleId,
+      project.captions.overrides as StyleOverrides | undefined
+    )
   )
-  // Animation per word is the thing ASS cannot express: karaoke tags recolour
-  // but cannot scale, and there is no per-word easing.
-  return style.animated === true && Object.keys(project.transcripts).length > 0
 }
 
 /**
- * Caption layers, one text layer per word.
+ * Whether these captions have to be drawn rather than burned in.
  *
- * Word-level layers rather than one layer per line: each word needs its own
- * entry time and its own scale curve, which is the entire point of coming to
- * tier 2 for this.
+ * ASS is genuinely cheaper — libass runs inside the normal encode and costs
+ * nothing extra — so it stays the answer for anything it can actually express.
+ * What it cannot express is a gradient or metallic fill, a glow, an extrusion, a
+ * highlight block, and any per-word easing: karaoke tags recolour but cannot
+ * scale, and there is no timing curve to reach.
+ */
+export function captionNeedsCanvas(style: CaptionStyle): boolean {
+  return (
+    style.animated === true ||
+    style.textStyleId !== undefined ||
+    style.animationId !== undefined
+  )
+}
+
+/**
+ * Caption layers, one per LINE.
+ *
+ * This used to emit one layer per word, each placed by guessing that a word is
+ * about 2.2 font sizes wide — which is not true of any real font, and left the
+ * spacing of every caption slightly wrong in a way no amount of style work could
+ * fix. A line is now one layer carrying a text spec, and the page measures and
+ * lays it out with the same painter the rest of the app uses. The per-word part
+ * that genuinely varies — which word is lit — survives as `wordFrames`.
  */
 export function buildGraphicsSpec(
   project: Project,
@@ -55,80 +88,51 @@ export function buildGraphicsSpec(
     project.captions.overrides as StyleOverrides | undefined
   )
 
-  const videoTrack = project.tracks.find((t) => t.kind === 'video' && !t.hidden)
+  // The same track the burned-in path builds from, so the two cannot disagree.
+  const videoTrack = captionTrack(project)
   if (!videoTrack) return null
 
-  const scale = options.height / REFERENCE_HEIGHT
-  const fontSize = style.fontSize * scale
-  const layers: TextLayer[] = []
-
-  // Where the caption sits vertically, as a fraction of the frame.
-  const anchorY =
-    style.position === 'top'
-      ? (style.marginV * scale) / options.height + 0.06
-      : style.position === 'center'
-        ? 0.5
-        : 1 - (style.marginV * scale) / options.height
-
-  let timelineCursorFrames = 0
+  const layers: CaptionLayer[] = []
 
   for (const clip of clipsOnTrack(project, videoTrack.id)) {
     const transcript = project.transcripts[clip.assetId]
-    if (!transcript) {
-      timelineCursorFrames += clip.duration
-      continue
-    }
+    if (!transcript) continue
 
     const clipStartMs = framesToSeconds(clip.inPoint, fps) * 1000
     const clipEndMs = clipStartMs + framesToSeconds(clip.duration, fps) * 1000
+    /*
+     * Source ms -> timeline frames, through where the clip actually SITS.
+     *
+     * This used to accumulate durations into a running cursor, which equals
+     * `clip.start` only while every clip is packed against its neighbour from
+     * zero. One gap and every caption after it drifts.
+     */
+    const at = (ms: number): number =>
+      clip.start + secondsToFrames((ms - clipStartMs) / 1000, fps)
 
     for (const group of groupWords(transcript.segments, transcript.words, style.wordsPerLine)) {
-      // Lay the group out horizontally around the centre. Real text metrics live
-      // in the browser, so this is an approximation the page refines — but the
-      // ordering and timing it encodes are exact.
-      const count = group.length
-      group.forEach((word, index) => {
-        if (word.endMs <= clipStartMs || word.startMs >= clipEndMs) return
+      // A line the clip does not actually show is not a line.
+      const visible = group.filter((w) => w.endMs > clipStartMs && w.startMs < clipEndMs)
+      if (visible.length === 0) continue
 
-        // Source ms -> timeline frames, through this clip's placement.
-        const intoClipMs = word.startMs - clipStartMs
-        const startFrame =
-          timelineCursorFrames + secondsToFrames(intoClipMs / 1000, fps)
-        const lastOfGroup = group[count - 1]
-        const endFrame =
-          timelineCursorFrames +
-          secondsToFrames((lastOfGroup.endMs - clipStartMs) / 1000, fps)
+      const startFrame = Math.max(clip.start, at(visible[0].startMs))
+      const endFrame = Math.min(
+        clip.start + clip.duration,
+        at(visible[visible.length - 1].endMs)
+      )
+      if (endFrame <= startFrame) continue
 
-        if (endFrame <= startFrame) return
-
-        const offset = (index - (count - 1) / 2) * fontSize * 2.2
-        const active = true
-
-        layers.push({
-          id: `w-${clip.id}-${word.index}`,
-          kind: 'text',
-          text: style.uppercase ? word.text.toUpperCase() : word.text,
-          startFrame,
-          endFrame,
-          fontFamily: style.fontFamily,
-          fontSize,
-          color: active ? style.highlightColor : style.primaryColor,
-          strokeColor: style.outlineColor,
-          strokeWidth: style.outlineWidth * scale,
-          anchorX: 0.5,
-          anchorY,
-          align: 'center',
-          uppercase: style.uppercase,
-          transform: {
-            ...popIn(startFrame, POP_FRAMES),
-            x: offset,
-            y: 0
-          }
-        })
+      layers.push({
+        id: `cap-${clip.id}-${visible[0].index}`,
+        kind: 'caption',
+        startFrame,
+        endFrame,
+        // The highlight is left off: it moves, so the page sets it per frame.
+        spec: captionSpec(style, visible, -1),
+        wordFrames: visible.map((w) => at(w.startMs)),
+        highlight: { color: style.highlightColor, scale: style.highlightScale }
       })
     }
-
-    timelineCursorFrames += clip.duration
   }
 
   if (layers.length === 0) return null

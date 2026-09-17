@@ -19,7 +19,9 @@ function defaults(): Settings {
     outputDir: null,
     concurrency: defaultConcurrency(),
     overwrite: false,
-    lastPresetId: null
+    lastPresetId: null,
+    voiceProvider: 'auto',
+    voiceHosted: { baseUrl: '', model: 'tts-1', voice: 'alloy', apiKey: '' }
   }
 }
 
@@ -34,7 +36,29 @@ function sanitize(raw: unknown): Settings {
         ? Math.floor(input.concurrency)
         : base.concurrency,
     overwrite: typeof input.overwrite === 'boolean' ? input.overwrite : base.overwrite,
-    lastPresetId: typeof input.lastPresetId === 'string' ? input.lastPresetId : base.lastPresetId
+    lastPresetId: typeof input.lastPresetId === 'string' ? input.lastPresetId : base.lastPresetId,
+    voiceProvider:
+      input.voiceProvider === 'kokoro' || input.voiceProvider === 'hosted'
+        ? input.voiceProvider
+        : 'auto',
+    voiceHosted: voiceHosted(input.voiceHosted, base.voiceHosted!)
+  }
+}
+
+/** Strings only, and never a partial object — every field has a usable default. */
+function voiceHosted(
+  raw: unknown,
+  base: NonNullable<Settings['voiceHosted']>
+): NonNullable<Settings['voiceHosted']> {
+  if (typeof raw !== 'object' || raw === null) return base
+  const input = raw as Record<string, unknown>
+  const str = (value: unknown, fallback: string): string =>
+    typeof value === 'string' ? value : fallback
+  return {
+    baseUrl: str(input.baseUrl, base.baseUrl),
+    model: str(input.model, base.model),
+    voice: str(input.voice, base.voice),
+    apiKey: str(input.apiKey, base.apiKey)
   }
 }
 

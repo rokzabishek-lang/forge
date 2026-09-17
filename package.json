@@ -13,7 +13,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "pack:mac": "npm run build && electron-builder --mac --publish never",
-    "pack:win": "npm run build && electron-builder --win --publish never"
+    "pack:win": "npm run build && electron-builder --win --publish never",
+    "harness": "vite --config vite.harness.config.ts"
   },
   "dependencies": {
     "@ffmpeg-installer/ffmpeg": "1.1.0",

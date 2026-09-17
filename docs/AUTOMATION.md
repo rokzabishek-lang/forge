@@ -166,6 +166,91 @@ the timeline.
 transition, generated on first use. Live-rendering 400 previews in a browser will not be
 pleasant.
 
+### 5b. The 90% hard-cut rule does not apply to stills — corrected 2026-09-11
+
+The research behind `DEFAULT_TRANSITION_RATE = 0.1` is about editing **footage**, where a
+hard cut works because the subject's own movement carries continuity across it. Two
+unrelated photographs have no such continuity. Applying the footage rate to the photo reel
+produced two or three transitions across a whole song, and the result read as a contact
+sheet rather than an edit.
+
+So `planCuts` gained `transitionsOn: 'structural' | 'all'`:
+
+- **`structural`** (default, for footage) — only drops, section changes and build-ends may
+  carry a transition. The original rule, unchanged.
+- **`all`** (used by the reel) — grid cuts are eligible too, at
+  `DEFAULT_REEL_TRANSITION_RATE = 0.55`.
+
+Two further corrections came out of the same bug:
+
+1. **Rank-only selection clusters.** Sorting candidates by weight and taking the top N put
+   every transition in the loudest passage and left the quiet one with none — backwards for
+   stills, where an unbroken run of hard cuts is exactly what looks unfinished. Structural
+   moments are still taken first; the remaining budget is then spread **evenly**.
+2. **The treatment must vary, not just fire.** Three hardcoded IDs meant that even when
+   transitions did fire they were always the same three. `pickTransition(tier, index,
+   available)` walks tier-appropriate families and varies by index, so the 400-odd mask
+   transitions participate without the planner knowing they exist.
+
+The general lesson is worth keeping: **a finding is scoped to the medium it was measured
+on.** Cut density being tempo-invariant survives the move from footage to stills. The
+hard-cut ratio does not.
+
+### 5c. Camera moves are the other half
+
+Transition density was never the whole complaint — a reel of flat photographs looks like a
+slideshow no matter what sits between the cuts. `Clip.motion` now carries twelve named
+moves (centred push/pull, four drifting pushes, two drifting pulls, four pans) plus
+`shake`, chosen per shot by energy tier: pans and pulls when quiet, pushes at peaks, a
+held shake on a drop. Consecutive shots never repeat a move or its mirror, and selection
+is deterministic in the shot index so rebuilding does not reshuffle an edit the user has
+already watched.
+
+The ceiling above this is parallax, which is a different technique rather than more
+choreography — see `PARALLAX.md`.
+
+### 5d. One photograph is a different problem — added 2026-09-12
+
+A multi-photo reel cuts *between* pictures. With one picture there is nothing to cut to,
+so every change has to be manufactured. Three sources, in `automation/onePhoto.ts`:
+
+**Framing.** The photograph is treated as several shots, the way documentary editors have
+cut archive stills for decades: wide, medium, close on the face, a detail. Two rules from
+ordinary coverage practice keep it from looking broken.
+
+- Shot sizes are proportions of the **figure**, not of the frame — a medium is waist-up, a
+  close is head and shoulders. Cropping to a fraction of the picture instead lands the
+  frame on whatever happens to be there, and on a standing subject that is their waist.
+  This is why the bake now reports `subjectBox` and not just `subject: true`.
+- Consecutive framings must **read as a cut**. The usual form of that rule is about size —
+  under roughly 1.4× the frame twitches rather than cuts. Scale is only one way a frame
+  changes, though: a same-size crop on a different part of the picture shows different
+  content, which is a cut by any measure. `readsAsCut` accepts either.
+
+That second half is not a refinement, it is what makes vertical work at all. Measured on a
+4032×3024 phone photo at 1080×1920, the ladder has **two** rungs — the wide is already a
+third of the photo's width, and the tightest crop the resolution supports is barely closer.
+Scale alone gives a wide/medium ping-pong. Adding the shot that looks away gives four.
+
+**Camera.** As §5c, inside the chosen crop, with less travel in a tight one — there is less
+picture to move through before the move runs out of it.
+
+Parallax is confined to the full-frame shots. Depth planes composite at the bake's own
+resolution (`MAX_WORKING_SIZE`, 2048 on the long side), not the photograph's, so a crop in
+source pixels would land somewhere else entirely. Framed shots take a flat move, which is
+what a punch-in wants anyway.
+
+**Text.** With one picture the words carry the rhythm, so the caption is the third source
+of change rather than decoration on top of it. Cards land on **bars**, never beats: a title
+that changes every beat flickers past unread at any tempo worth cutting to.
+
+How much text fits on a card is set by reading speed, not word count — subtitle practice
+puts comfortable reading at 15–17 characters a second, so the tempo decides the split. At
+120 BPM a bar is 2s and about thirty characters fit; at 160 BPM it is 1.5s and twenty-four
+do. The same caption therefore splits differently against different songs, which is the
+point. A hard ceiling on card length applies regardless: a vertical reel is narrow, and
+past about 48 characters the type has to shrink below what a phone can read.
+
 ---
 
 ## 6. Who is in control

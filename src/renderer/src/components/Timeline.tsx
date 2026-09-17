@@ -1,8 +1,17 @@
-import { useCallback, useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import type { Clip } from '@shared/timeline'
 import { Eye, EyeOff, Plus, Trash2, Volume2, VolumeX } from 'lucide-react'
-import { clipEnd, formatTimecode, projectDuration, MAX_TRACKS } from '@shared/timeline'
+import {
+  clipEnd,
+  formatTimecode,
+  laneOrder,
+  projectDuration,
+  nearestTransitionTarget,
+  MAX_TRACKS
+} from '@shared/timeline'
 import { useEditor } from '../store'
+import { useCatalog } from '../catalog'
+import { acceptsKind, isAssetDrag, readDragPayload, type DragPayload } from '../dragPayload'
 
 type DragMode = 'move' | 'trim-start' | 'trim-end'
 
@@ -35,6 +44,18 @@ export function Timeline(): ReactNode {
   const removeTrack = useEditor((s) => s.removeTrack)
   const toggleTrackMuted = useEditor((s) => s.toggleTrackMuted)
   const toggleTrackHidden = useEditor((s) => s.toggleTrackHidden)
+  const placeLibraryAsset = useEditor((s) => s.placeLibraryAsset)
+  const placeTitle = useEditor((s) => s.placeTitle)
+  const setTransition = useEditor((s) => s.setTransition)
+  const notify = useEditor((s) => s.notify)
+  const clearTransition = useEditor((s) => s.clearTransition)
+  const allTransitions = useCatalog((s) => s.transitions)
+  const [dropTarget, setDropTarget] = useState<{
+    trackId: string
+    frame: number
+    /** Set while dragging a transition: the cut it would snap to. */
+    cutFrame: number | null
+  } | null>(null)
 
   const laneRef = useRef<HTMLDivElement | null>(null)
   const drag = useRef<{
@@ -43,6 +64,63 @@ export function Timeline(): ReactNode {
     startX: number
     origin: Clip
   } | null>(null)
+
+  /**
+   * A transition attaches to a cut, everything else becomes a clip.
+   *
+   * Dropping a transition onto a clip applies it to that clip's incoming edge,
+   * which is the only place a transition can live — so it is rejected anywhere
+   * else rather than silently doing nothing.
+   */
+  const handleDrop = useCallback(
+    async (
+      payload: DragPayload,
+      trackId: string,
+      trackKind: 'video' | 'audio',
+      frame: number
+    ): Promise<void> => {
+      if (!acceptsKind(payload, trackKind)) {
+        notify(
+          payload.kind === 'sfx'
+            ? 'Sounds go on an audio track'
+            : 'That belongs on a video track',
+          'info'
+        )
+        return
+      }
+
+      if (payload.kind === 'transition') {
+        // Snap to the nearest cut within half a second of the drop.
+        const tolerance = Math.round(useEditor.getState().project.settings.fps / 2)
+        const result = nearestTransitionTarget(
+          useEditor.getState().project,
+          trackId,
+          frame,
+          tolerance
+        )
+        if (!result.clip) {
+          // Previously this failed silently, which looked exactly like the drop
+          // not registering at all.
+          notify(result.reason, 'info')
+          return
+        }
+        if (!payload.transitionId) return
+        setTransition(result.clip.id, payload.transitionId)
+        select(result.clip.id)
+        notify(`${payload.name} applied`, 'info')
+        return
+      }
+
+      // Titles are generated from a template rather than placed as a file.
+      if (payload.kind === 'title') {
+        await placeTitle(payload.file, payload.name, trackId, frame)
+        return
+      }
+
+      await placeLibraryAsset(payload.file, payload.name, trackId, frame)
+    },
+    [notify, placeLibraryAsset, placeTitle, setTransition, select]
+  )
 
   const snapTargets = useSnapTargets()
   const fps = project.settings.fps
@@ -137,6 +215,9 @@ export function Timeline(): ReactNode {
   const ticks: number[] = []
   for (let f = 0; f <= duration + fps * secondsStep; f += fps * secondsStep) ticks.push(f)
 
+  // Highest video layer at the top, the way every NLE shows it. See laneOrder.
+  const lanes = laneOrder(project.tracks)
+
   return (
     <div className="flex h-full flex-col border-t border-ink-800 bg-ink-900">
       <div className="flex flex-1 overflow-hidden">
@@ -164,7 +245,7 @@ export function Timeline(): ReactNode {
             </div>
           </div>
 
-          {project.tracks.map((track, index) => {
+          {lanes.map((track) => {
             const isOnlyVideo =
               track.kind === 'video' && project.tracks.filter((t) => t.kind === 'video').length === 1
             return (
@@ -203,9 +284,9 @@ export function Timeline(): ReactNode {
                   </button>
                 )}
 
-                {/* Layer order matters for compositing: higher video track wins. */}
+                {/* The track above composites over the one below, as in Resolve. */}
                 <span className="ml-auto shrink-0 text-[9px] text-ink-700">
-                  {track.kind === 'video' ? `L${index + 1}` : ''}
+                  {track.kind === 'video' && track.id === lanes[0]?.id ? 'top' : ''}
                 </span>
 
                 <button
@@ -239,15 +320,90 @@ export function Timeline(): ReactNode {
               ))}
             </div>
 
-            {project.tracks.map((track) => (
+            {lanes.map((track) => (
               <div
                 key={track.id}
                 className={`relative border-b border-ink-800 ${
                   track.hidden || track.muted ? 'opacity-40' : ''
-                }`}
+                } ${dropTarget?.trackId === track.id ? 'bg-flame-500/10' : ''}`}
                 style={{ height: TRACK_HEIGHT }}
                 onPointerDown={() => select(null)}
+                onDragOver={(e) => {
+                  if (!isAssetDrag(e)) return
+                  e.preventDefault()
+                  e.dataTransfer.dropEffect = 'copy'
+                  const frame = frameFromEvent(e.clientX)
+                  // dataTransfer contents are unreadable during dragover, so the
+                  // snap preview is computed for any drag and simply ignored for
+                  // kinds that do not snap.
+                  const snap = nearestTransitionTarget(
+                    project,
+                    track.id,
+                    frame,
+                    Math.round(project.settings.fps / 2)
+                  )
+                  setDropTarget({
+                    trackId: track.id,
+                    frame,
+                    cutFrame: snap.clip ? snap.clip.start : null
+                  })
+                }}
+                onDragLeave={() =>
+                  setDropTarget((current) => (current?.trackId === track.id ? null : current))
+                }
+                onDrop={(e) => {
+                  e.preventDefault()
+                  setDropTarget(null)
+                  const payload = readDragPayload(e)
+                  if (!payload) return
+                  void handleDrop(payload, track.id, track.kind, frameFromEvent(e.clientX))
+                }}
               >
+                {project.clips
+                  .filter((c) => c.trackId === track.id && c.transitionIn)
+                  .map((clip) => {
+                    const transition = clip.transitionIn!
+                    const width = Math.max(18, transition.durationFrames * zoom)
+                    const selected = clip.id === selectedClipId
+                    const label =
+                      allTransitions.find((t) => t.id === transition.id)?.label ?? transition.id
+                    return (
+                      <button
+                        key={`tr-${clip.id}`}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          select(clip.id)
+                        }}
+                        onDoubleClick={(e) => {
+                          e.stopPropagation()
+                          clearTransition(clip.id)
+                        }}
+                        title={`${label} · ${transition.durationFrames} frames — click to edit, double-click to remove`}
+                        // Centred on the cut: a transition consumes time from
+                        // both clips, so showing it inside only one misrepresents it.
+                        className={`absolute top-1 z-10 flex items-center justify-center overflow-hidden rounded border text-[9px] font-semibold transition-colors ${
+                          selected
+                            ? 'border-flame-300 bg-flame-500 text-ink-950'
+                            : 'border-flame-400 bg-flame-500/85 text-ink-950 hover:bg-flame-400'
+                        }`}
+                        style={{
+                          left: clip.start * zoom,
+                          width,
+                          height: TRACK_HEIGHT - 8
+                        }}
+                      >
+                        <span
+                          className="pointer-events-none absolute inset-0 opacity-30"
+                          style={{
+                            backgroundImage:
+                              'repeating-linear-gradient(45deg, rgba(0,0,0,0.7) 0 2px, transparent 2px 5px)'
+                          }}
+                        />
+                        <span className="relative">{width > 46 ? label : '⋈'}</span>
+                      </button>
+                    )
+                  })}
+
                 {project.clips
                   .filter((c) => c.trackId === track.id)
                   .map((clip) => {
@@ -267,18 +423,6 @@ export function Timeline(): ReactNode {
                         onPointerUp={endDrag}
                         onPointerCancel={endDrag}
                       >
-                        {/* A transition overlaps the clip before it; mark where. */}
-                        {clip.transitionIn && (
-                          <div
-                            className="pointer-events-none absolute left-0 top-0 flex h-full items-center justify-center overflow-hidden border-r-2 border-flame-400 bg-flame-500/70"
-                            style={{ width: Math.max(4, clip.transitionIn.durationFrames * zoom) }}
-                            title={`${clip.transitionIn.id} · ${clip.transitionIn.durationFrames} frames`}
-                          >
-                            {clip.transitionIn.durationFrames * zoom > 26 && (
-                              <span className="text-[9px] font-semibold text-ink-950">⇥</span>
-                            )}
-                          </div>
-                        )}
                         <div className="truncate px-2 pt-1 text-ink-200">{asset?.name ?? 'missing'}</div>
                         <div className="px-2 text-[10px] text-ink-400">
                           {formatTimecode(clip.duration, fps)}
@@ -304,6 +448,18 @@ export function Timeline(): ReactNode {
                   })}
               </div>
             ))}
+
+            {dropTarget && (
+              <div
+                className={`pointer-events-none absolute top-7 z-20 ${
+                  dropTarget.cutFrame === null ? 'w-0.5 bg-flame-400' : 'w-1 bg-flame-400'
+                }`}
+                style={{
+                  left: (dropTarget.cutFrame ?? dropTarget.frame) * zoom,
+                  height: project.tracks.length * TRACK_HEIGHT
+                }}
+              />
+            )}
 
             <div
               className="pointer-events-none absolute top-0 z-30 w-px bg-flame-500"

@@ -96,16 +96,39 @@ describe('caption burn-in', () => {
   })
 
   it('maps source time to timeline time for a trimmed clip', () => {
-    // Clip reads from 2s of source and lands at 1s of timeline.
+    /*
+     * This asserted 0:00:00.00 and described the setup, correctly, as "lands at
+     * 1s of timeline" — a test that contradicted itself and passed, because the
+     * builder walked a cursor of accumulated durations instead of reading
+     * `clip.start`. The two are the same number only while every clip is packed
+     * from zero; leave a gap and every caption after it drifts by its size.
+     */
     const p = project({ inPoint: 60, start: 30, duration: 60 })
     const ass = buildTimelineCaptions(p, DEFAULT_CAPTION_STYLE, { width: 1080, height: 1920 })!
 
     expect(ass).toBeTruthy()
-    // "Word" at 2000ms of source, clip starts reading at 2000ms and sits at 0ms
-    // of timeline (it is the only clip), so the cue must start at 0.
-    expect(ass).toContain('Dialogue: 0,0:00:00.00')
+    // "Word" at 2000ms of source, read from 2000ms in, on a clip that sits at
+    // frame 30 — one second in at 30fps.
+    expect(ass).toContain('Dialogue: 0,0:00:01.00')
     // Words before the in-point must not appear at all.
     expect(ass).not.toContain('FORGE')
+  })
+
+  it('follows a clip that has been dragged later', () => {
+    // The case the cursor could never get right: the same clip, moved.
+    const near = buildTimelineCaptions(
+      project({ inPoint: 60, start: 30, duration: 60 }),
+      DEFAULT_CAPTION_STYLE,
+      { width: 1080, height: 1920 }
+    )!
+    const far = buildTimelineCaptions(
+      project({ inPoint: 60, start: 150, duration: 60 }),
+      DEFAULT_CAPTION_STYLE,
+      { width: 1080, height: 1920 }
+    )!
+    expect(near).toContain('Dialogue: 0,0:00:01.00')
+    // 150 frames at 30fps = 5 seconds.
+    expect(far).toContain('Dialogue: 0,0:00:05.00')
   })
 
   it('burns captions that visibly change the frame', async () => {
