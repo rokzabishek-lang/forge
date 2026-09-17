@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { basename, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { downloadMedia, findCached, removePartials, type IngestTool } from '../../src/main/ingest/download'
 import type { IngestRequest } from '@shared/ingest/args'
@@ -74,8 +74,12 @@ describe('a download through the fake yt-dlp', () => {
     expect(outcome.path).toBe(join(dest, 'dQw4w9WgXcQ.video-1080p.mp4'))
     // The title carries every character Windows forbids and none of them
     // reached the filename — the split the whole design rests on.
+    //
+    // The FILENAME, not the path: every absolute Windows path carries a
+    // drive-letter colon, so asserting this against `outcome.path` could never
+    // pass there while passing everywhere on a `/Users/...` machine.
     expect(outcome.title).toBe('Fake | Title: "quoted"? *starred*')
-    expect(outcome.path).not.toMatch(/[<>:"|?*]/)
+    expect(basename(outcome.path)).not.toMatch(/[<>:"|?*]/)
 
     expect(seen.at(-1)).toBe(1)
     for (let i = 1; i < seen.length; i++) expect(seen[i]).toBeGreaterThanOrEqual(seen[i - 1])
@@ -88,7 +92,6 @@ describe('a download through the fake yt-dlp', () => {
   it('reuses a finished file instead of spawning anything', async () => {
     const dest = join(dir, 'cached')
     await rm(dest, { recursive: true, force: true })
-    await writeFile(join(dest, 'x').replace(/x$/, ''), '').catch(() => undefined)
     const { mkdir } = await import('node:fs/promises')
     await mkdir(dest, { recursive: true })
     await writeFile(join(dest, 'dQw4w9WgXcQ.video-720p.webm'), 'already here')
