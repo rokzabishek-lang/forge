@@ -1,6 +1,14 @@
+# Anchored with a leading slash wherever the intent is "the one at the root".
+#
+# A bare `assets` in gitignore matches a directory of that name at EVERY level,
+# not just this one — so it silently swallowed src/shared/assets/catalog.ts,
+# src/main/assets/scan.ts and src/main/assets/place.ts. They were never
+# committed, nothing said so, and the first sign of it was CI failing to
+# typecheck a module that exists perfectly well on the machine that wrote it.
+
 node_modules/
-out/
-dist/
+/out/
+/dist/
 .DS_Store
 *.log
 
@@ -9,9 +17,15 @@ sidecar/.venv/
 __pycache__/
 *.py[cod]
 
-# Asset library. Currently a symlink to the existing library while placement is
-# undecided (docs/ASSETS.md §"Open decision"), so it must not be committed.
-assets
-asset-catalog.json
+# The asset library. Currently a symlink to the existing library while
+# placement is undecided (docs/ASSETS.md §"Open decision"), so it must not be
+# committed — but only THIS one, hence the slash.
+/assets
+/asset-catalog.json
+
 *.tsbuildinfo
-*.tsbuildinfo
+
+# Scratch left behind by tools handed ":memory:" as a database path. The colon
+# makes the name illegal on Windows, and git cannot even check out a tree that
+# contains one: `error: invalid path`, exit 128, before a single test runs.
+*:memory:*

@@ -160,7 +160,10 @@
       "Bash(perl -0pi -e \"s/const rawW = Math\\\\.max\\\\\\(2, stream\\\\?\\\\.width \\\\?\\\\? canvas\\\\.width\\\\\\)\\\\n  const rawH = Math\\\\.max\\\\\\(2, stream\\\\?\\\\.height \\\\?\\\\? canvas\\\\.height\\\\\\)/const rawW = Math.max\\(2, clip.__asset?.width ?? canvas.width\\)\\\\n  const rawH = Math.max\\(2, clip.__asset?.height ?? canvas.height\\)/\" src/shared/render/plan.ts)",
       "Bash(perl -0pi -e \"s/const rawW = Math\\\\.max\\\\\\(2, clip\\\\.__asset\\\\?\\\\.width \\\\?\\\\? canvas\\\\.width\\\\\\)\\\\n  const rawH = Math\\\\.max\\\\\\(2, clip\\\\.__asset\\\\?\\\\.height \\\\?\\\\? canvas\\\\.height\\\\\\)/const rawW = Math.max\\(2, 4000\\)\\\\n  const rawH = Math.max\\(2, 3000\\)/\" src/shared/render/plan.ts)",
       "Bash(cp __TRACKED_VAR__/plan.bak.ts src/shared/render/plan.ts)",
-      "Bash(rm -f tests/zz_check.test.ts)"
+      "Bash(rm -f tests/zz_check.test.ts)",
+      "Bash(npm ls *)",
+      "Bash(git check-ignore *)",
+      "Bash(rm -f \"sidecar/:memory:.ses\")"
     ]
   }
 }
