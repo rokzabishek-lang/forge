@@ -30,6 +30,21 @@ __pycache__/
 # contains one: `error: invalid path`, exit 128, before a single test runs.
 *:memory:*
 
+# The meme vault and the matted stickers — 2.7GB, and not ours.
+#
+# `Master_Viral_Meme_Vault` is the scraped originals; the `_COMPLETE` folder is
+# the same set after background matting. They are source material for the
+# sticker library, they are other people's footage, and together they are larger
+# than every other thing in this repository by three orders of magnitude.
+#
+# Anchored, because the intent is these two at the root. Committing them once
+# would be permanent: git history does not forget, and GitHub refuses a single
+# file over 100MB. What the library NEEDS in the repo is the catalogue that
+# describes them, never the footage itself — the same split /assets already
+# makes.
+/Master_Viral_Meme_Vault/
+/Master_Viral_Meme_Stickers_COMPLETE*/
+
 # Reference recordings — other people's work, kept for study.
 #
 # Instagram reels and app screen-recordings that features were measured
