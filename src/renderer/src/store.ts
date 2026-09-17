@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { Job } from '@shared/types'
+import { samePath } from '@shared/assetPath'
 import type {
   Clip,
   ColorAdjust,
@@ -903,7 +904,7 @@ export const useEditor = create<EditorState>((set, get) => ({
     if (!audition) return
 
     try {
-      const existing = project.assets.find((a) => a.path === audition.path)
+      const existing = project.assets.find((a) => samePath(a.path, audition.path))
       let asset = existing
       if (!asset) {
         const { assets, failed } = await window.forge.probe([audition.path], project.settings.fps)

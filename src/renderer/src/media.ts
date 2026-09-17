@@ -1,4 +1,5 @@
 import { mediaUrl } from '@shared/mediaUrl'
+import { assetPath } from '@shared/assetPath'
 
 export { mediaUrl }
 
@@ -11,6 +12,5 @@ export { mediaUrl }
  */
 export function assetUrl(root: string, relativePath: string): string {
   if (!root) return ''
-  const separator = root.endsWith('/') ? '' : '/'
-  return mediaUrl(`${root}${separator}${relativePath}`)
+  return mediaUrl(assetPath(root, relativePath))
 }

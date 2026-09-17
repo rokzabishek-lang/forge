@@ -137,7 +137,10 @@ export async function splitStems(path: string): Promise<Stems> {
       '[inst]',
       instrumental
     ],
-    { maxBuffer: 16 * 1024 * 1024 }
+    // windowsHide: this decodes a whole track, so the console window it would
+    // otherwise open is not a flicker — it sits in front of the app and takes
+    // focus for the length of the split.
+    { maxBuffer: 16 * 1024 * 1024, windowsHide: true }
   )
 
   return { voice, instrumental, backend: 'mid-side', quality: 'emphasised' }

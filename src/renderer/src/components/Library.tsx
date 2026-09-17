@@ -3,6 +3,7 @@ import { RefreshCw, Search } from 'lucide-react'
 import type React from 'react'
 import type { AssetKind, CatalogEntry, FontMeta, TitleMeta } from '@shared/assets/catalog'
 import { searchEntries } from '@shared/assets/catalog'
+import { assetPath } from '@shared/assetPath'
 import { useCatalog } from '../catalog'
 import { useEditor } from '../store'
 import { assetUrl } from '../media'
@@ -147,7 +148,7 @@ export function Library(): ReactNode {
               key={entry.id}
               entry={entry}
               root={root}
-              absolutePath={`${root}${root.endsWith('/') ? '' : '/'}${entry.file}`}
+              absolutePath={assetPath(root, entry.file)}
               auditioning={audition?.name === entry.name}
               onAudition={setAudition}
               fontReady={loadedFonts.has((entry.meta as FontMeta).family)}
