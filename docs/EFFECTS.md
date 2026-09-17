@@ -1778,6 +1778,50 @@ tab in it. Forward slashes throughout, and `'\''` for a literal quote.
 An existing test asserted the broken escaping and had passed for months. That is
 the third test in this project found encoding the bug it was meant to guard.
 
+### `amix`'s `normalize`, and why the standard workaround is wrong
+
+The third one, and the first that could not be fixed by deleting the option.
+
+`amix` divides by its input count unless told otherwise: two clips and each is
+halved, three and each is a third. `normalize=0` switches that off, and arrived
+in **4.2**. It only appeared once a project had two audio streams, which is why
+one test failed — *concatenates two trimmed clips* — while every single-clip
+render passed.
+
+Every forum gives the same pre-4.2 workaround: `dropout_transition=0` plus a
+compensating `volume`. **It is wrong.** Measured, mixing a 3s tone with a 1s one
+and reading the mean level in each second:
+
+| form | 0–1s | 1–2s | 2–3s |
+|---|---|---|---|
+| `normalize=0` | −21.1 | −24.1 | −24.1 dB |
+| `dropout_transition=0`, `volume=2` | −21.1 | **−18.1** | **−18.1** dB |
+| neither | −27.1 | −28.8 | −25.8 dB |
+
+The long tone alone measures −24.1 dB, so the middle row is **6 dB hotter than
+its own source**. The moment the short input ends, amix renormalises to one
+active stream — and the compensating `volume` then doubles something already
+correct. The bottom row is worse still, and *ramps*, because the 2s dropout
+transition is audible as a swell.
+
+The fix is to remove the premise: pad every input to the full timeline first, so
+nothing ever drops out, the divisor stays at N for the whole render, and
+multiplying by N undoes it exactly.
+
+    [dia]apad,atrim=end=3.000000[aoutp0];
+    [oth]apad,atrim=end=3.000000[aoutp1];
+    [aoutp0][aoutp1]amix=inputs=2:duration=longest:dropout_transition=0,volume=2[aout]
+
+Summed against the `normalize=0` output with one inverted, the residual is
+**−91.0 dB** — the 16-bit quantisation floor. The same samples. `apad`, `atrim`
+and `volume` all predate 4.0 by years, so there is no version branch to keep in
+step.
+
+And, for the fourth time in this project, an existing test asserted the broken
+form — `toContain('amix=inputs=2:duration=longest:normalize=0[aout]')`. It did
+not merely miss the bug; it required it. It now asserts that both streams reach
+the output and neither is halved, which is the behaviour, not the spelling.
+
 ### What makes this class catchable now
 
 macOS allows a colon in a filename. So
@@ -1785,6 +1829,19 @@ macOS allows a colon in a filename. So
 locally: it writes a real LUT at a path containing each awkward character and
 checks ffmpeg opens it. Reverting the fix fails 5 of its 7 cases on a Mac.
 
-The version floor has no such trick available — there is only one ffmpeg on this
-machine. CI is the enforcement, which is why it runs the integration tests
-rather than only the unit ones.
+Windows does *not* allow a colon, which is the joke at the centre of that file:
+the two cases that build a directory named `x:y` cannot run on the one platform
+that cannot avoid colons. They are skipped there and lose nothing, because every
+path on a Windows runner is already `C:\…`. A `runIf` test asserts that drive
+letter is present rather than assuming it.
+
+The version floor used to have no local check — there is only one ffmpeg on this
+machine. `tests/oldestFfmpeg.test.ts` is the substitute: it builds the graphs for
+four project shapes and fails if any of them contains an option newer than 4.1,
+naming the version and the pre-4.2 alternative. It is a blocklist, so it cannot
+catch something nobody has thought of, but all three bugs above are in it and it
+runs in 200ms on a Mac rather than four minutes on a Windows runner. It is
+verified by mutation: putting `normalize=0` back fails three of its cases.
+
+If ffmpeg is ever unified across platforms, delete that file rather than
+maintaining it — the whole class goes with it.

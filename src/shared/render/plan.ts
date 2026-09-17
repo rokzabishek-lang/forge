@@ -530,6 +530,47 @@ function holdFilter(clip: Clip, fps: number): string {
   return `tpad=stop_mode=clone:stop_duration=${length},trim=duration=${length},setpts=PTS-STARTPTS`
 }
 
+/**
+ * Sum audio streams without amix quietly dividing every level by the count.
+ *
+ * `amix` normalises by default: two clips and each is halved, three and each is
+ * a third. `normalize=0` turns that off in one word — and was added in ffmpeg
+ * **4.2**, so it is present on the macOS build and missing on the Windows one.
+ * It is the same trap as `anullsrc:d` above, and it only fired on the two-clip
+ * tests, because a graph with one audio stream never reaches amix at all.
+ *
+ * The workaround every forum gives is `dropout_transition=0` plus a
+ * compensating `volume`. It is wrong, and the measurement says so. Against a
+ * 3s tone mixed with a 1s one:
+ *
+ *     normalize=0                       -21.1  -24.1  -24.1 dB   (correct)
+ *     dropout_transition=0, volume=2    -21.1  -18.1  -18.1 dB   (6dB HOT)
+ *     amix with nothing                 -27.1  -28.8  -25.8 dB   (and ramping)
+ *
+ * The moment the short input ends, amix renormalises to one active stream and
+ * the compensating volume doubles what is already correct. So the inputs are
+ * padded to the full timeline first: nothing ever drops out, the divisor stays
+ * at N for the whole render, and multiplying by N undoes it exactly. Measured
+ * against the `normalize=0` output, the residual is -91.0 dB — the 16-bit
+ * quantisation floor, i.e. the same samples.
+ *
+ * `apad`, `atrim` and `volume` all predate 4.0 by years, so this form works on
+ * both builds and there is no version branch to keep in step.
+ */
+function mixFilters(labels: string[], out: string, totalSeconds: string): string[] {
+  if (labels.length === 1) return [`${labels[0]}anull${out}`]
+
+  // The tag comes off the output label, so the intermediates cannot collide
+  // between the dialogue, music, other and final mixes.
+  const tag = out.replace(/[[\]]/g, '')
+  const padded = labels.map((_, i) => `[${tag}p${i}]`)
+  return [
+    ...labels.map((label, i) => `${label}apad,atrim=end=${totalSeconds}${padded[i]}`),
+    `${padded.join('')}amix=inputs=${labels.length}:duration=longest:dropout_transition=0,` +
+      `volume=${labels.length}${out}`
+  ]
+}
+
 export function buildRenderPlan(request: RenderRequest): RenderPlan {
   const { project, outputPath } = request
   const canvas = request.canvas ?? { width: project.settings.width, height: project.settings.height }
@@ -1259,11 +1300,7 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
   /** Combine a set of labels into one stream, or null when there are none. */
   const mixInto = (labels: string[], out: string): string | null => {
     if (labels.length === 0) return null
-    if (labels.length === 1) {
-      filters.push(`${labels[0]}anull${out}`)
-      return out
-    }
-    filters.push(`${labels.join('')}amix=inputs=${labels.length}:duration=longest:normalize=0${out}`)
+    filters.push(...mixFilters(labels, out, seconds(totalFrames, fps)))
     return out
   }
 
@@ -1313,11 +1350,8 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
     filters.push(
       `anullsrc=channel_layout=stereo:sample_rate=${project.settings.sampleRate}[aout]`
     )
-  } else if (audioLabels.length === 1) {
-    filters.push(`${audioLabels[0]}anull[aout]`)
   } else {
-    // normalize=0 stops amix quietly dividing every level by the input count.
-    filters.push(`${audioLabels.join('')}amix=inputs=${audioLabels.length}:duration=longest:normalize=0[aout]`)
+    filters.push(...mixFilters(audioLabels, '[aout]', seconds(totalFrames, fps)))
   }
 
   args.push(

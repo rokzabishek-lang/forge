@@ -237,9 +237,21 @@ describe('audio track mixing', () => {
       ]
     })
 
-  it('mixes an audio-track clip over the picture audio', () => {
+  it('mixes an audio-track clip over the picture audio at full level', () => {
     const filters = argString(buildRenderPlan({ project: withMusic(), outputPath: '/o.mp4' }).args)
-    expect(filters).toContain('amix=inputs=2:duration=longest:normalize=0[aout]')
+
+    /*
+     * Both streams reach the output, and neither is halved on the way.
+     *
+     * This used to assert `normalize=0`, which is the one-word way to say the
+     * second half and is an ffmpeg 4.2 option the Windows build does not have.
+     * So the test did not merely miss the bug — it required it. Asserting the
+     * compensation rather than the spelling leaves the graph free to change
+     * shape again when it has to.
+     */
+    expect(filters).toContain('amix=inputs=2:')
+    expect(filters).toMatch(/amix=inputs=2:[^;]*\bvolume=2\[aout\]/)
+    expect(filters).not.toMatch(/\bnormalize=/)
   })
 
   it('delays the clip to its timeline position', () => {
