@@ -4,6 +4,7 @@ import { promisify } from 'node:util'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { platform } from 'node:process'
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg'
 import { escapeFilterPath } from '@shared/captions/timeline'
 
@@ -24,6 +25,21 @@ import { escapeFilterPath } from '@shared/captions/timeline'
 
 const run = promisify(execFile)
 const FFMPEG = ffmpegInstaller.path
+
+/*
+ * Windows will not create a file whose name contains any of  < > : " | ? *  —
+ * the same rule that made `sidecar/:memory:.ses` impossible to check out, which
+ * is how this project met it in the first place. So the colon cases below
+ * cannot be BUILT on a Windows runner, and attempting to throws EINVAL out of
+ * mkdir before ffmpeg is ever reached.
+ *
+ * Skipping them there costs no coverage, and that is the joke of it: on Windows
+ * every path in this file is `C:\Users\RUNNER~1\...`, so every remaining case is
+ * already a drive-letter case. The colon is untestable on the one platform that
+ * cannot avoid it. `drivePrefixed` below asserts exactly that, so the skip can
+ * never quietly become "this file tests nothing on Windows".
+ */
+const onWindows = platform === 'win32'
 
 /** A 2x2x2 identity LUT: the smallest thing lut3d will actually load. */
 const CUBE = 'LUT_3D_SIZE 2\n0 0 0\n1 0 0\n0 1 0\n1 1 0\n0 0 1\n1 0 1\n0 1 1\n1 1 1\n'
@@ -58,13 +74,27 @@ async function loads(file: string): Promise<void> {
 }
 
 describe('a path inside a filtergraph', () => {
-  it('survives a colon — the Windows drive letter, in every export', async () => {
+  it.skipIf(onWindows)('survives a colon — the Windows drive letter, in every export', async () => {
     /*
      * THE case. A Windows path is `C:\Users\…`, which this normalises to
      * `C:/Users/…`; if the colon is under-escaped the `C` is eaten and ffmpeg
      * looks for `/Users/…`, which exists on macOS and never on Windows.
      */
     await expect(loads(await lutIn(':'))).resolves.toBeUndefined()
+  }, 60_000)
+
+  it.runIf(onWindows)('gets its colon from the drive letter instead', async () => {
+    /*
+     * The other half of the skip above, and the reason it is safe. Every path
+     * here begins `C:` on Windows, so the case that cannot be constructed is
+     * the case that cannot be escaped either. This asserts that rather than
+     * assuming it — if a runner ever hands us a UNC path (`\\server\share`)
+     * there is no drive letter, this fails loudly, and the colon goes back to
+     * being tested only on the Mac.
+     */
+    const file = await lutIn('-drive-')
+    expect(file).toMatch(/^[A-Za-z]:/)
+    await expect(loads(file)).resolves.toBeUndefined()
   }, 60_000)
 
   it('survives the separators the graph itself uses', async () => {
@@ -86,7 +116,9 @@ describe('a path inside a filtergraph', () => {
   }, 60_000)
 
   it('survives all of them at once', async () => {
-    await expect(loads(await lutIn(",;[]:='"))).resolves.toBeUndefined()
+    // The colon drops out on Windows because the directory cannot hold one —
+    // and is supplied by the drive letter on the front of the very same path.
+    await expect(loads(await lutIn(onWindows ? ",;[]='" : ",;[]:='"))).resolves.toBeUndefined()
   }, 60_000)
 
   it('escapes each character to the depth the parser needs', () => {
