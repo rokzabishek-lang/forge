@@ -205,6 +205,12 @@ const api = {
     /** The fast range path was taken: the ends are loose and want trimming. */
     approximateRange: boolean
     requestedRange: { startMs: number; endMs: number } | null
+    /**
+     * For instrumental/vocal: which backend answered. `emphasised` is mid/side
+     * and is an emphasis, not a stem — the name already says so, and a UI that
+     * shows this should not promise more.
+     */
+    stems: { backend: string; quality: 'separated' | 'emphasised' } | null
   }> => ipcRenderer.invoke('ingest:collect', { jobId, fps }),
 
   /** Which speech engines are usable, and why not when they are not. */

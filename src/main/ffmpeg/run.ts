@@ -39,7 +39,28 @@ export function killProcess(child: ChildProcess): void {
     // SIGTERM is not a real signal on Windows and leaves ffmpeg orphaned.
     // taskkill /t also takes down any child ffmpeg spawned.
     spawn('taskkill', ['/pid', String(child.pid), '/f', '/t'], { windowsHide: true })
-  } else {
+    return
+  }
+
+  /*
+   * POSIX: kill the process GROUP, not the process.
+   *
+   * `child.kill()` signals one pid. ffmpeg has no children of its own so that
+   * was enough here — but yt-dlp spawns ffmpeg to cut a section or merge two
+   * streams, and that grandchild survived. Worse, it inherits yt-dlp's stdout,
+   * so our pipe stayed open and the `close` event — which is where the job
+   * rejects and the partial files are removed — did not fire until ffmpeg
+   * finished the work nobody wanted. Measured: 3.0s to close instead of 0.13s,
+   * with the grandchild still running after the parent was gone.
+   *
+   * Killing the group needs the child to BE a group leader, which is what
+   * `detached: true` does at spawn. Callers that do not set it still get the
+   * right behaviour: the negative-pid kill fails with ESRCH or EPERM and we
+   * fall back to the single kill.
+   */
+  try {
+    process.kill(-child.pid, 'SIGKILL')
+  } catch {
     child.kill('SIGKILL')
   }
 }

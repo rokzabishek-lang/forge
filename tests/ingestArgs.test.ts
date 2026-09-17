@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import {
   buildYtDlpArgs,
+  downloadKind,
   FILE_MARK,
   humanError,
+  needsStems,
   outputStem,
   readMarkedLine,
   TITLE_MARK,
@@ -30,8 +32,35 @@ function build(over: Partial<IngestRequest> = {}) {
 describe('the yt-dlp command line', () => {
   it('hands over the canonical URL, not what was pasted', () => {
     // Tracking parameters and the timestamp are gone; the playlist would be.
-    expect(build().args[0]).toBe('https://www.youtube.com/watch?v=dQw4w9WgXcQ')
+    // Position is not asserted — yt-dlp takes flags either side of the URL.
+    expect(build().args).toContain('https://www.youtube.com/watch?v=dQw4w9WgXcQ')
     expect(build().args).toContain('--no-playlist')
+  })
+
+  it('ignores the user\u2019s own yt-dlp config', () => {
+    /*
+     * Every flag here is chosen for a reason — AV1 is excluded because the
+     * Windows ffmpeg cannot decode it, the title is kept out of the filename
+     * because Windows forbids its characters. A stranger's config file can
+     * override any of them, so it is not read at all.
+     */
+    expect(build().args).toContain('--ignore-config')
+  })
+
+  it('asks for UTF-8, because Windows pipes the ANSI code page otherwise', () => {
+    /*
+     * Not cosmetic. We decode stdout as UTF-8, so without this a non-ASCII
+     * userData path came back mangled, failed to stat, and the finished
+     * download was deleted as "missing".
+     */
+    expect(build().after('--encoding')).toBe('utf-8')
+  })
+
+  it('takes one item, whatever a strange site calls its collection', () => {
+    // --no-playlist is not enough on its own: yt-dlp ignores it when the URL
+    // carries no video id. parseLink refuses the shapes it recognises; this is
+    // the belt for the thousand sites it cannot.
+    expect(build().after('--playlist-items')).toBe('1')
   })
 
   it('uses OUR ffmpeg, never one found on PATH', () => {
@@ -145,8 +174,23 @@ describe('the stem — what makes two asks the same file', () => {
   it('differs by range, and normalises a backwards one', () => {
     const a = outputStem(link, { url: URL, kind: 'video', quality: '1080p', range: { startMs: 60_000, endMs: 90_000 } })
     const b = outputStem(link, { url: URL, kind: 'video', quality: '1080p', range: { startMs: 90_000, endMs: 60_000 } })
-    expect(a).toBe('dQw4w9WgXcQ.video-1080p.r60000-90000')
+    // `.fast` because neither asked for an exact cut — see the next test.
+    expect(a).toBe('dQw4w9WgXcQ.video-1080p.r60000-90000.fast')
     expect(b).toBe(a)
+  })
+
+  it('tells an exact cut from a fast one, which are different files', () => {
+    /*
+     * An exact cut re-encodes at the marks; a fast cut copies streams and pads
+     * outward by ten seconds. Sharing a name meant ticking "exact" after a fast
+     * download returned the fast file from cache, instantly and wrongly.
+     */
+    const range = { startMs: 60_000, endMs: 90_000 }
+    const exact = outputStem(link, { url: URL, kind: 'video', quality: '1080p', range, exact: true })
+    const fast = outputStem(link, { url: URL, kind: 'video', quality: '1080p', range, exact: false })
+    expect(exact).not.toBe(fast)
+    expect(exact).toBe('dQw4w9WgXcQ.video-1080p.r60000-90000')
+    expect(fast).toBe('dQw4w9WgXcQ.video-1080p.r60000-90000.fast')
   })
 
   it('is legal on Windows and safe in a filtergraph', () => {
@@ -188,5 +232,36 @@ describe('reading yt-dlp back', () => {
   it('falls back to the last line, then to the exit code', () => {
     expect(humanError(['something odd happened'], 2)).toBe('something odd happened')
     expect(humanError([], 3)).toBe('yt-dlp exited with code 3')
+  })
+})
+
+describe('instrumental and vocal — an audio download with a split inside the job', () => {
+  const link = parseLink(URL)!
+
+  it('is an audio download as far as yt-dlp is concerned', () => {
+    for (const kind of ['instrumental', 'vocal'] as const) {
+      expect(downloadKind(kind)).toBe('audio')
+      const b = build({ kind })
+      expect(b.args, kind).toContain('-x')
+      expect(b.after('--audio-format'), kind).toBe('m4a')
+      expect(b.args, kind).not.toContain('--merge-output-format')
+    }
+    expect(downloadKind('audio')).toBe('audio')
+    expect(downloadKind('video')).toBe('video')
+  })
+
+  it('shares the download with plain audio, so the song is fetched once', () => {
+    // The split is a second, separately cached step. Asking for the song and
+    // then its instrumental must not download it twice.
+    const audio = outputStem(link, { url: URL, kind: 'audio', quality: '1080p' })
+    expect(outputStem(link, { url: URL, kind: 'instrumental', quality: '1080p' })).toBe(audio)
+    expect(outputStem(link, { url: URL, kind: 'vocal', quality: '1080p' })).toBe(audio)
+  })
+
+  it('knows which choices need the stems step', () => {
+    expect(needsStems('instrumental')).toBe(true)
+    expect(needsStems('vocal')).toBe(true)
+    expect(needsStems('audio')).toBe(false)
+    expect(needsStems('video')).toBe(false)
   })
 })

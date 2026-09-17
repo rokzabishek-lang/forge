@@ -23,7 +23,16 @@
 import { mkdirSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-const argv = process.argv.slice(2)
+/*
+ * slice(1), not slice(2).
+ *
+ * Under `node -e` there is no script path, so argv is [execPath, ...args] and
+ * slice(2) silently dropped the first argument — the URL. The fake never read
+ * it, so nothing failed; it just meant the integration test did not actually
+ * prove the URL reaches the tool. It does now, and the check below fails loudly
+ * if it ever stops.
+ */
+const argv = process.argv.slice(1)
 const after = (flag) => {
   const at = argv.indexOf(flag)
   return at === -1 ? null : argv[at + 1]
@@ -42,6 +51,20 @@ const title = process.env.FAKE_TITLE ?? 'Fake | Title: "quoted"? *starred*'
 
 if (!destDir) {
   process.stderr.write('ERROR: fake needs -P\n')
+  process.exit(2)
+}
+
+/*
+ * The URL has to be in there SOMEWHERE — but not necessarily first.
+ *
+ * yt-dlp's option parser takes flags before or after the positional argument,
+ * so the fake must not invent an ordering the real tool does not have. What it
+ * does assert is that a URL arrives at all: under `node -e` argv starts at the
+ * first real argument, and an off-by-one here would silently mean the
+ * integration tests never proved the link reaches the tool.
+ */
+if (!argv.some((a) => a.startsWith('http'))) {
+  process.stderr.write(`ERROR: fake got no URL in ${JSON.stringify(argv.slice(0, 4))}\n`)
   process.exit(2)
 }
 

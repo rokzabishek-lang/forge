@@ -25,7 +25,7 @@ import {
 import { peaksFor } from './waveform'
 import { FFMPEG_PATH, FFPROBE_PATH } from './ffmpeg/paths'
 import { ensureLooks } from './looks'
-import { splitStems } from './stems'
+import { separateStems } from './separate'
 import { speak, voiceOptions, voiceStatus } from './voice'
 import { loadCatalog, resolveAssetFile, assetsRootExists, assetsRoot } from './assets/scan'
 import { preparePlaceableFile, placeableName } from './assets/place'
@@ -34,7 +34,7 @@ import { tagMasks } from './transitions/maskTags'
 import { downloadMedia, downloadsDir, type IngestHandle, type IngestOutcome } from './ingest/download'
 import { ensureYtDlp, ytDlpStatus } from './ingest/binary'
 import { CancelledError } from './ffmpeg/run'
-import type { IngestRequest } from '@shared/ingest/args'
+import { needsStems, outputStem, type IngestRequest } from '@shared/ingest/args'
 import { parseLink } from '@shared/ingest/url'
 import { QUALITIES } from '@shared/ingest/format'
 
@@ -83,6 +83,8 @@ export function registerIpc(getWindow: () => BrowserWindow | null): JobQueue {
    * nothing over there has to learn that a job can be a download.
    */
   const ingests = new Map<string, { request: IngestRequest; outcome: IngestOutcome | null }>()
+  /** Stems with a download running, so a second job for one waits rather than races. */
+  const inFlightStems = new Map<string, Promise<void>>()
   const downloads = new JobQueue((job, onProgress) => {
     const entry = ingests.get(job.id)
     if (!entry) throw new Error('This download is missing its request')
@@ -92,20 +94,88 @@ export function registerIpc(getWindow: () => BrowserWindow | null): JobQueue {
     // and cancel reaches whichever stage is running.
     let inner: IngestHandle | null = null
     let cancelled = false
+    const splitting = new AbortController()
+    const fetching = new AbortController()
+    const split = needsStems(entry.request.kind)
+
     const promise = (async (): Promise<void> => {
       // The fetch message rides in the speed column, which is free text on
       // screen — "downloading yt-dlp (~30MB, first time only)" is exactly what
       // a user staring at 0% needs to read.
-      const tool = await ensureYtDlp((message) => onProgress(0, message))
+      //
+      // The signal matters: without it, cancelling during the first-run fetch
+      // only set a flag, and the job sat at "running" for up to five minutes
+      // waiting on a transfer nobody wanted.
+      let tool
+      try {
+        tool = await ensureYtDlp((message) => onProgress(0, message), { signal: fetching.signal })
+      } catch (err) {
+        if (cancelled) throw new CancelledError()
+        throw err
+      }
       if (cancelled) throw new CancelledError()
-      inner = downloadMedia(entry.request, { command: tool.path }, onProgress)
-      entry.outcome = await inner.promise
+
+      /*
+       * One download per stem at a time.
+       *
+       * The queue runs two jobs at once, and two jobs for the same video wrote
+       * to the same `.part`: yt-dlp resumes by default, so the second appended
+       * from wherever the first had reached, one rename won and the other
+       * failed — and cancelling either removed the shared partials. Waiting
+       * here means the second job finds a finished file and takes the cache
+       * path. It cannot be a straight "return the other job", because
+       * instrumental and vocal share the audio stem and need different
+       * post-processing.
+       */
+      const stem = outputStem(parseLink(entry.request.url)!, entry.request)
+      while (inFlightStems.has(stem)) {
+        onProgress(0, 'waiting for the same download to finish')
+        await inFlightStems.get(stem)!.catch(() => undefined)
+        if (cancelled) throw new CancelledError()
+      }
+
+      // With a split to follow, the download is the first 80% of the bar. The
+      // split is minutes with Demucs and instant with mid/side, and we do not
+      // know which until the sidecar answers, so the last 20% is the honest
+      // compromise: the bar never reaches the end before the file exists.
+      const scale = split ? 0.8 : 1
+      inner = downloadMedia(entry.request, { command: tool.path }, (p, s) => onProgress(p * scale, s))
+      const claim = inner.promise.then(
+        () => undefined,
+        () => undefined
+      )
+      inFlightStems.set(stem, claim)
+      let downloaded
+      try {
+        downloaded = await inner.promise
+      } finally {
+        if (inFlightStems.get(stem) === claim) inFlightStems.delete(stem)
+      }
+      if (cancelled) throw new CancelledError()
+
+      if (!split) {
+        entry.outcome = { ...downloaded, stems: null }
+        return
+      }
+
+      const stems = await separateStems(downloaded.path, 'separated', {
+        signal: splitting.signal,
+        onProgress: (p, message) => onProgress(0.8 + 0.2 * (p ?? 0), message ?? 'separating')
+      })
+      entry.outcome = {
+        ...downloaded,
+        path: entry.request.kind === 'vocal' ? stems.voice : stems.instrumental,
+        stems: { backend: stems.backend, quality: stems.quality }
+      }
     })()
+
     return {
       promise,
       cancel: () => {
         cancelled = true
         inner?.cancel()
+        splitting.abort()
+        fetching.abort()
       }
     }
   }, 2)
@@ -471,23 +541,9 @@ export function registerIpc(getWindow: () => BrowserWindow | null): JobQueue {
     const { path, quality } = (payload ?? {}) as { path?: unknown; quality?: unknown }
     if (typeof path !== 'string') throw new Error('Splitting a song needs a file path')
 
-    /*
-     * Ask for the good one, take the cheap one.
-     *
-     * Demucs is a real separation and minutes of CPU; mid/side is arithmetic
-     * and instant. Most installs will not have demucs at all — it is not in
-     * requirements.txt — so the fallback is the normal path rather than the
-     * error path, and it is not worth a message on screen. What IS worth
-     * reporting is which one answered, which the result carries.
-     */
-    if (quality === 'separated') {
-      try {
-        return await getSidecar().request(SIDECAR_METHODS.stems, { path }, { timeoutMs: 900_000 })
-      } catch (err) {
-        console.warn('Falling back to mid/side stems', err)
-      }
-    }
-    return splitStems(path)
+    // The policy — ask for the good one, take the cheap one — lives in
+    // separate.ts now, shared with the download job. See there for why.
+    return separateStems(path, quality === 'separated' ? 'separated' : 'emphasised', {})
   })
 
   /* ---------------------------------------------------------------- voice */
@@ -697,7 +753,10 @@ export function registerIpc(getWindow: () => BrowserWindow | null): JobQueue {
         : null
     const request: IngestRequest = {
       url: link.url,
-      kind: raw.kind === 'audio' ? 'audio' : 'video',
+      kind:
+        raw.kind === 'audio' || raw.kind === 'instrumental' || raw.kind === 'vocal'
+          ? raw.kind
+          : 'video',
       quality: QUALITIES.includes(raw.quality as never) ? (raw.quality as IngestRequest['quality']) : '1080p',
       audioFormat: raw.audioFormat === 'mp3' ? 'mp3' : 'm4a',
       range,
@@ -728,17 +787,30 @@ export function registerIpc(getWindow: () => BrowserWindow | null): JobQueue {
     const { jobId, fps } = (payload ?? {}) as { jobId?: unknown; fps?: unknown }
     if (typeof jobId !== 'string') throw new Error('Collecting a download needs its job id')
     const entry = ingests.get(jobId)
-    if (!entry?.outcome) throw new Error('That download has not finished')
+    // Three different situations that all used to say "has not finished".
+    if (!entry) throw new Error('That download was cleared from the list')
+    if (!entry.outcome) throw new Error('That download has not finished')
 
     const projectFps = typeof fps === 'number' && fps > 0 ? fps : 30
     const { ok, failed } = await probeMany([entry.outcome.path])
     if (ok.length === 0) throw new Error(failed[0]?.error ?? 'Could not read the downloaded file')
 
+    // The media pool must tell the song from its instrumental at a glance, and
+    // "emphasised" must not be allowed to read as a clean stem.
+    const suffix =
+      entry.request.kind === 'instrumental'
+        ? entry.outcome.stems?.quality === 'separated' ? ' (instrumental)' : ' (instrumental, mid/side)'
+        : entry.request.kind === 'vocal'
+          ? entry.outcome.stems?.quality === 'separated' ? ' (vocals)' : ' (voice, emphasised)'
+          : ''
+    const base = entry.outcome.title ?? basename(entry.outcome.path)
     return {
-      asset: toAsset({ ...ok[0], name: entry.outcome.title ?? basename(entry.outcome.path) }, projectFps),
+      path: entry.outcome.path,
+      asset: toAsset({ ...ok[0], name: `${base}${suffix}` }, projectFps),
       cached: entry.outcome.cached,
       approximateRange: entry.outcome.approximateRange,
-      requestedRange: entry.outcome.requestedRange
+      requestedRange: entry.outcome.requestedRange,
+      stems: entry.outcome.stems ?? null
     }
   })
 

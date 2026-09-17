@@ -91,8 +91,52 @@ describe('reading a pasted link', () => {
   })
 
   it('never returns an empty key, which would make a dotfile', () => {
-    expect(parseLink('https://example.com/')!.key).toBe('example-com')
+    expect(parseLink('https://example.com/')!.key).toMatch(/^example-com-[0-9a-f]{8}$/)
     expect(parseLink('https://-/')?.key ?? 'download').not.toBe('')
+  })
+
+  it('does not collide when two long URLs share a prefix', () => {
+    /*
+     * A collision here is not a mangled name — it is the second link being
+     * served the FIRST link's file as a cache hit. Real sites lay paths out
+     * exactly like this, so the readable slug is truncated and a digest of the
+     * whole URL is appended.
+     */
+    const base = 'https://example.com/a/very/long/path/that/goes/on/and/on/segment-'
+    const a = parseLink(`${base}one-aaaaaaaaaaaaaaaaaaaa`)!.key
+    const b = parseLink(`${base}two-bbbbbbbbbbbbbbbbbbbb`)!.key
+    expect(a).not.toBe(b)
+    expect(a.slice(0, 40)).toBe(b.slice(0, 40))
+  })
+
+  it('refuses a playlist, channel or feed rather than downloading all of it', () => {
+    /*
+     * --no-playlist does NOT save us: yt-dlp decides `not video_id` before it
+     * reads that flag, so a collection URL extracts everything. Against one
+     * output template that means entry 1's bytes under entry N's title, with
+     * nothing to show anything went wrong.
+     */
+    for (const url of [
+      'https://www.youtube.com/playlist?list=PLabcdefghijklmnop',
+      'https://www.youtube.com/@SomeChannel/videos',
+      'https://www.youtube.com/channel/UCabcdefghijklmnopqrstuv',
+      'https://www.youtube.com/c/SomeChannel',
+      'https://www.youtube.com/user/SomeUser',
+      'https://www.youtube.com/feed/subscriptions',
+      'https://soundcloud.com/artist/sets/an-album'
+    ]) {
+      expect(parseLink(url), url).toBeNull()
+    }
+  })
+
+  it('still takes a video that merely sits inside a playlist', () => {
+    const link = parseLink('https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PLabc&index=3')
+    expect(link?.videoId).toBe('dQw4w9WgXcQ')
+  })
+
+  it('refuses a string that yt-dlp would read as an option', () => {
+    expect(parseLink('--version')).toBeNull()
+    expect(parseLink('-o /tmp/x')).toBeNull()
   })
 
   it('names the output from the key and lets yt-dlp choose the extension', () => {
@@ -103,6 +147,31 @@ describe('reading a pasted link', () => {
 describe('the quality ladder', () => {
   it('offers exactly what the sheet drew', () => {
     expect([...QUALITIES]).toEqual(['2160p', '1080p', '720p', '480p'])
+  })
+
+  it('asks for a stream ABOVE 1080p when 4K was requested', () => {
+    /*
+     * The bug this file did not catch the first time. yt-dlp's `/` is
+     * fallback-only, so the first branch that matches anything wins. YouTube
+     * publishes no avc1 above 1080p, so an H.264-first selector was satisfied
+     * by the 1080p stream and 4K silently returned a 1080p file — cached under
+     * the 4K name, so a retry served it straight back. Verified against the
+     * real yt-dlp with a YouTube-shaped info JSON: it chose 137+140 1080 avc1
+     * while 313+140 2160 vp09 sat there unused.
+     */
+    const first = formatFor('video', '2160p').selector.split('/')[0]
+    expect(first).toContain('[height>1080]')
+    expect(first).not.toContain('vcodec^=avc1')
+
+    // And a video that tops out at 1080p still falls through to H.264, which
+    // is the friendliest answer for it — so this is an addition, not a swap.
+    expect(formatFor('video', '2160p').selector).toContain('vcodec^=avc1')
+
+    // The lower rungs are unchanged: H.264 first, no height floor.
+    for (const q of ['1080p', '720p', '480p'] as const) {
+      expect(formatFor('video', q).selector.split('/')[0], q).toContain('vcodec^=avc1')
+      expect(formatFor('video', q).selector, q).not.toContain('[height>1080]')
+    }
   })
 
   it('EXCLUDES AV1 at every quality, because the Windows ffmpeg predates it', () => {

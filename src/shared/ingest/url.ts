@@ -15,6 +15,21 @@
 
 export type LinkKind = 'youtube' | 'generic'
 
+/**
+ * Link shapes that name a COLLECTION rather than one video.
+ *
+ * These have to be refused, and `--no-playlist` is not the guard people assume.
+ * yt-dlp's `_yes_playlist` returns `not video_id` *before* it reads that flag,
+ * so with no video id in the URL the whole collection is extracted whatever was
+ * passed. Against our `-o <stem>.%(ext)s` every entry maps to the same
+ * filename: the first downloads, the rest report already-downloaded, and the
+ * title we read back is the LAST one — so the user gets entry 1's bytes under
+ * entry N's name, and no sign anything went wrong.
+ *
+ * Refusing is the honest answer until there is a UI for "which one".
+ */
+const COLLECTION_PATHS = /^\/(playlist|feed|results|channel|c|user|@[^/]+|.*\/sets)(\/|$)/i
+
 export interface ParsedLink {
   kind: LinkKind
   /** The canonical URL to hand to yt-dlp. */
@@ -83,6 +98,9 @@ export function youtubeId(input: string): string | null {
 export function parseLink(input: string): ParsedLink | null {
   const trimmed = input.trim()
   if (!trimmed) return null
+  // An argument, not a URL. yt-dlp reads anything starting with `-` as an
+  // option, so this must never reach argv even though `new URL` rejects it too.
+  if (trimmed.startsWith('-')) return null
 
   const id = youtubeId(trimmed)
   if (id) {
@@ -103,8 +121,17 @@ export function parseLink(input: string): ParsedLink | null {
     return null
   }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null
+  if (isCollection(parsed)) return null
 
   return { kind: 'generic', url: parsed.toString(), videoId: null, key: genericKey(parsed) }
+}
+
+/** A playlist, channel, feed or set — many videos, not one. */
+export function isCollection(url: URL): boolean {
+  if (COLLECTION_PATHS.test(url.pathname)) return true
+  // `list=` with no `v=` is a YouTube playlist page. With a `v=` it is a video
+  // that happens to sit in a playlist, which `youtubeId` already handled.
+  return url.searchParams.has('list') && !url.searchParams.has('v')
 }
 
 /**
@@ -121,7 +148,33 @@ function genericKey(url: URL): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
-  // Long enough to stay recognisable, short enough to stay far from Windows'
-  // 260-character path limit once a cache directory is in front of it.
-  return slug.slice(0, 48) || 'download'
+  /*
+   * Truncating alone is not safe: two different URLs sharing their first 48
+   * characters would collide, and a collision here is not a mangled name — it
+   * is the second link being served the first link's FILE as a cache hit. Long
+   * paths with a shared prefix are exactly how real sites are laid out.
+   *
+   * So the readable slug is truncated for humans and a short digest of the
+   * whole canonical URL is appended for uniqueness. Kept short because Windows
+   * caps a path at 260 characters once a cache directory sits in front of it.
+   */
+  return `${slug.slice(0, 40) || 'download'}-${shortDigest(url.toString())}`
+}
+
+/**
+ * Eight hex characters from a URL, without importing node:crypto.
+ *
+ * This file is shared with the renderer, which has no crypto module — and the
+ * job here is telling two URLs apart in a filename, not resisting an attacker.
+ * FNV-1a over two offset passes gives 64 bits, which is far more than enough
+ * for the handful of downloads one person accumulates.
+ */
+function shortDigest(text: string): string {
+  let a = 0x811c9dc5
+  let b = 0x01000193
+  for (let i = 0; i < text.length; i++) {
+    a = Math.imul(a ^ text.charCodeAt(i), 0x01000193) >>> 0
+    b = Math.imul(b ^ text.charCodeAt(text.length - 1 - i), 0x01000193) >>> 0
+  }
+  return (a.toString(16).padStart(8, '0') + b.toString(16).padStart(8, '0')).slice(0, 8)
 }

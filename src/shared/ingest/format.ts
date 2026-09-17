@@ -91,6 +91,29 @@ export function formatFor(kind: IngestKind, quality: Quality): FormatChoice {
    */
   const h264 = `bestvideo${size}[vcodec^=avc1]+bestaudio[acodec^=mp4a]`
   const notAv1 = `bestvideo${size}[vcodec!*=av01]+bestaudio[acodec!*=opus]/bestvideo${size}[vcodec!*=av01]+bestaudio`
+
+  /*
+   * Above 1080p, H.264 must NOT be tried first — and this is the bug that
+   * shipped in the first version of this file.
+   *
+   * yt-dlp's `/` is fallback-only: the first branch that matches anything wins,
+   * and it never looks at the ones after it. YouTube publishes no avc1 above
+   * 1080p, so for a 2160p request the H.264 branch matched the 1080p stream and
+   * was satisfied by it. Asking for 4K returned the same file as asking for
+   * 1080p — cached under a 4K name, so a retry served it straight back.
+   * Reproduced against the real yt-dlp with a YouTube-shaped `--load-info-json`:
+   * the selector chose `137+140 1080 avc1`, where `313+140 2160 vp09` existed.
+   *
+   * So for the rungs above 1080p a `[height>1080]` branch goes first. It is
+   * NOT a plain replacement: a video that tops out at 1080p matches nothing
+   * there and falls through to the H.264 branch, which is still the friendliest
+   * answer for it.
+   */
+  const above1080 =
+    HEIGHT[quality] > 1080
+      ? `bestvideo${size}[height>1080][vcodec!*=av01]+bestaudio[acodec!*=opus]/` +
+        `bestvideo${size}[height>1080][vcodec!*=av01]+bestaudio/`
+      : ''
   /*
    * AV1 is excluded here too, even though a single pre-muxed stream needs no
    * merging and so dodges the ffmpeg-version problem on the way in.
@@ -107,7 +130,7 @@ export function formatFor(kind: IngestKind, quality: Quality): FormatChoice {
   const single = `best${size}[vcodec!*=av01]`
 
   return {
-    selector: `${h264}/${notAv1}/${single}`,
+    selector: `${above1080}${h264}/${notAv1}/${single}`,
     // mp4 is requested rather than assumed: when branch 1 wins there is nothing
     // to do, and when branch 2 wins yt-dlp falls back to a container that fits
     // rather than failing. Naming mkv here instead would push every ordinary

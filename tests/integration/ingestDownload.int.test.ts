@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { downloadMedia, findCached, removePartials, type IngestTool } from '../../src/main/ingest/download'
 import type { IngestRequest } from '@shared/ingest/args'
 
@@ -33,7 +34,10 @@ function tool(env: Record<string, string> = {}): IngestTool {
     prefixArgs: [
       '--input-type=module',
       '-e',
-      `${assignments.join('')}await import(${JSON.stringify(FAKE)});`,
+      // A file URL, not a path. Node's ESM loader rejects an absolute Windows
+      // path as a specifier ("Only URLs with a scheme in: file, data..."), so
+      // the four spawning tests in here failed on the Windows runner alone.
+      `${assignments.join('')}await import(${JSON.stringify(pathToFileURL(FAKE).href)});`,
       '--'
     ]
   }
@@ -164,8 +168,28 @@ describe('a download through the fake yt-dlp', () => {
     const dest = join(dir, 'siblings')
     const { mkdir } = await import('node:fs/promises')
     await mkdir(dest, { recursive: true })
-    const mine = ['abc.video-1080p.mp4.part', 'abc.video-1080p.f137.mp4', 'abc.video-1080p.f140.m4a.ytdl', 'abc.video-1080p.temp.mp4']
-    const theirs = ['abc.video-1080p.r60000-90000.mp4', 'abc.video-720p.mp4', 'abc.audio-m4a.m4a']
+    const mine = [
+      'abc.video-1080p.mp4.part',
+      'abc.video-1080p.f137.mp4',
+      'abc.video-1080p.f140.m4a.ytdl',
+      'abc.video-1080p.temp.mp4',
+      // Format ids are not always numeric — YouTube ships 251-drc, 137-sr and
+      // friends, and a cancel used to leave every one of them behind.
+      'abc.video-1080p.f251-drc.webm.part',
+      'abc.video-1080p.f137-sr.mp4.part',
+      // A fragmented format's in-flight fragment nests a second .part.
+      'abc.video-1080p.mp4.part-Frag12.part',
+      'abc.video-1080p.f137.mp4.part-Frag3.part'
+    ]
+    const theirs = [
+      // Different finished downloads of the SAME video. Cancelling one must
+      // never delete another — the ranged ones are the easy mistake, because
+      // the stem is a prefix of their names.
+      'abc.video-1080p.r60000-90000.mp4',
+      'abc.video-1080p.r60000-90000.fast.mp4',
+      'abc.video-720p.mp4',
+      'abc.audio-m4a.m4a'
+    ]
     for (const name of [...mine, ...theirs]) await writeFile(join(dest, name), 'x')
 
     await removePartials(dest, 'abc.video-1080p')

@@ -78,9 +78,13 @@ rule `ffmpeg/run.ts` arrived at the hard way — and the match is precise, so
 cancelling `abc.video-1080p` never touches `abc.video-1080p.r60000-90000.mp4`,
 which is a different finished download of the same video.
 
-**Cancel kills the tree.** yt-dlp spawns its own ffmpeg to merge. `killProcess`
-from `ffmpeg/run.ts` — `taskkill /f /t` on Windows — is shared rather than
-copied a third time.
+**Cancel kills the process GROUP.** yt-dlp spawns its own ffmpeg to cut a
+section or merge streams. `child.kill()` signals one pid, so that grandchild
+survived — and because it inherits yt-dlp's stdout, our pipe stayed open and the
+`close` event, where the job rejects and the partials are removed, did not fire
+until ffmpeg finished work nobody wanted. Measured: 3.0s to close instead of
+0.13s. The child is now spawned `detached` on POSIX and `killProcess` signals
+`-pid`; Windows keeps `taskkill /f /t`, which already did this.
 
 ---
 
@@ -107,10 +111,59 @@ these are the checks that do not need it.
 - **`mkv` and `webm` are accepted extensions**, so a merge that lands in either
   still probes.
 
+## What a review of this code then found
+
+Eight agents over four lenses, each finding attacked by an independent reader.
+Deduplicated, sixteen real defects. The ones worth remembering:
+
+**4K silently returned 1080p.** yt-dlp's `/` is fallback-only: the first branch
+that matches anything wins and the rest are never consulted. YouTube publishes
+no avc1 above 1080p, so the H.264-first selector was *satisfied* by the 1080p
+stream on a 2160p request — and cached it under the 4K name, so a retry served
+it straight back. Fixed by putting a `[height>1080]` branch first for the rungs
+above 1080p only; a video that tops out at 1080p still falls through to H.264.
+Verified against the real binary with a YouTube-shaped `--load-info-json`:
+`313+140 2160 vp09` now, `137+140 1080 avc1` before.
+
+**A playlist or channel URL downloaded the whole collection.** `--no-playlist`
+does not save you: yt-dlp's `_yes_playlist` returns `not video_id` *before* it
+reads that flag, so a URL with no video id extracts everything. Against one
+output template that means entry 1's bytes under entry N's title. Collection
+shapes are refused in `parseLink` now, with `--playlist-items 1` as the belt for
+the thousand sites whose shapes we cannot recognise.
+
+**Two jobs for one video corrupted each other.** The queue runs two at a time
+and both wrote to the same `.part`; yt-dlp resumes by default, so the second
+appended from wherever the first had reached, one rename won and the other
+failed — and cancelling either removed the shared partials. A second job for a
+stem already in flight now waits and takes the cache path.
+
+**Exact and fast cuts shared a filename.** Tick "exact" after a fast download
+and the fast file came back from cache, instantly and wrongly. The cut kind is
+part of the stem now.
+
+**Windows-only, and CI would have caught only one of them.** The integration
+test loaded its fake via `await import(<absolute path>)`, which Node's ESM
+loader rejects on Windows — four tests failed there and nowhere else. And
+yt-dlp pipes stdout in the ANSI code page unless told otherwise, so a non-ASCII
+userData path came back mangled, failed to `stat`, and the finished download was
+deleted as "missing". `--encoding utf-8` fixes the second; the first was a bug
+in the test, not the code, which is its own lesson.
+
+**`--ignore-config` was missing**, so a user's own yt-dlp config merged into a
+command line where every flag is chosen for a reason.
+
+Six of these are pinned by mutation-checked tests. One — the cleanup regex for
+hyphenated format ids like `251-drc` — was *fixed but not covered*, and only a
+mutation check revealed that; the sibling test now carries those cases.
+
 ## Not yet measured, and how to
 
-The format selector is *reasoned*, not verified — the sandbox cannot reach
-YouTube. On any machine that can, this checks it without downloading anything:
+The format selector is now verified for *selection* — a synthetic
+YouTube-shaped `--load-info-json` proves which streams it picks, with no
+network. What is still unverified is that real YouTube offers the shapes that
+table assumes. On any machine with a network, this checks it without
+downloading anything:
 
     yt-dlp --simulate --print "%(format_id)s %(vcodec)s %(acodec)s %(height)s %(ext)s" \
       -f "<the 2160p selector from format.ts>" "<a 4K URL>"
@@ -128,7 +181,30 @@ is the only place it can.
 - The collect step in the store: on `done`, `collectIngest` → `importAssets`
   path, then place the clip; for a fast-path range, set in/out to the requested
   range. Two clicks from paste to clip is the number to hit.
-- Stems after download: "instrumental" and "vocal" are the existing
-  `audio:stems` call on the finished file, not a new pipeline.
 - Nothing cleans `<userData>/downloads/`. It is the first cache in the app big
   enough for that to matter.
+
+## Instrumental and vocal are inside the job
+
+The sketch's four buttons are the request's four `kind`s: `video`, `audio`,
+`instrumental`, `vocal`. The last two are an audio download **followed by the
+stem split, inside the same job** — the queue says *done* when the file the
+user asked for exists, not when the download half of it does. The download is
+the first 80% of the bar, the split the last 20%; the speed column says which
+backend is running.
+
+The song is fetched once: instrumental and vocal share the plain audio
+download's stem, and the split is cached separately by `stems.ts`. Asking for
+a song and then its instrumental does not download it twice.
+
+The policy — ask the sidecar for Demucs, fall back to mid/side — moved out of
+the `audio:stems` handler into `src/main/separate.ts`, shared by both callers,
+and fixed on the way: the inline version's `catch` swallowed **every** sidecar
+error including the user cancelling, so cancelling a five-minute Demucs split
+did not stop it — it quietly produced the mid/side version and reported
+success. Cancellation is checked on the signal first now, and never falls back.
+`tests/separate.test.ts` pins it with both dependencies faked.
+
+The asset's name says what it is — `Song (instrumental)` when Demucs answered,
+`Song (instrumental, mid/side)` when it did not — because "emphasised" must not
+be allowed to read as a clean stem in the media pool.

@@ -24,10 +24,31 @@ import { PROGRESS_TEMPLATE } from './progress'
 
 export type AudioFormat = 'm4a' | 'mp3'
 
+/**
+ * What the user asked for. The sketch's four buttons, exactly.
+ *
+ * `instrumental` and `vocal` are an audio download followed by a stem split,
+ * and both stay INSIDE the job: the queue says done when the file the user
+ * asked for exists, not when the download half of it does. A job that reads
+ * "done" while the app is still separating is the kind of seam that makes a
+ * stack of features feel like a pile of them.
+ */
+export type IngestWant = 'video' | 'audio' | 'instrumental' | 'vocal'
+
+/** The half of the choice yt-dlp sees. Everything that is not video is audio. */
+export function downloadKind(want: IngestWant): IngestKind {
+  return want === 'video' ? 'video' : 'audio'
+}
+
+/** Does this choice need the stems step after the download? */
+export function needsStems(want: IngestWant): boolean {
+  return want === 'instrumental' || want === 'vocal'
+}
+
 export interface IngestRequest {
   url: string
-  kind: IngestKind
-  /** Ignored for audio. */
+  kind: IngestWant
+  /** Ignored for anything but video. */
   quality: Quality
   /** Audio only. m4a copies the stream out; mp3 re-encodes through libmp3lame. */
   audioFormat?: AudioFormat
@@ -52,13 +73,26 @@ export const TITLE_MARK = '@forgetitle@'
  * escaping in a filtergraph.
  */
 export function outputStem(link: ParsedLink, request: IngestRequest): string {
+  // instrumental and vocal share the plain audio download: the split is a
+  // second, separately cached step, so asking for the song and then its
+  // instrumental fetches it once.
   const what =
-    request.kind === 'audio'
+    downloadKind(request.kind) === 'audio'
       ? `audio-${request.audioFormat ?? 'm4a'}`
       : `video-${request.quality}`
+  /*
+   * The cut KIND is part of the identity, not just the bounds.
+   *
+   * An exact cut re-encodes at the marks; a fast cut copies streams and pads
+   * outward by ten seconds. They are different files. Without this, asking for
+   * the fast version and then the exact one returned the fast file from cache
+   * without spawning anything — the user ticks "exact", waits no time at all,
+   * and gets the loose cut back.
+   */
   const range = request.range
     ? `.r${Math.round(Math.min(request.range.startMs, request.range.endMs))}-` +
-      `${Math.round(Math.max(request.range.startMs, request.range.endMs))}`
+      `${Math.round(Math.max(request.range.startMs, request.range.endMs))}` +
+      (request.exact ? '' : '.fast')
     : ''
   return `${link.key}.${what}${range}`
 }
@@ -84,14 +118,41 @@ export function buildYtDlpArgs(request: IngestRequest, context: ArgContext): Bui
   const link = parseLink(request.url)
   if (!link) throw new Error('That is not a link yt-dlp can read')
 
-  const format = formatFor(request.kind, request.quality)
+  const kind = downloadKind(request.kind)
+  const format = formatFor(kind, request.quality)
   const section = sectionPlan(request.range ?? null, request.exact ?? false)
 
   const args: string[] = [
+    /*
+     * `--ignore-config` first, and it is load-bearing.
+     *
+     * Without it yt-dlp merges the user's own config file into this command
+     * line. Every flag below is chosen for a reason — the format selector keeps
+     * AV1 out because the Windows ffmpeg cannot decode it, `-o` keeps the title
+     * out of the filename because Windows forbids its characters — and a
+     * stranger's `~/.config/yt-dlp/config` can override any of them. Their
+     * config is for their yt-dlp, not for ours.
+     */
+    '--ignore-config',
+
     // The canonical URL, not what was pasted — playlist ids and timestamps are
-    // already gone, and `--no-playlist` catches anything a generic link brings.
+    // already gone. `--no-playlist` and `--playlist-items 1` are belt and
+    // braces for the thousand sites `parseLink` cannot recognise the shape of;
+    // for YouTube, collection URLs are refused before they reach here.
     link.url,
     '--no-playlist',
+    '--playlist-items',
+    '1',
+
+    /*
+     * Windows pipes yt-dlp's stdout in the ANSI code page unless told
+     * otherwise, and we decode it as UTF-8. That mangles every non-ASCII title,
+     * and — worse — mangles the printed FILE PATH, so a user whose name is not
+     * ASCII gets a path that does not stat, and the finished download is then
+     * deleted as "missing".
+     */
+    '--encoding',
+    'utf-8',
     '--ffmpeg-location',
     context.ffmpegPath,
 
@@ -131,7 +192,7 @@ export function buildYtDlpArgs(request: IngestRequest, context: ArgContext): Bui
 
   if (format.mergeFormat) args.push('--merge-output-format', format.mergeFormat)
 
-  if (request.kind === 'audio') {
+  if (kind === 'audio') {
     if ((request.audioFormat ?? 'm4a') === 'mp3') {
       // Re-encode. Our ffmpeg has libmp3lame (checked, not assumed); `0` is
       // the best VBR setting, which for a music bed is the right default.

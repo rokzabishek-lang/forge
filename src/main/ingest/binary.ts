@@ -1,9 +1,10 @@
 import { execFile } from 'node:child_process'
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { constants } from 'node:fs'
-import { access, chmod, mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { access, chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { delimiter, join } from 'node:path'
 import { app } from 'electron'
+import { CancelledError } from '../ffmpeg/run'
 import {
   CHECKSUMS_ASSET,
   fetchFailureMessage,
@@ -123,7 +124,13 @@ export async function locateYtDlp(): Promise<YtDlpTool | null> {
   }
 
   const found = await onPath()
-  if (found) return { path: found, source: 'path', version: await ytDlpVersion(found) }
+  if (found) {
+    // Same rule as the managed copy: a binary that will not run is not a tool.
+    // Reporting it ready meant a broken PATH copy shadowed the fetch forever,
+    // and every download failed with whatever yt-dlp said on its way out.
+    const version = await ytDlpVersion(found)
+    if (version) return { path: found, source: 'path', version }
+  }
 
   return null
 }
@@ -138,14 +145,20 @@ export async function ytDlpStatus(): Promise<YtDlpStatus> {
   }
 }
 
-async function get(url: string, timeoutMs: number): Promise<Response> {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
+async function get(url: string, timeoutMs: number, signal?: AbortSignal): Promise<Response> {
+  if (signal?.aborted) throw new CancelledError()
+
+  const timeout = new AbortController()
+  const timer = setTimeout(() => timeout.abort(), timeoutMs)
+  // The caller's cancel and our timeout are different failures and must stay
+  // distinguishable: a cancelled job reports nothing, a timed-out one explains.
+  const combined = signal ? AbortSignal.any([signal, timeout.signal]) : timeout.signal
   try {
-    const response = await fetch(url, { signal: controller.signal, redirect: 'follow' })
+    const response = await fetch(url, { signal: combined, redirect: 'follow' })
     if (!response.ok) throw new Error(`${url} answered ${response.status}`)
     return response
   } catch (err) {
+    if (signal?.aborted) throw new CancelledError()
     if (err instanceof Error && err.name === 'AbortError') {
       throw new Error(`${url} did not answer within ${Math.round(timeoutMs / 1000)}s`)
     }
@@ -162,7 +175,10 @@ async function get(url: string, timeoutMs: number): Promise<Response> {
  * download is never mistaken for a binary. The checksum file is fetched FIRST:
  * if it is unreachable or does not list our asset, nothing is downloaded at all.
  */
-async function fetchYtDlp(onMessage?: (message: string) => void): Promise<YtDlpTool> {
+async function fetchYtDlp(
+  onMessage?: (message: string) => void,
+  signal?: AbortSignal
+): Promise<YtDlpTool> {
   const asset = releaseAsset(process.platform, process.arch)
   if (!asset) {
     throw new Error(`There is no yt-dlp build for ${process.platform}/${process.arch}`)
@@ -172,12 +188,16 @@ async function fetchYtDlp(onMessage?: (message: string) => void): Promise<YtDlpT
     await mkdir(toolsDir(), { recursive: true })
 
     onMessage?.('checking the yt-dlp release')
-    const sums = parseChecksums(await (await get(releaseUrl(CHECKSUMS_ASSET), CHECKSUMS_TIMEOUT_MS)).text())
+    const sums = parseChecksums(
+      await (await get(releaseUrl(CHECKSUMS_ASSET), CHECKSUMS_TIMEOUT_MS, signal)).text()
+    )
     const expected = sums.get(asset)
     if (!expected) throw new Error(`the release does not publish a checksum for ${asset}`)
 
     onMessage?.('downloading yt-dlp (~30MB, first time only)')
-    const bytes = Buffer.from(await (await get(releaseUrl(asset), BINARY_TIMEOUT_MS)).arrayBuffer())
+    const bytes = Buffer.from(
+      await (await get(releaseUrl(asset), BINARY_TIMEOUT_MS, signal)).arrayBuffer()
+    )
     if (bytes.byteLength === 0) throw new Error('the download was empty')
 
     const actual = createHash('sha256').update(bytes).digest('hex')
@@ -186,10 +206,18 @@ async function fetchYtDlp(onMessage?: (message: string) => void): Promise<YtDlpT
     }
 
     const final = managedPath()
-    const temp = `${final}.download`
-    await writeFile(temp, bytes)
-    if (process.platform !== 'win32') await chmod(temp, 0o755)
-    await rename(temp, final)
+    // Unique: two first-run jobs sharing one temp name meant the second's
+    // rename hit a file the first had already moved, and that job reported
+    // "could not be fetched" for a binary that was sitting there working.
+    const temp = `${final}.${process.pid}.${randomUUID().slice(0, 8)}.download`
+    try {
+      await writeFile(temp, bytes)
+      if (process.platform !== 'win32') await chmod(temp, 0o755)
+      await rename(temp, final)
+    } catch (err) {
+      await rm(temp, { force: true }).catch(() => undefined)
+      throw err
+    }
 
     const version = await ytDlpVersion(final)
     if (!version) {
@@ -206,6 +234,9 @@ async function fetchYtDlp(onMessage?: (message: string) => void): Promise<YtDlpT
     )
     return { path: final, source: 'managed', version }
   } catch (err) {
+    // A cancelled fetch is not a failure to explain a way around.
+    if (err instanceof Error && err.name === 'CancelledError') throw err
+    if (signal?.aborted) throw new CancelledError()
     throw new Error(fetchFailureMessage(err instanceof Error ? err.message : String(err)))
   }
 }
@@ -216,15 +247,39 @@ async function fetchYtDlp(onMessage?: (message: string) => void): Promise<YtDlpT
  * `refresh` forces a fresh fetch of the current release over whatever is there,
  * which is the whole answer to "YouTube changed and downloads broke".
  */
+/**
+ * The one fetch in flight, shared by everyone who asks while it runs.
+ *
+ * Two downloads started together on a fresh machine both found no yt-dlp and
+ * both fetched 30MB of it. Single-flighting removes the duplicate transfer as
+ * well as the race over the install.
+ */
+let inflight: Promise<YtDlpTool> | null = null
+
 export async function ensureYtDlp(
   onMessage?: (message: string) => void,
-  options: { refresh?: boolean } = {}
+  options: { refresh?: boolean; signal?: AbortSignal } = {}
 ): Promise<YtDlpTool> {
+  if (options.signal?.aborted) throw new CancelledError()
+
   if (!options.refresh) {
     const found = await locateYtDlp()
     if (found) return found
+    if (inflight) {
+      // Someone else is already fetching. Say so rather than showing nothing,
+      // and let their cancel be theirs — this caller only stops waiting.
+      onMessage?.('waiting for yt-dlp to finish downloading')
+      return inflight
+    }
   }
-  return fetchYtDlp(onMessage)
+
+  // The shared promise deliberately carries NO caller signal: one job
+  // cancelling must not abort a download another job is waiting on.
+  const run = fetchYtDlp(onMessage, options.refresh ? options.signal : undefined).finally(() => {
+    if (inflight === run) inflight = null
+  })
+  inflight = run
+  return run
 }
 
 /** What the last fetch recorded, for a settings screen. Null if never fetched. */

@@ -13,7 +13,7 @@ import {
 } from '@shared/ingest/args'
 import { parseLink } from '@shared/ingest/url'
 import { createIngestProgress, formatSpeed } from '@shared/ingest/progress'
-import type { Range } from '@shared/ingest/section'
+import { sectionPlan, type Range } from '@shared/ingest/section'
 import { ALL_EXTENSIONS } from '@shared/media'
 
 /**
@@ -55,6 +55,11 @@ export interface IngestOutcome {
   /** True when the fast range path was taken and the ends want trimming. */
   approximateRange: boolean
   requestedRange: Range | null
+  /**
+   * Set by the job, not by this module, when the choice was instrumental or
+   * vocal: which backend answered and how honest the word "stem" is for it.
+   */
+  stems?: { backend: string; quality: 'separated' | 'emphasised' } | null
 }
 
 export interface IngestHandle {
@@ -111,8 +116,23 @@ export async function findCached(destDir: string, stem: string): Promise<string 
  * segment contains a hyphen, so `[A-Za-z0-9]+` for the extension keeps it out.
  */
 export async function removePartials(destDir: string, stem: string): Promise<void> {
+  /*
+   * Every temp shape yt-dlp actually writes, and nothing else.
+   *
+   *   <stem>.<ext>.part                       a plain download in progress
+   *   <stem>.f137.<ext>.part                  one stream of a merge
+   *   <stem>.f251-drc.<ext>.part              format ids are not always numeric
+   *   <stem>.<ext>.part-Frag12.part           a fragment of a fragmented format
+   *   <stem>.<ext>.ytdl                       the resume sidecar
+   *
+   * Still precise rather than a prefix match: `<stem>.r60000-90000.fast.mp4` is
+   * a DIFFERENT finished download of the same video, and cancelling one must
+   * not delete the other. Its second segment starts with `r`, not `f`, so the
+   * format-id group cannot swallow it.
+   */
   const pattern = new RegExp(
-    `^${escapeRegex(stem)}\\.(?:f\\d+\\.)?(?:temp\\.)?[A-Za-z0-9]+(?:\\.part|\\.ytdl|\\.part-Frag\\d+)?$`
+    `^${escapeRegex(stem)}\\.(?:f[A-Za-z0-9-]+\\.)?(?:temp\\.)?[A-Za-z0-9]+` +
+      `(?:\\.part(?:-Frag\\d+(?:\\.part)?)?|\\.ytdl)?$`
   )
   let entries: string[]
   try {
@@ -152,7 +172,24 @@ export function downloadMedia(
     const cached = await findCached(destDir, stem)
     if (cached) {
       onProgress(1, null)
-      return { path: cached, title: null, cached: true, approximateRange: false, requestedRange: null }
+      /*
+       * The range facts come from the REQUEST, not from defaults.
+       *
+       * Returning `approximateRange: false, requestedRange: null` here said
+       * "this is an exact, whole clip" about a file that may be a padded fast
+       * cut — so the second time a user pulled the same range, the caller
+       * stopped trimming the ends and the clip silently grew by twenty seconds.
+       * The stem now encodes the cut kind, so a cache hit is genuinely the same
+       * cut, and these two fields simply restate what was asked for.
+       */
+      const plan = sectionPlan(request.range ?? null, request.exact ?? false)
+      return {
+        path: cached,
+        title: null,
+        cached: true,
+        approximateRange: plan.approximate,
+        requestedRange: plan.requested
+      }
     }
 
     const built = buildYtDlpArgs(request, { ffmpegPath: FFMPEG_PATH, destDir, stem })
@@ -164,8 +201,32 @@ export function downloadMedia(
       }
 
       child = spawn(tool.command, [...(tool.prefixArgs ?? []), ...built.args], {
-        windowsHide: true
+        windowsHide: true,
+        /*
+         * A process group of its own, so cancelling can kill the whole tree.
+         *
+         * yt-dlp spawns ffmpeg to cut a section or merge streams, and that
+         * grandchild inherits yt-dlp's stdout — our pipe. Killing only yt-dlp
+         * left ffmpeg finishing the work and holding the pipe open, so `close`
+         * (where this rejects and removes the partials) did not fire until it
+         * was done. `detached` makes yt-dlp a group leader; `killProcess` then
+         * signals the negative pid. On Windows this is ignored and taskkill /t
+         * does the same job.
+         */
+        detached: process.platform !== 'win32'
       })
+
+      /*
+       * A sectioned download reports nothing until it is finished.
+       *
+       * `--download-sections` routes through yt-dlp's FFmpegFD, which emits one
+       * `finished` line and no intermediate bytes — so the bar would sit at 0%
+       * for the whole cut with no indication anything was happening. The speed
+       * column is free text, so it carries the explanation instead.
+       */
+      if (built.args.includes('--download-sections')) {
+        onProgress(0, request.exact ? 'cutting and re-encoding' : 'cutting with ffmpeg')
+      }
 
       const progress = createIngestProgress()
       let filePath: string | null = null
@@ -225,15 +286,27 @@ export function downloadMedia(
           void (async () => {
             // Trust the printed path first; fall back to looking, because a
             // file that already existed can make yt-dlp skip the print.
-            const found = filePath ?? (await findCached(destDir, stem))
-            if (!found) {
-              discard(new Error('yt-dlp finished but did not say where the file is'))
-              return
+            /*
+             * Trust the printed path, but verify it before acting on it — and
+             * never let a bad one destroy a good download. If the printed path
+             * does not stat (a mangled encoding, a postprocessor rename we did
+             * not expect), look the file up on disk before giving up, because
+             * `discard` DELETES the partials for this stem.
+             */
+            let found: string | null = null
+            for (const candidate of [filePath, await findCached(destDir, stem)]) {
+              if (!candidate) continue
+              try {
+                if ((await stat(candidate)).size > 0) {
+                  found = candidate
+                  break
+                }
+              } catch {
+                // Not there under that name; try the next candidate.
+              }
             }
-            try {
-              if ((await stat(found)).size === 0) throw new Error('empty')
-            } catch {
-              discard(new Error('yt-dlp finished but the file is missing or empty'))
+            if (!found) {
+              discard(new Error('yt-dlp finished but its output file is missing or empty'))
               return
             }
             onProgress(1, null)
