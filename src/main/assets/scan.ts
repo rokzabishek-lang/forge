@@ -94,8 +94,34 @@ async function titleMeta(file: string): Promise<{ width: number; height: number;
  * app degrades gracefully when nothing is found — an empty catalog means fewer
  * choices in the UI, never a failure to start.
  */
+/**
+ * Where the library is, in order of preference.
+ *
+ * `FORGE_ASSETS_DIR` first: someone who pointed it at their own folder meant
+ * it, and nothing should override that.
+ *
+ * Then INSTALLED PACKS, under `userData`. They have to live there rather than
+ * beside the app because the install directory is inside the bundle on macOS
+ * and under `%LOCALAPPDATA%\Programs` on Windows — writing there means an
+ * update silently deletes everything the user downloaded.
+ *
+ * Then whatever shipped with the build, which in practice is nothing: `assets/`
+ * is gitignored, so a CI-built installer has none (docs/PACKAGING.md). This
+ * branch is what a development checkout uses.
+ *
+ * Resolved synchronously from a flag `refreshAssetsRoot()` sets, because it is
+ * read on nearly every catalog call and an await on each would be silly.
+ */
+let packsInstalled = false
+
+/** Re-check whether any pack is installed. Called at startup and after each install. */
+export function setPacksInstalled(value: boolean): void {
+  packsInstalled = value
+}
+
 export function assetsRoot(): string {
   if (process.env.FORGE_ASSETS_DIR) return process.env.FORGE_ASSETS_DIR
+  if (packsInstalled) return join(app.getPath('userData'), 'assets')
   return app.isPackaged
     ? join(process.resourcesPath, 'assets')
     : join(app.getAppPath(), 'assets')
