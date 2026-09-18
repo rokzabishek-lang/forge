@@ -156,29 +156,43 @@ describe('the quality ladder', () => {
     expect([...QUALITIES]).toEqual(['2160p', '1080p', '720p', '480p'])
   })
 
-  it('asks for a stream ABOVE 1080p when 4K was requested', () => {
+  it('expresses size as a SORT, not a height filter', () => {
     /*
-     * The bug this file did not catch the first time. yt-dlp's `/` is
-     * fallback-only, so the first branch that matches anything wins. YouTube
-     * publishes no avc1 above 1080p, so an H.264-first selector was satisfied
-     * by the 1080p stream and 4K silently returned a 1080p file — cached under
-     * the 4K name, so a retry served it straight back. Verified against the
-     * real yt-dlp with a YouTube-shaped info JSON: it chose 137+140 1080 avc1
-     * while 313+140 2160 vp09 sat there unused.
+     * The bug this file missed twice, in two different forms.
+     *
+     * First: yt-dlp's `/` is fallback-only, so an H.264-first chain was
+     * satisfied by a 1080p stream and 4K silently returned 1080p.
+     *
+     * Then, worse: `height<=?1080` is FALSE for every vertical video, because
+     * a 1080p reel is 1080 wide and 1920 tall. Every YouTube Short and every
+     * Instagram reel answered "Requested format is not available" — in an app
+     * whose whole subject is short-form vertical video.
+     *
+     * Both came from choosing with filters and branches. `-S res:N` ranks
+     * every permitted format instead, and `res` is the LOWER of height and
+     * width, which is what 1080p means for a reel. What yt-dlp actually picks
+     * is asserted against the real binary in
+     * tests/integration/ytdlpFormat.int.test.ts; this only pins the shape.
      */
-    const first = formatFor('video', '2160p').selector.split('/')[0]
-    expect(first).toContain('[height>1080]')
-    expect(first).not.toContain('vcodec^=avc1')
-
-    // And a video that tops out at 1080p still falls through to H.264, which
-    // is the friendliest answer for it — so this is an addition, not a swap.
-    expect(formatFor('video', '2160p').selector).toContain('vcodec^=avc1')
-
-    // The lower rungs are unchanged: H.264 first, no height floor.
-    for (const q of ['1080p', '720p', '480p'] as const) {
-      expect(formatFor('video', q).selector.split('/')[0], q).toContain('vcodec^=avc1')
-      expect(formatFor('video', q).selector, q).not.toContain('[height>1080]')
+    for (const q of QUALITIES) {
+      const { selector, sort } = formatFor('video', q)
+      expect(selector, q).not.toContain('height')
+      expect(sort, q).toContain('res:')
     }
+    expect(formatFor('video', '2160p').sort).toContain('res:2160')
+    expect(formatFor('video', '480p').sort).toContain('res:480')
+  })
+
+  it('prefers H.264 and AAC without demanding them', () => {
+    /*
+     * A preference, not a filter. H.264 plus AAC is what every ffmpeg since
+     * 2012 can mux, so it is ranked first — but a site serving nothing else
+     * must still download, which a hard `vcodec^=avc1` branch cannot promise.
+     */
+    const { selector, sort } = formatFor('video', '1080p')
+    expect(sort).toContain('vcodec:h264')
+    expect(sort).toContain('acodec:m4a')
+    expect(selector).not.toContain('vcodec^=avc1')
   })
 
   it('EXCLUDES AV1 at every quality, because the Windows ffmpeg predates it', () => {
@@ -207,29 +221,23 @@ describe('the quality ladder', () => {
     }
   })
 
-  it('prefers H.264 and AAC first, which every ffmpeg since 2012 can mux', () => {
-    const { selector } = formatFor('video', '1080p')
-    const first = selector.split('/')[0]
-    expect(first).toContain('vcodec^=avc1')
-    expect(first).toContain('acodec^=mp4a')
-  })
-
-  it('caps height non-strictly, so a 720p-only video still downloads', () => {
-    // `<=?` not `<=`. Plenty of YouTube is 720p at best, and "you asked for
-    // 1080p so you get nothing" is not a useful answer.
-    const { selector } = formatFor('video', '1080p')
-    expect(selector).toContain('[height<=?1080]')
-    expect(selector).not.toContain('[height<=1080]')
-  })
-
-  it('asks for a different cap for each rung', () => {
-    const caps = QUALITIES.map((q) => formatFor('video', q).selector.match(/height<=\?(\d+)/)![1])
-    expect(caps).toEqual(['2160', '1080', '720', '480'])
+  it('asks for the combined stream before the pre-muxed one', () => {
+    /*
+     * Order still matters in `-f`, even though size no longer lives there:
+     * separate streams give the better picture where a site has them, and the
+     * single-file branch is the fallback for everywhere that does not.
+     */
+    const branches = formatFor('video', '1080p').selector.split('/')
+    expect(branches[0]).toContain('+')
+    expect(branches.at(-1)).not.toContain('+')
   })
 
   it('always leaves a branch that works without separate streams', () => {
-    // Some videos have no split streams at all, and this is also the branch
-    // that still works if YouTube changes the other two out from under us.
+    /*
+     * Most of the web is not YouTube. Instagram, TikTok and the rest serve one
+     * already-muxed file with no separate audio stream, and a selector that
+     * only knows how to combine two streams downloads nothing from any of them.
+     */
     for (const q of QUALITIES) {
       const branches = formatFor('video', q).selector.split('/')
       expect(branches.some((b) => !b.includes('+')), q).toBe(true)
@@ -568,6 +576,47 @@ describe('what is wrong with a pasted link', () => {
   it('has a message for every problem it can report', () => {
     for (const problem of ['empty', 'not-a-link', 'collection'] as const) {
       expect(LINK_PROBLEM_TEXT[problem].length).toBeGreaterThan(10)
+    }
+  })
+})
+
+describe('links from sites that are not YouTube', () => {
+  it('accepts a TikTok video, which puts a handle in its path', () => {
+    /*
+     * `@[^/]+` was in the collection list for `youtube.com/@channel`, and it
+     * refused every TikTok video link with "That is a playlist, channel or
+     * feed". Depth is what separates them: a profile and its tabs are one or
+     * two segments, a video is three.
+     */
+    const link = parseLink('https://www.tiktok.com/@someone/video/7123456789')
+    expect(link?.kind).toBe('generic')
+    expect(linkProblem('https://www.tiktok.com/@someone/video/7123456789')).toBeNull()
+  })
+
+  it('still refuses a profile and its tabs', () => {
+    for (const url of [
+      'https://www.youtube.com/@mrbeast',
+      'https://www.youtube.com/@mrbeast/videos',
+      'https://www.youtube.com/@mrbeast/shorts',
+      'https://www.tiktok.com/@someone'
+    ]) {
+      expect(parseLink(url), url).toBeNull()
+      expect(linkProblem(url), url).toBe('collection')
+    }
+  })
+
+  it('accepts the reel and post shapes people actually paste', () => {
+    // None of these is YouTube, and yt-dlp reads well over a thousand sites.
+    // Refusing them would be the app inventing a limit the tool does not have.
+    for (const url of [
+      'https://www.instagram.com/reel/DAbc123XyZ/',
+      'https://www.instagram.com/reel/DAbc123XyZ/?igsh=MXY123',
+      'https://www.instagram.com/p/DAbc123XyZ/',
+      'https://vt.tiktok.com/ZSABC123/',
+      'https://x.com/someone/status/1790000000000',
+      'https://www.facebook.com/reel/123456789'
+    ]) {
+      expect(parseLink(url)?.kind, url).toBe('generic')
     }
   })
 })

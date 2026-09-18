@@ -36,6 +36,8 @@ export type IngestKind = 'video' | 'audio'
 export interface FormatChoice {
   /** The `-f` argument. */
   selector: string
+  /** The `-S` argument — how to choose among what `-f` allows, or null. */
+  sort: string | null
   /** `--merge-output-format`, or null when nothing needs merging. */
   mergeFormat: 'mp4' | 'webm' | null
   /** The extension the finished file will have, for the probe that follows. */
@@ -49,18 +51,6 @@ const HEIGHT: Record<Quality, number> = {
   '480p': 480
 }
 
-/**
- * `<=?` rather than `<=`.
- *
- * The `?` makes the filter non-strict: a video that simply is not available at
- * the asked-for size still matches instead of failing the whole selection.
- * Plenty of YouTube is 720p at best, and "you asked for 1080p so you get
- * nothing" is not a useful answer.
- */
-function cap(quality: Quality): string {
-  return `[height<=?${HEIGHT[quality]}]`
-}
-
 export function formatFor(kind: IngestKind, quality: Quality): FormatChoice {
   if (kind === 'audio') {
     /*
@@ -71,70 +61,55 @@ export function formatFor(kind: IngestKind, quality: Quality): FormatChoice {
      */
     return {
       selector: 'bestaudio[acodec^=mp4a]/bestaudio[ext=m4a]/bestaudio',
+      sort: null,
       mergeFormat: null,
       expectedExt: 'm4a'
     }
   }
 
-  const size = cap(quality)
+  /*
+   * `-S res:N`, not `-f [height<=N]`. This is the second bug this file has had
+   * from picking formats the wrong way, and it was the worse of the two.
+   *
+   * `height<=?1080` rejects EVERY VERTICAL VIDEO. A 1080p reel is 1080 wide and
+   * 1920 tall, so its height fails the filter, no branch matches, and yt-dlp
+   * answers "Requested format is not available". Measured against the real
+   * yt-dlp with shaped `--load-info-json` files: a landscape 1080p video
+   * downloaded fine while a YouTube Short and an Instagram reel both failed
+   * outright. For an app whose entire subject is short-form vertical video,
+   * every Short and every reel was unreachable.
+   *
+   * yt-dlp's sort field `res` is the LOWER of height and width, which is what
+   * everyone means by "1080p" for a vertical clip. Verified across a vertical
+   * ladder: asking 360/720/1080/2160 returns exactly that rung each time.
+   *
+   * Sorting also fixes the trap that caused the FIRST bug here. `/` in `-f` is
+   * fallback-only — the first branch matching anything wins and the rest are
+   * never considered — which is how a 4K request used to be satisfied by a
+   * 1080p stream. A sort has no branches to be trapped in: every allowed
+   * format is ranked, so 4K still comes back 4K (verified), and a missing rung
+   * degrades to the nearest one below rather than failing.
+   *
+   * Codec is a PREFERENCE here rather than a filter, for the same reason: h264
+   * and m4a are ranked first, but a site that has neither still downloads.
+   */
+  const sort = `res:${HEIGHT[quality]},vcodec:h264,acodec:m4a`
 
   /*
-   * Read as three attempts, in order:
+   * AV1 stays a hard filter, and is the one thing that may still refuse.
    *
-   *   1. H.264 video + AAC audio            -> mp4, the friendliest result
-   *   2. anything except AV1 + any audio    -> webm, which is where VP9/Opus live
-   *   3. a single pre-muxed stream          -> whatever it already is
-   *
-   * The third exists because some videos have no separate streams at all, and
-   * because it is the branch that still works if YouTube changes the other two
-   * out from under us.
+   * It is not about the download. The file has to be decoded for the preview
+   * and for every render, and the 2018 Windows build ships no AV1 decoder at
+   * all (docs/EFFECTS.md §25). Allowing it would trade a download that fails
+   * with a clear message for an import that succeeds and then cannot be played
+   * or exported — the worse failure, and much later.
    */
-  const h264 = `bestvideo${size}[vcodec^=avc1]+bestaudio[acodec^=mp4a]`
-  const notAv1 = `bestvideo${size}[vcodec!*=av01]+bestaudio[acodec!*=opus]/bestvideo${size}[vcodec!*=av01]+bestaudio`
-
-  /*
-   * Above 1080p, H.264 must NOT be tried first — and this is the bug that
-   * shipped in the first version of this file.
-   *
-   * yt-dlp's `/` is fallback-only: the first branch that matches anything wins,
-   * and it never looks at the ones after it. YouTube publishes no avc1 above
-   * 1080p, so for a 2160p request the H.264 branch matched the 1080p stream and
-   * was satisfied by it. Asking for 4K returned the same file as asking for
-   * 1080p — cached under a 4K name, so a retry served it straight back.
-   * Reproduced against the real yt-dlp with a YouTube-shaped `--load-info-json`:
-   * the selector chose `137+140 1080 avc1`, where `313+140 2160 vp09` existed.
-   *
-   * So for the rungs above 1080p a `[height>1080]` branch goes first. It is
-   * NOT a plain replacement: a video that tops out at 1080p matches nothing
-   * there and falls through to the H.264 branch, which is still the friendliest
-   * answer for it.
-   */
-  const above1080 =
-    HEIGHT[quality] > 1080
-      ? `bestvideo${size}[height>1080][vcodec!*=av01]+bestaudio[acodec!*=opus]/` +
-        `bestvideo${size}[height>1080][vcodec!*=av01]+bestaudio/`
-      : ''
-  /*
-   * AV1 is excluded here too, even though a single pre-muxed stream needs no
-   * merging and so dodges the ffmpeg-version problem on the way in.
-   *
-   * It does not dodge it afterwards. The file still has to be decoded for the
-   * preview and for every render, and the 2018 Windows build has no AV1
-   * decoder at all. Allowing it would trade a download that fails with a clear
-   * message for an import that succeeds and then cannot be played or exported
-   * — the worse failure, and much later.
-   *
-   * In practice YouTube offers VP9 beside AV1 at every size, so this costs
-   * nothing; if a video ever is AV1-only, saying so is the right answer.
-   */
-  const single = `best${size}[vcodec!*=av01]`
-
   return {
-    selector: `${above1080}${h264}/${notAv1}/${single}`,
-    // mp4 is requested rather than assumed: when branch 1 wins there is nothing
-    // to do, and when branch 2 wins yt-dlp falls back to a container that fits
-    // rather than failing. Naming mkv here instead would push every ordinary
-    // 1080p download into a needless remux.
+    selector: 'bv*[vcodec!*=av01]+ba/b[vcodec!*=av01]',
+    sort,
+    // Requested rather than assumed: when the parts are already mp4 there is
+    // nothing to do, and when they are not yt-dlp falls back to a container
+    // that fits rather than failing.
     mergeFormat: 'mp4',
     expectedExt: 'mp4'
   }

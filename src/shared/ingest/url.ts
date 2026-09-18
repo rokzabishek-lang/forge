@@ -28,7 +28,24 @@ export type LinkKind = 'youtube' | 'generic'
  *
  * Refusing is the honest answer until there is a UI for "which one".
  */
-const COLLECTION_PATHS = /^\/(playlist|feed|results|channel|c|user|@[^/]+|.*\/sets)(\/|$)/i
+const COLLECTION_PATHS = /^\/(playlist|feed|results|channel|c|user|.*\/sets)(\/|$)/i
+
+/**
+ * `@handle` is a profile on YouTube and a path prefix everywhere else.
+ *
+ * This used to live in the list above as a plain `@[^/]+`, which made
+ * `tiktok.com/@user/video/7123456789` — a single video — get refused with
+ * "That is a playlist, channel or feed". The rule was written for
+ * `youtube.com/@channel` and quietly applied to every site that puts a handle
+ * in the path.
+ *
+ * Depth tells them apart. `/@name` is a profile and `/@name/videos` is one of
+ * its tabs, both collections; `/@name/video/123` names one thing and is not.
+ */
+function isHandleCollection(pathname: string): boolean {
+  const parts = pathname.split('/').filter(Boolean)
+  return parts[0]?.startsWith('@') === true && parts.length <= 2
+}
 
 export interface ParsedLink {
   kind: LinkKind
@@ -139,6 +156,7 @@ export function parseLink(input: string): ParsedLink | null {
 /** A playlist, channel, feed or set — many videos, not one. */
 export function isCollection(url: URL): boolean {
   if (COLLECTION_PATHS.test(url.pathname)) return true
+  if (isHandleCollection(url.pathname)) return true
   // `list=` with no `v=` is a YouTube playlist page. With a `v=` it is a video
   // that happens to sit in a playlist, which `youtubeId` already handled.
   return url.searchParams.has('list') && !url.searchParams.has('v')

@@ -122,10 +122,47 @@ Deduplicated, sixteen real defects. The ones worth remembering:
 that matches anything wins and the rest are never consulted. YouTube publishes
 no avc1 above 1080p, so the H.264-first selector was *satisfied* by the 1080p
 stream on a 2160p request — and cached it under the 4K name, so a retry served
-it straight back. Fixed by putting a `[height>1080]` branch first for the rungs
-above 1080p only; a video that tops out at 1080p still falls through to H.264.
-Verified against the real binary with a YouTube-shaped `--load-info-json`:
-`313+140 2160 vp09` now, `137+140 1080 avc1` before.
+it straight back. Verified against the real binary with a YouTube-shaped
+`--load-info-json`: `313+140 2160 vp09` now, `137+140 1080 avc1` before.
+
+**Then every vertical video turned out to be unreachable** — and this one was
+found by a user, not by a review, which is the whole point of writing it down.
+
+`[height<=?1080]` is FALSE for a 1080p reel, because a 1080p reel is 1080 wide
+and **1920 tall**. No branch matched, so yt-dlp answered *"Requested format is
+not available"*. Measured against the real binary with shaped format tables: a
+landscape 1080p video downloaded fine, while a YouTube Short and an Instagram
+reel both failed outright. **In an app whose entire subject is short-form
+vertical video, every Short and every reel was refused** — and the failure
+looked like the site being unsupported rather than like our arithmetic.
+
+Both bugs have the same cause: **choosing a format with filters and fallback
+branches**. The fix is to stop doing that.
+
+    -f  bv*[vcodec!*=av01]+ba/b[vcodec!*=av01]     what is PERMITTED
+    -S  res:N,vcodec:h264,acodec:m4a               which of those is BEST
+
+`res` in a yt-dlp sort is the **lower of height and width**, which is exactly
+what "1080p" means for a vertical clip. A sort also has no branches to be
+trapped in, so the 4K case cannot come back. Codec becomes a preference rather
+than a filter — H.264 and AAC rank first where they exist, and a site with
+neither still downloads.
+
+AV1 stays a hard filter and is the one thing that may still refuse, because the
+2018 Windows ffmpeg cannot decode it: better a clear failure now than an import
+that plays nowhere later.
+
+Verified across a vertical ladder (360/720/1080/2160 each return their own
+rung), a single pre-muxed Instagram-shaped stream, the 4K case, a VP9-only
+video, and an AV1-only one. `tests/integration/ytdlpFormat.int.test.ts` runs all
+of it against the real yt-dlp with no network, and every assertion was
+mutation-checked by restoring the height filter.
+
+**A TikTok video link was refused as a playlist.** `@[^/]+` sat in the
+collection list for `youtube.com/@channel` and was quietly applied to every
+site that puts a handle in a path, so `tiktok.com/@user/video/123` was told
+"That is a playlist, channel or feed." Depth separates them: a profile and its
+tabs are one or two segments, a video is three.
 
 **A playlist or channel URL downloaded the whole collection.** `--no-playlist`
 does not save you: yt-dlp's `_yes_playlist` returns `not video_id` *before* it

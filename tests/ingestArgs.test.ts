@@ -119,6 +119,21 @@ describe('the yt-dlp command line', () => {
     expect(b.after('--merge-output-format')).toBe('mp4')
   })
 
+  it('passes the size preference as a sort, so vertical video works', () => {
+    /*
+     * `-f` is what is PERMITTED, `-S` is which of those is BEST. Size has to
+     * ride in the sort: as a filter it read `height<=N`, which is false for
+     * every vertical video and refused every Short and every reel.
+     */
+    const b = build()
+    expect(b.after('-S')).toContain('res:')
+    expect(b.after('-f')).not.toContain('height')
+  })
+
+  it('sends no sort for an audio-only download, which has no resolution', () => {
+    expect(build({ kind: 'audio' }).args).not.toContain('-S')
+  })
+
   it('extracts audio as m4a by default, copying the stream out', () => {
     const b = build({ kind: 'audio' })
     expect(b.args).toContain('-x')

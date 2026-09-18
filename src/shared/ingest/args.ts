@@ -190,6 +190,17 @@ export function buildYtDlpArgs(request: IngestRequest, context: ArgContext): Bui
     '30'
   ]
 
+  /*
+   * `-S` decides among what `-f` allowed.
+   *
+   * Separate from the selector because they answer different questions: `-f`
+   * is what is PERMITTED (never AV1, which the Windows ffmpeg cannot decode),
+   * `-S` is which of the permitted is BEST. Expressing the size preference as
+   * a sort rather than a filter is what makes vertical video work at all —
+   * see the note in format.ts.
+   */
+  if (format.sort) args.push('-S', format.sort)
+
   if (format.mergeFormat) args.push('--merge-output-format', format.mergeFormat)
 
   if (kind === 'audio') {
