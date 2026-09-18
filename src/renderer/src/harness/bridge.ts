@@ -1,4 +1,5 @@
 import type { MediaAsset } from '@shared/timeline'
+import type { PackListing } from '@shared/assets/pack'
 import { LOOKS, cubeFor } from '@shared/render/looks'
 
 /**
@@ -22,6 +23,48 @@ const unsupported = (what: string) => async (): Promise<never> => {
 
 /** Files the harness has made, so they can be handed back as assets. */
 const made = new Map<string, { width: number; height: number }>()
+
+/* --------------------------------------------------------------- packs */
+
+/**
+ * Two packs, in the two states that matter.
+ *
+ * One published, so there is something to press, and one unpublished, because
+ * that is what every pack in the real build is today and the panel has to look
+ * right in it. Mutable: installing one here changes what the button says, which
+ * is the whole point of having it.
+ */
+const harnessPacks: PackListing[] = [
+  {
+    id: 'library',
+    name: 'Asset library',
+    summary: '88 fonts, 412 transitions, 50 title templates, SFX and props',
+    group: 'library',
+    version: 1,
+    url: 'https://example.invalid/library.tar.gz',
+    sha256: 'a'.repeat(64),
+    bytes: 85_000_000,
+    state: { kind: 'available' }
+  },
+  {
+    id: 'stickers-telugu',
+    name: 'Telugu reactions',
+    summary: '78 reaction stickers with transparency',
+    group: 'stickers',
+    version: 1,
+    url: '',
+    sha256: '',
+    bytes: 14_000_000,
+    state: { kind: 'unpublished' }
+  }
+]
+
+const packCancels = new Set<string>()
+const packListeners = new Set<(update: { id: string; progress: number | null; message: string }) => void>()
+
+function emitPackProgress(id: string, progress: number | null, message: string): void {
+  for (const listener of packListeners) listener({ id, progress, message })
+}
 
 function blobUrl(data: BlobPart, type: string): string {
   return URL.createObjectURL(new Blob([data], { type }))
@@ -343,6 +386,57 @@ export function installHarnessBridge(): void {
     assetFileUrl: async (relative: string) => relative,
     assetFontData: unsupported('Font loading'),
     transitionLibrary: async () => [],
+
+    /*
+     * Asset packs, SIMULATED — and the one place this file fakes a result on
+     * purpose.
+     *
+     * A download is real work elsewhere, so by the rule above this should
+     * refuse. But the thing worth looking at here is not the download: it is
+     * the button's state machine — bar, indeterminate stage, cancel, installed,
+     * remove, try again — and every one of those is renderer logic. Refusing
+     * would leave a panel of four greyed buttons with nothing to click, which
+     * checks nothing at all.
+     *
+     * So the bytes are imaginary and the catalog stays empty, which it does in
+     * every other harness state too. Nothing here says anything about whether a
+     * real pack unpacks; `tests/assetPacks.test.ts` is what covers that.
+     */
+    assetPacks: async () => harnessPacks.map((pack) => ({ ...pack })),
+    installAssetPack: async (id: string) => {
+      const pack = harnessPacks.find((p) => p.id === id)
+      if (!pack) throw new Error(`There is no pack called ${id}`)
+      packCancels.delete(id)
+
+      for (let step = 0; step <= 10; step++) {
+        await new Promise((resolve) => setTimeout(resolve, 120))
+        if (packCancels.has(id)) {
+          packCancels.delete(id)
+          throw new Error('Cancelled')
+        }
+        emitPackProgress(id, step / 10, `fetching ${pack.name}`)
+      }
+      // The two stages with no total, which is what the striped bar is for.
+      emitPackProgress(id, null, 'checking what arrived')
+      await new Promise((resolve) => setTimeout(resolve, 250))
+      emitPackProgress(id, null, 'unpacking')
+      await new Promise((resolve) => setTimeout(resolve, 250))
+
+      pack.state = { kind: 'installed', version: pack.version }
+      return { ...pack }
+    },
+    cancelAssetPack: async (id: string) => {
+      packCancels.add(id)
+    },
+    removeAssetPack: async (id: string) => {
+      const pack = harnessPacks.find((p) => p.id === id)
+      if (pack) pack.state = { kind: 'available' }
+      return harnessPacks.map((entry) => ({ ...entry }))
+    },
+    onPackProgress: (cb: (update: { id: string; progress: number | null; message: string }) => void) => {
+      packListeners.add(cb)
+      return () => packListeners.delete(cb)
+    },
 
     analyseBeats: async (_path: string, range?: { startMs?: number; endMs?: number }) =>
       fakeBeats((range?.endMs ?? 30_000) - (range?.startMs ?? 0)),

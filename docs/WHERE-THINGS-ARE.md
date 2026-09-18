@@ -28,6 +28,13 @@ Three buttons above it make clips out of nothing:
 **Library** — the shipped assets: transitions, stickers, props, sounds, titles.
 Drag onto the timeline. Transitions must be dropped on a clip's incoming edge.
 
+The **package button** beside the search box opens the **asset packs** — the
+downloads that put things in here in the first place. It opens on its own the
+first time the library is empty, which in an installed build is the first launch:
+an installer ships no assets at all, so "Nothing here." is where most people
+start and the offer has to be in it. See `docs/ASSETS.md`. Nothing in the editor
+needs a pack; they add choices.
+
 **Text** — title templates.
 
 **Auto** — the automations. See §5.

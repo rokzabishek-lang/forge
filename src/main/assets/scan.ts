@@ -109,12 +109,13 @@ async function titleMeta(file: string): Promise<{ width: number; height: number;
  * is gitignored, so a CI-built installer has none (docs/PACKAGING.md). This
  * branch is what a development checkout uses.
  *
- * Resolved synchronously from a flag `refreshAssetsRoot()` sets, because it is
- * read on nearly every catalog call and an await on each would be silly.
+ * Resolved synchronously from a flag, because it is read on nearly every
+ * catalog call and an await on each would be silly. `refreshPacksInstalled()`
+ * in `./packs` is what does the disk check and sets it — at startup, and after
+ * every install and removal.
  */
 let packsInstalled = false
 
-/** Re-check whether any pack is installed. Called at startup and after each install. */
 export function setPacksInstalled(value: boolean): void {
   packsInstalled = value
 }

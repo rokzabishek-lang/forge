@@ -28,6 +28,7 @@ import { ensureLooks } from './looks'
 import { separateStems } from './separate'
 import { speak, voiceOptions, voiceStatus } from './voice'
 import { loadCatalog, resolveAssetFile, assetsRootExists, assetsRoot } from './assets/scan'
+import { installPack, listPacks, refreshPacksInstalled, removePack } from './assets/packs'
 import { preparePlaceableFile, placeableName } from './assets/place'
 import { readTitleSlots, renderSolid, renderText, renderTitle, writeTitleImage, writeTitleFrame, clearTitleFrames } from './titles'
 import { tagMasks } from './transitions/maskTags'
@@ -259,9 +260,25 @@ export function registerIpc(getWindow: () => BrowserWindow | null): JobQueue {
    * entries into transition definitions on every export would be wasted work.
    */
   let maskTransitions: TransitionDef[] | null = null
+
+  /*
+   * Which folder the catalog scans depends on whether a pack is installed, and
+   * that is a disk check — so it is started once, here, and AWAITED by
+   * everything that resolves an asset path.
+   *
+   * Setting the flag from a floating promise at startup would have been a race
+   * against the first scan, lost silently and only on a slow disk: the catalog
+   * would be built from the empty bundled folder, cached with that root, and
+   * the packs the user downloaded would simply not be there until the next
+   * launch. Cheap enough to gate on — one readdir, once.
+   */
+  let packsPrimed: Promise<unknown> | null = null
+  const primePacks = (): Promise<unknown> => (packsPrimed ??= refreshPacksInstalled())
+
   const getMaskTransitions = async (): Promise<TransitionDef[]> => {
     if (maskTransitions) return maskTransitions
 
+    await primePacks()
     const catalog = await loadCatalog()
     const entries = entriesOfKind(catalog, 'transition').map((entry) => ({
       id: entry.id,
@@ -416,6 +433,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): JobQueue {
 
   ipcMain.handle('assets:catalog', async (_e, force: unknown) => {
     if (force === true) maskTransitions = null
+    await primePacks()
     const catalog = await loadCatalog(force === true)
     return {
       catalog,
@@ -444,6 +462,75 @@ export function registerIpc(getWindow: () => BrowserWindow | null): JobQueue {
     // Copy into a plain ArrayBuffer: a Node Buffer is a view onto a shared pool,
     // and sending it whole would ship far more bytes than the font.
     return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)
+  })
+
+  /* ---------------------------------------------------------- asset packs */
+
+  /** Installs in flight, so each has one cancel and a second press is refused. */
+  const installs = new Map<string, AbortController>()
+
+  ipcMain.handle('assets:packs', async (_e, refresh: unknown) => {
+    await primePacks()
+    return listPacks({ refresh: refresh === true })
+  })
+
+  /**
+   * Fetch and install one pack, by id.
+   *
+   * The id is the only thing the renderer gets to choose. The URL, checksum and
+   * size all come from the manifest main already holds — a renderer that could
+   * pass a URL here would be a renderer that could make the app download and
+   * unpack anything at all.
+   */
+  ipcMain.handle('assets:installPack', async (_e, id: unknown) => {
+    if (typeof id !== 'string') throw new Error('Installing a pack needs its id')
+    if (installs.has(id)) throw new Error('That pack is already downloading')
+
+    const pack = (await listPacks()).find((entry) => entry.id === id)
+    if (!pack) throw new Error(`There is no pack called ${id}`)
+
+    const controller = new AbortController()
+    installs.set(id, controller)
+    try {
+      const listing = await installPack(pack, {
+        signal: controller.signal,
+        onProgress: (progress, message) => {
+          getWindow()?.webContents.send('assets:packProgress', { id, progress, message })
+        }
+      })
+
+      /*
+       * The catalog has to be rebuilt, not just invalidated.
+       *
+       * Its on-disk cache is keyed by the root it scanned, and installing a
+       * SECOND pack does not change that root — so an unforced load would come
+       * straight back with a catalog that predates the download. Rescanning
+       * here also means `transitions:library` is right the moment the button
+       * finishes, rather than on whatever call happens to force it next.
+       */
+      await refreshPacksInstalled()
+      maskTransitions = null
+      await loadCatalog(true)
+      return listing
+    } finally {
+      installs.delete(id)
+    }
+  })
+
+  ipcMain.handle('assets:cancelPack', (_e, id: unknown) => {
+    if (typeof id !== 'string') throw new Error('Cancelling a pack needs its id')
+    // Cancelling one that is not running is a no-op, the same as a render.
+    installs.get(id)?.abort()
+  })
+
+  ipcMain.handle('assets:removePack', async (_e, id: unknown) => {
+    if (typeof id !== 'string') throw new Error('Removing a pack needs its id')
+    installs.get(id)?.abort()
+    await removePack(id)
+    await refreshPacksInstalled()
+    maskTransitions = null
+    await loadCatalog(true)
+    return listPacks()
   })
 
   ipcMain.handle('audio:beats', async (_e, payload: unknown) => {

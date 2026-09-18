@@ -7,10 +7,13 @@ import {
   isValidPackId,
   MANIFEST_VERSION,
   mergeManifest,
+  orderPacks,
+  packButton,
   packProgress,
   packState,
   safeMemberPath,
-  type Pack
+  type Pack,
+  type PackListing
 } from '@shared/assets/pack'
 import { readTar, TarError } from '@shared/assets/tar'
 
@@ -276,5 +279,98 @@ describe('what the button says', () => {
     expect(formatBytes(512)).toBe('512 B')
     expect(formatBytes(85_000_000)).toBe('81 MB')
     expect(formatBytes(1_400_000_000)).toBe('1.3 GB')
+  })
+
+  it('asks for the download, with what it will cost', () => {
+    const button = packButton(PACK, { kind: 'available' }, null, null)
+    expect(button).toMatchObject({ action: 'install', busy: false, progress: null })
+    expect(button.label).toContain('81 MB')
+    expect(button.detail).toBe(PACK.summary)
+  })
+
+  it('cannot be pressed before the release is cut', () => {
+    const button = packButton(PACK, { kind: 'unpublished' }, null, null)
+    expect(button.action).toBeNull()
+    expect(button.label).toMatch(/not yet/i)
+  })
+
+  it('offers a removal once it is installed, not another download', () => {
+    expect(packButton(PACK, { kind: 'installed', version: 2 }, null, null)).toMatchObject({
+      action: 'remove',
+      label: 'Remove'
+    })
+  })
+
+  it('names both versions when one is stale, rather than just "update"', () => {
+    // "Update" alone cannot be judged. Which version is here and which is
+    // waiting is the entire question somebody has at that moment.
+    const button = packButton(PACK, { kind: 'stale', installed: 1 }, null, null)
+    expect(button.action).toBe('install')
+    expect(button.detail).toContain('1')
+    expect(button.detail).toContain('2')
+  })
+
+  it('shows only the cancel while a download is running, whatever is on disk', () => {
+    /*
+     * Including over `installed`, which is what a re-download looks like the
+     * whole time it runs. A "Remove" button beside a moving bar invites
+     * deleting the thing currently being written.
+     */
+    for (const state of [
+      { kind: 'available' as const },
+      { kind: 'stale' as const, installed: 1 },
+      { kind: 'installed' as const, version: 2 }
+    ]) {
+      const button = packButton(PACK, state, { progress: 0.4, message: 'fetching' }, null)
+      expect(button, state.kind).toMatchObject({
+        action: 'cancel',
+        busy: true,
+        progress: 0.4,
+        detail: 'fetching'
+      })
+    }
+  })
+
+  it('keeps an unknown total as no bar rather than a bar at zero', () => {
+    // Checksumming and unpacking report no total. A bar frozen at the left
+    // reads as a hang, which is the moment somebody force-quits.
+    const button = packButton(PACK, { kind: 'available' }, { progress: null, message: 'unpacking' }, null)
+    expect(button.progress).toBeNull()
+    expect(button.busy).toBe(true)
+  })
+
+  it('offers another go after a failure, even when a working version is installed', () => {
+    /*
+     * A failed UPDATE leaves the previous version installed and working, so the
+     * state on disk still reads `installed` — and a button saying "Remove"
+     * there answers a question nobody asked.
+     */
+    const button = packButton(PACK, { kind: 'installed', version: 1 }, null, 'checksum did not match')
+    expect(button.action).toBe('install')
+    expect(button.label).toMatch(/again/i)
+    expect(button.detail).toBe('checksum did not match')
+  })
+
+  it('does not offer a retry for something that was never fetchable', () => {
+    const button = packButton(PACK, { kind: 'unpublished' }, null, 'stale error from before')
+    expect(button.action).toBeNull()
+  })
+
+  it('offers the library first, then categories by name', () => {
+    const listing = (id: string, name: string, group: Pack['group']): PackListing => ({
+      ...PACK,
+      id,
+      name,
+      group,
+      state: { kind: 'available' }
+    })
+    const ordered = orderPacks([
+      listing('stickers-telugu', 'Telugu reactions', 'stickers'),
+      listing('stickers-hindi', 'Hindi punchlines', 'stickers'),
+      listing('library', 'Asset library', 'library')
+    ])
+    // The library changes what the rest of the app can do; a category only adds
+    // stickers to it.
+    expect(ordered.map((p) => p.id)).toEqual(['library', 'stickers-hindi', 'stickers-telugu'])
   })
 })

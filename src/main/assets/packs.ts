@@ -11,9 +11,10 @@ import {
   packState,
   safeMemberPath,
   type Pack,
-  type PackState
+  type PackListing
 } from '@shared/assets/pack'
 import { readTar } from '@shared/assets/tar'
+import { setPacksInstalled } from './scan'
 import { CancelledError } from '../ffmpeg/run'
 
 /**
@@ -76,9 +77,22 @@ export async function packRootHasContent(): Promise<boolean> {
   }
 }
 
-export interface PackListing extends Pack {
-  state: PackState
+/**
+ * Point the catalog at the pack root, or away from it.
+ *
+ * `assetsRoot()` resolves synchronously because it is read on nearly every
+ * catalog call, so the disk check that decides it lives here and sets a flag.
+ * Called once at startup and again after every install and removal — a pack
+ * that arrived and a root that still points at the empty bundled folder is the
+ * same to the user as a download that did nothing.
+ */
+export async function refreshPacksInstalled(): Promise<boolean> {
+  const has = await packRootHasContent()
+  setPacksInstalled(has)
+  return has
 }
+
+export type { PackListing }
 
 /**
  * Every pack this build knows about, with what is installed.

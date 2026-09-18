@@ -5,6 +5,7 @@ import type { DecisionRecord } from '@shared/project'
 import type { Transcript } from '@shared/transcript'
 import type { HelloResult } from '@shared/sidecar/protocol'
 import type { AssetCatalog } from '@shared/assets/catalog'
+import type { PackListing } from '@shared/assets/pack'
 import type { TransitionDef } from '@shared/transitions/registry'
 import type { MusicAnalysis } from '@shared/automation/cutPlan'
 import type { IngestRequest } from '@shared/ingest/args'
@@ -82,6 +83,38 @@ const api = {
     ipcRenderer.invoke('assets:fileUrl', relativePath),
   assetFontData: (relativePath: string): Promise<ArrayBuffer> =>
     ipcRenderer.invoke('assets:fontData', relativePath),
+
+  /**
+   * The downloadable asset packs, with what is installed.
+   *
+   * `refresh` asks main to look for a newer published list first; without it
+   * this answers from what the build shipped knowing about, which is instant
+   * and is a complete answer on a machine with no network.
+   */
+  assetPacks: (refresh?: boolean): Promise<PackListing[]> =>
+    ipcRenderer.invoke('assets:packs', refresh),
+  /**
+   * Fetch and install one, by id — the only thing the renderer chooses. Rejects
+   * if it was cancelled, so a caller that cancelled should expect that and not
+   * show it as a failure.
+   */
+  installAssetPack: (id: string): Promise<PackListing> =>
+    ipcRenderer.invoke('assets:installPack', id),
+  cancelAssetPack: (id: string): Promise<void> => ipcRenderer.invoke('assets:cancelPack', id),
+  /** Returns the list again, so the caller does not have to ask twice. */
+  removeAssetPack: (id: string): Promise<PackListing[]> =>
+    ipcRenderer.invoke('assets:removePack', id),
+
+  onPackProgress: (
+    cb: (update: { id: string; progress: number | null; message: string }) => void
+  ): (() => void) => {
+    const listener = (
+      _e: unknown,
+      update: { id: string; progress: number | null; message: string }
+    ): void => cb(update)
+    ipcRenderer.on('assets:packProgress', listener)
+    return () => ipcRenderer.removeListener('assets:packProgress', listener)
+  },
   transitionLibrary: (): Promise<TransitionDef[]> => ipcRenderer.invoke('transitions:library'),
   placeAsset: (file: string, fps: number): Promise<MediaAsset> =>
     ipcRenderer.invoke('assets:place', { file, fps }),

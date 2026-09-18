@@ -165,6 +165,109 @@ export function packState(pack: Pack, installed: number | null): PackState {
   return { kind: 'installed', version: installed }
 }
 
+/** A pack plus what is on disk — what both sides of the IPC actually pass. */
+export interface PackListing extends Pack {
+  state: PackState
+}
+
+/** A download in flight, as the renderer knows it. */
+export interface PackProgress {
+  /** 0..1, or null while the total is unknown. */
+  progress: number | null
+  message: string
+}
+
+export interface PackButton {
+  /** What pressing it does. `null` means it cannot be pressed. */
+  action: 'install' | 'cancel' | 'remove' | null
+  label: string
+  /** A bar to draw, or null for no bar rather than a bar at zero. */
+  progress: number | null
+  /** The line under the button, in the user's words. */
+  detail: string
+  busy: boolean
+}
+
+/**
+ * One pack, as one button.
+ *
+ * Pure so the thing a user will actually judge the feature by — whether the
+ * button says the true thing at each moment — is decided somewhere it can be
+ * tested. The ORDER of these branches is the whole content of the function:
+ *
+ * - A download in flight wins over everything. It is the only state the user
+ *   can see changing, and offering "Download" beside a moving bar invites a
+ *   second one.
+ * - A failure wins over what is on disk, including `installed`. A failed
+ *   UPDATE leaves the old version installed and working, and a button reading
+ *   "Remove" there answers a question nobody asked — the user wants another go.
+ * - Unpublished is last, and unreachable from the other two: nothing can be
+ *   fetched or fail before its release is cut.
+ */
+export function packButton(
+  pack: Pack,
+  state: PackState,
+  inFlight: PackProgress | null,
+  error: string | null
+): PackButton {
+  if (inFlight) {
+    return {
+      action: 'cancel',
+      label: 'Cancel',
+      progress: inFlight.progress,
+      detail: inFlight.message,
+      busy: true
+    }
+  }
+
+  if (error && state.kind !== 'unpublished') {
+    return { action: 'install', label: 'Try again', progress: null, detail: error, busy: false }
+  }
+
+  switch (state.kind) {
+    case 'unpublished':
+      return {
+        action: null,
+        label: 'Not yet released',
+        progress: null,
+        detail: pack.summary,
+        busy: false
+      }
+    case 'available':
+      return {
+        action: 'install',
+        label: `Get · ${formatBytes(pack.bytes)}`,
+        progress: null,
+        detail: pack.summary,
+        busy: false
+      }
+    case 'stale':
+      return {
+        action: 'install',
+        label: `Update · ${formatBytes(pack.bytes)}`,
+        progress: null,
+        detail: `Version ${state.installed} is installed, ${pack.version} is available`,
+        busy: false
+      }
+    case 'installed':
+      return { action: 'remove', label: 'Remove', progress: null, detail: 'Installed', busy: false }
+  }
+}
+
+/**
+ * Packs in the order they should be offered.
+ *
+ * The asset library first — it is the one that changes what the rest of the app
+ * can do, where a sticker category only adds stickers. Then categories by name,
+ * so a list that grows to a dozen stays somewhere the eye can find a row again.
+ */
+export function orderPacks(packs: PackListing[]): PackListing[] {
+  return [...packs].sort((a, b) => {
+    if (a.group !== b.group) return a.group === 'library' ? -1 : 1
+    return a.name.localeCompare(b.name)
+  })
+}
+
 /**
  * Is this archive member safe to write?
  *

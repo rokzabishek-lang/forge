@@ -110,11 +110,53 @@ parses in pure TypeScript — so installing a pack needs no native dependency, n
 bundled binary and no `tar` on PATH. Every one of those is a thing that can be
 missing on a machine nobody can see.
 
+### Where it is in the UI
+
+In the **Library** panel, and it opens **by itself when the library is empty** —
+which in a packaged build is every first launch, because `assets/` is gitignored
+and an installer ships none (`docs/PACKAGING.md`). "Nothing here." is the screen
+most people will meet first, and putting the packs behind a control they would
+have to go looking for makes that dead end look like the product. There is also
+a package button in the panel's header for everyone else.
+
+It auto-opens **once**, then the button owns it. Deriving it from "is the library
+empty" instead meant the list vanished the moment an install finished, taking the
+Remove button and every other pack with it.
+
+| piece | file |
+|---|---|
+| what each button says | `packButton()` in `src/shared/assets/pack.ts` — pure, and tested |
+| the panel | `src/renderer/src/components/PackList.tsx` |
+| the state | `src/renderer/src/packs.ts` |
+| IPC | `assets:packs`, `assets:installPack`, `assets:cancelPack`, `assets:removePack`, and `assets:packProgress` events |
+
+Three things that are less obvious than they look:
+
+**The renderer passes an id, never a URL.** The URL, checksum and size all come
+from the manifest main already holds. A renderer that could pass a URL here
+would be a renderer that could make the app download and unpack anything at all.
+
+**Installing rescans the catalog in main, forcibly.** The on-disk catalog cache
+is keyed by the root it scanned, and installing a SECOND pack does not change
+that root — so an unforced load comes back with a catalog that predates the
+download.
+
+**A cancel is not a failure.** `installPack` rejects with `CancelledError` either
+way, so the renderer records the ids it cancelled rather than matching on the
+message — otherwise `"Cancelled"` becomes a load-bearing string across the IPC
+boundary. It then re-reads the list rather than guessing: a cancelled install
+leaves whatever was there before, which may be an older version or nothing.
+
 **What remains before any of it can be used:** the packs have to be built and
 published. `BUILT_IN_MANIFEST` carries the library entry with an empty
 `sha256`, and `isPublished()` hides any pack in that state — so the UI offers
-nothing rather than offering a download that 404s. Filling in the checksum and
-cutting the release is what turns it on.
+nothing rather than offering a download that 404s. **Until then the panel shows
+its packs greyed, with one line under the list saying none have been released
+yet.** Said once, under the list, rather than on each disabled button: every
+pack being unreleased is a fact about the project, not about the packs, and a
+person reading four greyed buttons with no explanation reasonably concludes the
+feature is broken. Filling in the checksum and cutting the release is what turns
+it on.
 
 The original three options, for the record:
 

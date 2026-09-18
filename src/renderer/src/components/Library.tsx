@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { RefreshCw, Search } from 'lucide-react'
+import { Package, RefreshCw, Search } from 'lucide-react'
 import type React from 'react'
 import type { AssetKind, CatalogEntry, FontMeta, TitleMeta } from '@shared/assets/catalog'
 import { searchEntries } from '@shared/assets/catalog'
@@ -8,6 +8,7 @@ import { useCatalog } from '../catalog'
 import { useEditor } from '../store'
 import { assetUrl } from '../media'
 import { setDragPayload } from '../dragPayload'
+import { PackList } from './PackList'
 
 const KINDS: { id: AssetKind; label: string }[] = [
   { id: 'font', label: 'Fonts' },
@@ -36,12 +37,36 @@ export function Library(): ReactNode {
   const [kind, setKind] = useState<AssetKind>('font')
   const [query, setQuery] = useState('')
   const [limit, setLimit] = useState(PAGE)
+  const [showPacks, setShowPacks] = useState(false)
+  const autoOpenedPacks = useRef(false)
   const scrollerRef = useRef<HTMLDivElement | null>(null)
   const sentinelRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     if (!catalog && !loading) void load()
   }, [catalog, loading, load])
+
+  const empty = (catalog?.entries.length ?? 0) === 0
+
+  /*
+   * An empty library IS the offer.
+   *
+   * A packaged build ships with no assets at all (docs/PACKAGING.md), so the
+   * first thing most people will ever see here is "Nothing here." Putting the
+   * packs behind a button they would have to find first makes that dead end
+   * look like the product.
+   *
+   * Opened once, then left alone — deriving it from `empty` instead meant the
+   * list vanished the instant an install finished, taking the Remove button and
+   * every other pack with it. The panel that just did something is not the
+   * panel to make disappear; after this the toggle owns it.
+   */
+  useEffect(() => {
+    if (catalog && empty && !autoOpenedPacks.current) {
+      autoOpenedPacks.current = true
+      setShowPacks(true)
+    }
+  }, [catalog, empty])
 
   const counts = useMemo(() => {
     const totals: Partial<Record<AssetKind, number>> = {}
@@ -92,6 +117,15 @@ export function Library(): ReactNode {
           {matches.length}
         </span>
         <button
+          onClick={() => setShowPacks((open) => !open)}
+          title="Asset packs — download more fonts, transitions and stickers"
+          className={`shrink-0 rounded p-0.5 hover:bg-ink-800 hover:text-ink-200 ${
+            showPacks ? 'text-flame-400' : 'text-ink-600'
+          }`}
+        >
+          <Package size={11} />
+        </button>
+        <button
           onClick={() => void load(true)}
           title="Rescan the asset library"
           className="shrink-0 rounded p-0.5 text-ink-600 hover:bg-ink-800 hover:text-ink-200"
@@ -131,6 +165,12 @@ export function Library(): ReactNode {
             Nothing here.
             <br />
             <span className="text-ink-700">Looked in {root || 'the assets folder'}</span>
+          </div>
+        )}
+
+        {showPacks && (
+          <div className={`-mx-2 ${empty ? '' : 'mb-2 border-b border-ink-800 pb-1'}`}>
+            <PackList />
           </div>
         )}
 
