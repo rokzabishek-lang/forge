@@ -1294,6 +1294,23 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
 
   const addAudio = (index: number, clip: Clip, label: string, into: string[]): void => {
     const volume = clip.volume ?? 1
+    /*
+     * A muted clip is not a quiet input, it is not an input.
+     *
+     * Mixing it changes nothing in the output — padding plus `volume=N` cancels
+     * amix's renormalisation exactly, so silence in is silence out — but it
+     * decodes a stream, builds a filter chain, and pushes the audio tail off the
+     * single-source `anull` path onto the full apad/atrim/amix workaround, which
+     * is the branch carrying every 2018-ffmpeg compromise. Stickers land muted
+     * and their colour files DO carry an aac stream, so on a timeline of them
+     * this was the normal case rather than an edge one.
+     *
+     * The guard lives here rather than at the two call sites so picture audio
+     * and audio-track clips cannot drift apart. `volume` is a plain scalar and
+     * is not keyframable, so there is no "starts at zero and rises" case this
+     * would wrongly drop.
+     */
+    if (volume === 0) return
     const delayMs = Math.round(framesToSeconds(clip.start, fps) * 1000)
     const chain = [
       'aformat=sample_fmts=fltp:channel_layouts=stereo',

@@ -291,6 +291,50 @@ describe('audio track mixing', () => {
     const filters = argString(buildRenderPlan({ project: muted, outputPath: '/o.mp4' }).args)
     expect(filters).not.toContain('amix')
   })
+
+  /*
+   * A clip muted to zero is not an input.
+   *
+   * Mixing it is not WRONG — padding plus `volume=N` cancels amix's
+   * renormalisation exactly, so silence in is silence out — which is why this
+   * went unnoticed. The cost is that it decodes a stream and drags the audio
+   * tail off the single-source `anull` path onto the full apad/atrim/amix
+   * workaround, the branch carrying every 2018-ffmpeg compromise.
+   *
+   * Not a hypothetical: stickers land muted, and their `.colour.mp4` files DO
+   * carry an aac stream (the `.matte.mp4` does not), so a timeline of stickers
+   * made this the normal case rather than an edge one.
+   */
+  it('drops an audio-track clip muted to zero rather than mixing silence', () => {
+    const filters = argString(
+      buildRenderPlan({ project: withMusic({ volume: 0 }), outputPath: '/o.mp4' }).args
+    )
+    // Only the picture's audio is left, so no mixer at all.
+    expect(filters).not.toContain('amix')
+    expect(filters).toContain('anull[aout]')
+  })
+
+  it('drops the picture’s own audio when the clip is muted to zero', () => {
+    const base = withMusic()
+    const muted = {
+      ...base,
+      clips: base.clips.map((c) => (c.id === 'v' ? { ...c, volume: 0 } : c))
+    }
+    const filters = argString(buildRenderPlan({ project: muted, outputPath: '/o.mp4' }).args)
+    // The guard sits inside addAudio, so picture audio and audio-track clips
+    // cannot drift apart — this is the same rule as the test above, other side.
+    expect(filters).not.toContain('[va0]')
+    expect(filters).not.toContain('amix')
+  })
+
+  it('still mixes a clip that is merely quiet', () => {
+    // The boundary the guard must not overshoot: 0.0001 is audible work.
+    const filters = argString(
+      buildRenderPlan({ project: withMusic({ volume: 0.0001 }), outputPath: '/o.mp4' }).args
+    )
+    expect(filters).toContain('volume=0.0001')
+    expect(filters).toContain('amix=inputs=2:')
+  })
 })
 
 
