@@ -19,6 +19,14 @@ import { emptyProject, type Clip, type MediaAsset, type Project } from '@shared/
  * fine. Judging by release number alone would have sent us rewriting working
  * code.
  *
+ * It nearly did. `amix`'s `weights` was blocked here as "4.2 — no pre-4.2
+ * equivalent", and both halves were wrong: the Windows build lists it
+ * (`weights <string> ... (default "1 1")`) and renders it at equal and unequal
+ * weights, and it IS the pre-4.2 equivalent the note said did not exist. It was
+ * blocked by reading a release number; it was unblocked by running the binary.
+ * If you reach for it to mix at unequal levels, it works — measure before
+ * adding it back here.
+ *
  * The rule that actually holds: an option works on Windows if it was MERGED
  * before 2018-12-17, whatever release first carried it. Three have not been:
  *
@@ -39,7 +47,6 @@ import { emptyProject, type Clip, type MediaAsset, type Project } from '@shared/
 /** Option or filter, the release it first shipped in, and what to use instead. */
 const TOO_NEW: { pattern: RegExp; since: string; why: string }[] = [
   { pattern: /\bnormalize=/, since: '4.2', why: 'amix — pad the inputs and scale by N instead' },
-  { pattern: /\bweights=/, since: '4.2', why: 'amix — no pre-4.2 equivalent; mix in stages' },
   { pattern: /anullsrc[^;,]*\bd(uration)?=/, since: '4.2', why: 'bound the stream with -t' },
   { pattern: /\badelay=[^;,]*\ball=/, since: '4.2', why: 'repeat the delay once per channel' },
   { pattern: /\b(pad_dur|whole_dur)=/, since: '4.2', why: 'apad — follow it with atrim=end=' },
