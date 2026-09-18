@@ -85,6 +85,39 @@ whoosh on the audio track at `beat_88` and it renders correctly today.
 
 ---
 
+## Decided — the files are packs, fetched on first use
+
+**This section's "open decision" is closed.** Option 2 was chosen and built:
+`src/shared/assets/pack.ts`, `src/shared/assets/tar.ts` and
+`src/main/assets/packs.ts`, with `tests/assetPacks.test.ts` covering them.
+
+Two things the original three options did not anticipate:
+
+**It is not one download.** The same machinery carries the sticker library
+(`docs/STICKERS.md`), and sheet ⑨ asks for categories — so categories are the
+unit. Someone editing Telugu content takes a ~14MB pack and never fetches
+SpongeBob. The asset library is pack #1; sticker categories are packs #2
+onwards.
+
+**Packs install under `userData`, not beside the app.** The install directory is
+inside the bundle on macOS and under `%LOCALAPPDATA%\Programs` on Windows, so
+writing there means an app update silently deletes everything downloaded.
+`assetsRoot()` prefers the pack root when anything is installed, falls back to
+whatever shipped, and `FORGE_ASSETS_DIR` still overrides both.
+
+Archives are `.tar.gz` rather than `.zip` because Node gunzips natively and tar
+parses in pure TypeScript — so installing a pack needs no native dependency, no
+bundled binary and no `tar` on PATH. Every one of those is a thing that can be
+missing on a machine nobody can see.
+
+**What remains before any of it can be used:** the packs have to be built and
+published. `BUILT_IN_MANIFEST` carries the library entry with an empty
+`sha256`, and `isPublished()` hides any pack in that state — so the UI offers
+nothing rather than offering a download that 404s. Filling in the checksum and
+cutting the release is what turns it on.
+
+The original three options, for the record:
+
 ## Open decision — where the files live
 
 The six catalogued directories total ~75 MB (transitions 46 MB, fonts 21 MB, stickers 8 MB).

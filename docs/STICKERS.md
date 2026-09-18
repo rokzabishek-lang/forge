@@ -68,6 +68,77 @@ perfect.
 terminated long before this was written, so keying the green is the only path —
 do not spend time looking for a better source. The green files are the source.
 
+### The recipe, measured
+
+Every number below came from running the chain on a real sticker from the vault
+(`107 - Telugu Comedy Reaction Hook 107_sticker.mp4`, 1280×720, 4.9s). Three of
+the four findings are counterintuitive, which is why they are written down.
+
+**`colorkey` beats `chromakey`.** The keyer meant for video left MORE green
+(5.59% vs 3.38%) and a harder edge. The green here is machine-generated and
+mathematically exact, so plain RGB distance wins over YUV chroma distance.
+
+**`despill` is the entire fix for fringing** — 3.38% → **0.00%**. Not a
+refinement; the thing that matters.
+
+**`blend` is the only real dial, and 0.10 is the answer:**
+
+| blend | subject | soft edge | |
+|---|---|---|---|
+| 0.02 | 29.5% | 1.44% | too hard, aliased |
+| **0.10** | **28.3%** | **2.40%** | **widest edge before damage** |
+| 0.20 | 21.1% | 9.41% | eating into the subject |
+| 0.35 | **5.1%** | 25.3% | subject destroyed |
+
+Past 0.10 the key stops softening the edge and starts dissolving the person. At
+0.35 only 5% of the subject is still solid. Anyone "improving" the softness by
+raising this is making it worse.
+
+**The chain:**
+
+    colorkey=0x00FE00:0.30:0.10
+      → despill=type=green
+      → alphaextract → erosion → boxblur=1:1     (pull in 1px, feather)
+      → alphamerge
+
+## The packing pipeline, and what it costs
+
+Keying is only half of what makes these look like stickers. The other half is
+the crop — measured on the same file, the subject occupies **942×542 of
+1280×720**, so cropping to content drops **45% of the pixels** and the sticker
+stops being a person floating in an empty rectangle.
+
+Per sticker, one pass:
+
+1. key → despill (above)
+2. `cropdetect` on the ALPHA, across the whole clip — the subject moves, so the
+   box is the union over time, not one frame
+3. crop to it, scale to 512 on the long edge (a sticker is an overlay)
+4. erode 1px + feather the matte
+5. encode a PAIR: `colour.mp4` crf 23, `matte.mp4` crf 26 (greyscale, compresses
+   hard), recombined with `alphamerge` at render — which `plan.ts` already does
+6. compare first and last frame → store `loops` on the catalog entry
+7. record name, category, dimensions, duration
+
+Measured output:
+
+| | |
+|---|---|
+| per sticker | **187 KB** (133 colour + 54 matte) — **29% of the original** |
+| all 845 | **~154 MB**, vs 539 MB raw |
+| **one category pack** | **~14 MB** |
+
+Verified by recombining the pair: **45% clean, 48.7% solid subject, 6% soft
+edge, 0.00% green.** The subject fraction nearly doubled from 28% purely from
+the crop.
+
+Runtime is about 2s per sticker, so the whole vault is ~30 minutes unattended,
+once.
+
+**Do NOT bake the die-cut border into the pack.** It would double the size, and
+the matte is already shipped — growing it into an outline is four filters at
+render time on a single sticker. Ship one matte, offer the border as a toggle.
+
 ### So: key once, at import. Never at render.
 
 Chroma keying every frame on every preview and every export is wasted work and
