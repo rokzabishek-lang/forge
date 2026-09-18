@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react'
-import { Crop, Grid3x3, MousePointer2, Scan, Brush, Circle, Droplet } from 'lucide-react'
+import { Crop, Grid3x3, MousePointer2, Scan, Brush, Circle, Droplet, Type } from 'lucide-react'
 import { useEditor } from '../store'
 import { defaultMask, type MaskMode } from '@shared/render/mask'
 
@@ -27,6 +27,15 @@ interface Tool {
   onClick?: () => void
   active?: boolean
   soon?: string
+  /**
+   * Nothing behind it yet — as opposed to merely unavailable right now.
+   *
+   * Mask and Blur drop their handler when no clip is selected, so "has no
+   * onClick" is not the same question as "is not built", and using it to place
+   * the divider moved the line in front of two working tools whenever nothing
+   * was selected.
+   */
+  unbuilt?: true
 }
 
 export function Toolbox(): ReactNode {
@@ -38,6 +47,22 @@ export function Toolbox(): ReactNode {
   const selectedClipId = useEditor((s) => s.selectedClipId)
   const selected = useEditor((s) => s.project.clips.find((c) => c.id === s.selectedClipId) ?? null)
   const setMask = useEditor((s) => s.setMask)
+  const addTextClip = useEditor((s) => s.addTextClip)
+  const playhead = useEditor((s) => s.playhead)
+  const tracks = useEditor((s) => s.project.tracks)
+
+  /**
+   * Text over the frame, on the topmost video track.
+   *
+   * `addTextClip` stacks rather than sequences, so it lands ON what is showing
+   * rather than after it — and grows a new track when the top one is busy at
+   * that moment, which is what makes a second line of text a second layer.
+   */
+  const addTextHere = async (): Promise<void> => {
+    const video = tracks.filter((t) => t.kind === 'video' && !t.locked)
+    const top = video[video.length - 1] ?? tracks.find((t) => t.kind === 'video')
+    if (top) await addTextClip(top.id, playhead)
+  }
 
   /*
    * One button both opens the tool and puts a shape on the picture.
@@ -92,6 +117,30 @@ export function Toolbox(): ReactNode {
       onClick: () => toggleGuide('safe')
     },
     {
+      /*
+       * Text ON the picture, as opposed to text as a thing on the timeline.
+       *
+       * Both make the same kind of clip — a canvas-sized transparent card that
+       * stacks above whatever is under the playhead — so whether it reads as a
+       * title card or as a caption over the footage depended entirely on
+       * whether something happened to be underneath, and nothing said which
+       * you were getting.
+       *
+       * Where you reach for it is what settles that. This strip acts on the
+       * frame you are looking at, so pressing T here plainly means "put words
+       * on this picture"; `+ Text` in the left panel adds a text thing to the
+       * timeline, which is where a standalone card belongs.
+       */
+      id: 'text',
+      label: 'Text',
+      hint: 'Put text on the picture — it lands over whatever is under the playhead',
+      icon: Type,
+      onClick: () => {
+        setPreviewTool('select')
+        void addTextHere()
+      }
+    },
+    {
       id: 'mask',
       label: 'Mask',
       hint: selected
@@ -118,9 +167,12 @@ export function Toolbox(): ReactNode {
       label: 'Paint',
       hint: 'Painting pixels frame by frame',
       icon: Brush,
-      soon: 'stills only, and a long way off'
+      soon: 'stills only, and a long way off',
+      unbuilt: true
     }
   ]
+
+  const firstUnbuilt = tools.findIndex((t) => t.unbuilt)
 
   return (
     <div className="flex h-full w-9 shrink-0 flex-col items-center gap-0.5 border-r border-ink-850 bg-ink-900 py-2">
@@ -129,8 +181,16 @@ export function Toolbox(): ReactNode {
         const ready = tool.onClick !== undefined
         return (
           <div key={tool.id} className="contents">
-            {/* A rule between what works and what does not. */}
-            {index === 6 && <div className="my-1 h-px w-5 bg-ink-800" />}
+            {/*
+              A rule between what is built and what is not.
+
+              This was a hard-coded `index === 6`, and adding Text in the
+              middle of the list silently slid it in front of Blur. Deriving it
+              from "has no handler" was no better: Mask and Blur drop theirs
+              when nothing is selected, so the line moved as you clicked
+              around. The tool says so itself instead.
+            */}
+            {index === firstUnbuilt && <div className="my-1 h-px w-5 bg-ink-800" />}
             <button
               onClick={tool.onClick}
               disabled={!ready}

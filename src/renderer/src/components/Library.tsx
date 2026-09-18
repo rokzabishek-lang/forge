@@ -220,17 +220,41 @@ export function Library(): ReactNode {
             {loading ? 'Scanning the asset library…' : 'No library loaded'}
           </div>
         )}
+        {/*
+          The offer comes BEFORE the dead end.
+
+          This used to render under "Nothing here", so on a short panel the
+          packs were below the fold and the first — often only — thing anyone
+          saw was the empty message. Reported from the Surface as "there was no
+          download option, it was empty".
+        */}
+        {showPacks && (
+          <div className={`-mx-2 ${empty ? '' : 'mb-2 border-b border-ink-800 pb-1'}`}>
+            <PackList />
+          </div>
+        )}
+
         {catalog && matches.length === 0 && (
           <div className="px-2 py-6 text-center text-[11px] leading-relaxed text-ink-600">
             Nothing here.
             <br />
-            <span className="text-ink-700">Looked in {root || 'the assets folder'}</span>
-          </div>
-        )}
-
-        {showPacks && (
-          <div className={`-mx-2 ${empty ? '' : 'mb-2 border-b border-ink-800 pb-1'}`}>
-            <PackList />
+            {/*
+              An empty DRAWER is not an empty library, and it needs its own way
+              out. Somebody on Stickers with fonts installed gets this message
+              and no grid — and the pack list only opens itself when the WHOLE
+              library is empty, so for them the only way in was an icon nobody
+              would think to press.
+            */}
+            {showPacks ? (
+              <span className="text-ink-700">Looked in {root || 'the assets folder'}</span>
+            ) : (
+              <button
+                onClick={() => setShowPacks(true)}
+                className="mt-1.5 rounded bg-ink-800 px-2 py-1 text-[10.5px] text-ink-300 hover:bg-ink-700 hover:text-ink-200"
+              >
+                Get {KINDS.find((k) => k.id === kind)?.label.toLowerCase() ?? 'assets'} →
+              </button>
+            )}
           </div>
         )}
 

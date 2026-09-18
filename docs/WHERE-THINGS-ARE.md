@@ -64,7 +64,7 @@ the preview says so and offers one click to go to it: a clip is only drawn while
 the playhead is over it, and handles can only exist over a frame being drawn.
 
 The tool strip runs down the left of the picture: Select, Reframe, Thirds, Safe
-areas, Mask, Blur — and Paint, which is greyed because painting pixels frame by
+areas, **Text**, Mask, Blur — and Paint, which is greyed because painting pixels frame by
 frame is a long way off and worth being honest about.
 
 The split view (Source | Output) is in the inspector under **Preview**. Drag the
