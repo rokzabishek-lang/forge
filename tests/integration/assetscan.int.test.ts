@@ -304,3 +304,54 @@ describe('clip stickers, described by the pack index', () => {
     await writeFile(join(dir, 'index.json'), good)
   })
 })
+
+describe('sounds a pack has named for itself', () => {
+  let sounds = ''
+
+  beforeAll(async () => {
+    sounds = await mkdtemp(join(tmpdir(), 'forge-assets-sfx-'))
+    const pack = join(sounds, 'sfx-meme-sounds', 'sfx')
+    await mkdir(pack, { recursive: true })
+    await writeFile(join(pack, '001-collect-item.m4a'), 'x')
+    await writeFile(join(pack, '002-bass-drop-vine-boom.m4a'), 'x')
+    await writeFile(join(pack, 'index.json'), JSON.stringify({
+      version: 1,
+      sfx: [
+        { key: '001-collect-item', title: 'Collect Item', file: '001-collect-item.m4a', durationMs: 1200 },
+        { key: '002-bass-drop-vine-boom', title: 'Bass Drop + Vine Boom', file: '002-bass-drop-vine-boom.m4a', durationMs: 2400 }
+      ]
+    }))
+    // A hand-placed library with no index, whose names must be left alone.
+    await mkdir(join(sounds, 'sfx'), { recursive: true })
+    await writeFile(join(sounds, 'sfx', '808_boom.wav'), 'x')
+  })
+
+  afterAll(async () => {
+    await rm(sounds, { recursive: true, force: true }).catch(() => undefined)
+  })
+
+  it('uses the title the pack states, not the numbered filename', async () => {
+    const sfx = entriesOfKind(await scanAssets(sounds), 'sfx')
+    expect(sfx.map((s) => s.name)).toContain('Collect Item')
+    expect(sfx.map((s) => s.name)).toContain('Bass Drop + Vine Boom')
+    expect(sfx.map((s) => s.name)).not.toContain('001 collect item')
+  })
+
+  it('leaves a library with no index exactly as it was', async () => {
+    /*
+     * The tempting fix was to strip a leading number in the fallback, which
+     * would rename `808 boom` to `boom`. An index prefix and a name that starts
+     * with digits are indistinguishable by looking, so only a pack that states
+     * a title gets one.
+     */
+    const sfx = entriesOfKind(await scanAssets(sounds), 'sfx')
+    expect(sfx.map((s) => s.name)).toContain('808 boom')
+  })
+
+  it('takes the duration from the index instead of leaving it null', async () => {
+    const sfx = entriesOfKind(await scanAssets(sounds), 'sfx')
+    expect(sfx.find((s) => s.name === 'Collect Item')!.meta).toEqual({ durationMs: 1200 })
+    // Unknown stays null rather than being invented.
+    expect(sfx.find((s) => s.name === '808 boom')!.meta).toEqual({ durationMs: null })
+  })
+})

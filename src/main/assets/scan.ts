@@ -188,17 +188,51 @@ export async function scanAssets(root = assetsRoot()): Promise<AssetCatalog> {
     })
   }
 
-  for (const file of await walkKind(root, 'sfx')) {
+  const sfxFiles = await walkKind(root, 'sfx')
+
+  /*
+   * Names and durations a pack already knows, rather than ones guessed from a
+   * filename.
+   *
+   * The meme sounds are keyed `001-collect-item.m4a` because the source is
+   * numbered, and deriving the name from that gives "001 collect item" 105
+   * times over. The pack's own index has "Collect Item".
+   *
+   * Stripping a leading number in the fallback would be wrong: the library's
+   * own `808 boom` would become `boom`. There is no telling an index prefix
+   * from a name by looking at it, so the answer is to use the title when the
+   * pack states one and leave every other library alone.
+   */
+  const sfxIndex = new Map<string, { title: string; durationMs: number | null }>()
+  for (const indexFile of sfxFiles.filter((file) => basename(file) === 'index.json')) {
+    try {
+      const parsed = JSON.parse(await readFile(indexFile, 'utf8')) as { sfx?: unknown[] }
+      for (const raw of Array.isArray(parsed.sfx) ? parsed.sfx : []) {
+        const item = raw as Record<string, unknown>
+        if (typeof item.file !== 'string' || item.file.includes('/')) continue
+        const duration = Number(item.durationMs)
+        sfxIndex.set(join(dirname(indexFile), item.file), {
+          title: typeof item.title === 'string' ? item.title : '',
+          durationMs: Number.isFinite(duration) && duration > 0 ? duration : null
+        })
+      }
+    } catch {
+      // A corrupt index costs its pack's names, not the catalog.
+    }
+  }
+
+  for (const file of sfxFiles) {
     if (!AUDIO_EXT.has(extname(file).toLowerCase())) continue
     const filename = basename(file)
-    const name = filename.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ')
+    const known = sfxIndex.get(file)
+    const name = known?.title || filename.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ')
     entries.push({
-      id: `sfx:${slugify(filename)}`,
+      id: `sfx:${slugify(rel(file))}`,
       kind: 'sfx',
       name,
       file: rel(file),
-      tags: name.split(' '),
-      meta: { durationMs: null }
+      tags: name.split(/\s+/).filter(Boolean),
+      meta: { durationMs: known?.durationMs ?? null }
     })
   }
 

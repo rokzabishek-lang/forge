@@ -329,8 +329,17 @@ Filenames come from a safe key with the title kept in the index, per "Two
 problems in the source material" above — and `build-pack.mjs` refuses an illegal
 name outright, so a pack that would break on Windows cannot be built.
 
-`04_Reels_Audio_Hooks_and_SFX` goes to `sfx-meme-sounds` as plain `.m4a`,
-needing no new code: they are ordinary sounds once the video is dropped.
+`04_Reels_Audio_Hooks_and_SFX` goes to `sfx-meme-sounds` as plain `.m4a`. They
+are ordinary sounds once the video is dropped — but the scanner did need one
+change, because the files are numbered (`001-collect-item.m4a`) and a name
+derived from that reads "001 collect item" 105 times over. It now prefers the
+title the pack's index states, and takes the duration from it too, which
+`SfxMeta` had always had a field for and never a value.
+
+**Stripping a leading number in the fallback would have been wrong**: the
+library's own `808 boom` becomes `boom`. An index prefix and a name that begins
+with digits cannot be told apart by looking, so only a pack that states a title
+gets one, and every hand-placed library is left exactly as it was.
 
 ### What the catalog knows
 
