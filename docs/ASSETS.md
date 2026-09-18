@@ -19,18 +19,28 @@ Not yet catalogued (no read access this session, but present in the same tree):
 
 ## How the catalog works
 
-A build-time scan (`scripts/scan-assets.mjs`) produces a manifest; the app never walks the
-filesystem at startup. Entries store paths **relative to an assets root** resolved at
-runtime, so "what assets exist" stays independent of "where they are installed" — the same
-manifest serves dev and a packaged build.
+`scanAssets` in [`src/main/assets/scan.ts`](../src/main/assets/scan.ts) walks the assets root
+at runtime and caches the result to `userData/asset-catalog.json`, invalidated when the root
+or the catalog format changes. The walk takes about a second for ~1,800 files, which is too
+long to repeat on every launch and fine to do once.
 
-```bash
-node scripts/scan-assets.mjs <assets-root> assets/catalog.json
-```
+> An earlier version of this file described a build-time `scripts/scan-assets.mjs` producing
+> a committed manifest. That script does not exist and the app does not work that way.
 
-Output: 304 KB for 1,803 entries. Query helpers (`searchCatalog`, `entriesOfKind`,
-`findEntry`) live in [`src/shared/assets/catalog.ts`](../src/shared/assets/catalog.ts) and are
-pure, so the asset browser is testable without touching disk.
+Entries store paths **relative to the assets root**, so "what assets exist" stays independent
+of "where they are installed" — which is what lets a pack install under `userData` and a
+development checkout use `assets/` with the same entries. Query helpers (`searchCatalog`,
+`entriesOfKind`, `findEntry`) live in
+[`src/shared/assets/catalog.ts`](../src/shared/assets/catalog.ts) and are pure, so the asset
+browser is testable without touching disk.
+
+**The root is scanned one level deep for packs.** `installPack` writes each pack to
+`<root>/<pack.id>/`, so an installed library's fonts are at `<root>/library/fonts`, not
+`<root>/fonts`. `dirsFor` unions the root itself with every non-dotted subdirectory that is
+not already a kind-folder name. This was a real bug and the bad kind: the download succeeded,
+the files were on disk, the receipt was written, and the Library said "Nothing here."
+Unioning is also what makes categories work — two sticker packs both contain `stickers/`, and
+the catalog is meant to be both.
 
 ---
 
@@ -146,6 +156,62 @@ way, so the renderer records the ids it cancelled rather than matching on the
 message — otherwise `"Cancelled"` becomes a load-bearing string across the IPC
 boundary. It then re-reads the list rather than guessing: a cancelled install
 leaves whatever was there before, which may be an older version or nothing.
+
+### Building and publishing a pack
+
+```bash
+node scripts/build-pack.mjs assets dist/library.tar.gz
+```
+
+Measured on the real library: **1,818 files, 77 MB unpacked, 57 MB compressed,
+2.6 seconds.**
+
+The script does three things `tar czf` does not, each for a reason this project
+has already paid for:
+
+**It refuses what the installer would refuse**, using the same `safeMemberPath`,
+imported from the app rather than reimplemented. A second copy of that rule
+drifts, and what it drifts into is a pack that builds green and then refuses to
+install after a 57 MB download. Confirmed against the exact filenames
+`docs/STICKERS.md` records — `India vs Pakistan … | Full Clash.svg` and
+`what?.svg` are both rejected before a byte is written.
+
+**It reads its own output back** — gunzips it, parses it with the app's own
+`readTar`, and compares every member byte for byte against the file on disk,
+before printing a checksum anybody might publish.
+
+**It is deterministic.** Sorted names, zeroed mtimes and ownership, normalised
+modes. Two builds of the same directory produce the same sha256 (verified), so a
+changed checksum means changed content rather than a changed clock. Names over
+100 bytes use a GNU long-name record, which both `readTar` and bsdtar read.
+
+### Packs are published from a separate, PUBLIC repo
+
+`rokzabishek-lang/forge-assets`, not the source repo.
+
+The app fetches a pack with a plain `fetch` and no credentials, and it has to
+stay that way: a token that reaches your own assets is a token in every user's
+app bundle. **GitHub answers an unauthenticated request for a private repo's
+release asset with a flat 404** — not a 403 — so a pack published from a private
+repo can never be installed by anyone, and the failure looks exactly like a
+missing file.
+
+This was found by fetching the published URL before writing the checksum, which
+is the entire reason that order exists. `curl` on the release asset returned
+`Not Found`, 9 bytes.
+
+Then, in order:
+
+1. Build the archive, and keep the `sha256` and `bytes` it prints.
+2. Cut the release on the **public assets repo** and upload the `.tar.gz`.
+3. **Fetch the published URL with no credentials and check the checksum
+   matches.** This is a step, not a formality — it is what caught the private
+   repo.
+4. **Only then** paste `sha256` and `bytes` into `BUILT_IN_MANIFEST`.
+
+Step 4 must come last. Filling in the checksum is what makes `isPublished()`
+true, and that is what puts a live button in front of a user — so doing it
+earlier ships a download that 404s.
 
 **What remains before any of it can be used:** the packs have to be built and
 published. `BUILT_IN_MANIFEST` carries the library entry with an empty

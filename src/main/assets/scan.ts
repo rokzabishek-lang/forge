@@ -30,15 +30,55 @@ const KIND_DIRS: Record<string, string[]> = {
   transition: ['transitions', 'transition']
 }
 
+/** The folder names that mean a KIND, so a pack's folder is not mistaken for one. */
+const KIND_DIR_NAMES = new Set(Object.values(KIND_DIRS).flat())
+
+/**
+ * The directories installed packs own, one level under the root.
+ *
+ * `installPack` writes each pack into `<root>/<pack.id>/`, so its fonts land in
+ * `<root>/library/fonts` and not `<root>/fonts`. Scanning only the root found
+ * none of them: the download succeeded, the files were on disk, the receipt was
+ * written, and the Library said "Nothing here." — which is this project's
+ * signature failure, everything green and nothing visible.
+ *
+ * Unioning them is also what makes categories work at all. Two sticker packs
+ * both contain `stickers/`, and the catalog is meant to be both.
+ */
+async function packDirs(root: string): Promise<string[]> {
+  let items
+  try {
+    items = await readdir(root, { withFileTypes: true })
+  } catch {
+    return []
+  }
+  return items
+    .filter(
+      (item) =>
+        item.isDirectory() &&
+        // `.packs` and any in-progress staging directory; the same rule `walk`
+        // uses, which is why staging is named with a leading dot.
+        !item.name.startsWith('.') &&
+        // A hand-placed library's own `fonts/` is not a pack.
+        !KIND_DIR_NAMES.has(item.name)
+    )
+    .map((item) => join(root, item.name))
+}
+
 /** Every existing directory for a kind; a library may split one across several. */
 async function dirsFor(root: string, kind: string): Promise<string[]> {
+  const aliases = KIND_DIRS[kind] ?? []
   const found: string[] = []
-  for (const name of KIND_DIRS[kind] ?? []) {
-    const dir = join(root, name)
-    try {
-      if ((await stat(dir)).isDirectory()) found.push(dir)
-    } catch {
-      // Not present under this alias.
+  // The root itself first — a hand-placed folder, or FORGE_ASSETS_DIR — then
+  // each installed pack.
+  for (const base of [root, ...(await packDirs(root))]) {
+    for (const name of aliases) {
+      const dir = join(base, name)
+      try {
+        if ((await stat(dir)).isDirectory()) found.push(dir)
+      } catch {
+        // Not present under this alias.
+      }
     }
   }
   return found

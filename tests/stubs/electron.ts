@@ -4,5 +4,12 @@
  */
 export const app = {
   isPackaged: false,
-  getPath: (name: string): string => `/tmp/forge-test/${name}`
+  /*
+   * `FORGE_TEST_USERDATA` lets a test point userData somewhere it may actually
+   * write. The default is fine for tests that only need a path to exist in a
+   * string; anything that puts bytes on disk — installing an asset pack — has
+   * to own a real directory it can clean up afterwards.
+   */
+  getPath: (name: string): string =>
+    `${process.env.FORGE_TEST_USERDATA ?? '/tmp/forge-test'}/${name}`
 }

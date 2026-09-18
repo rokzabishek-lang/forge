@@ -205,9 +205,29 @@ describe('which packs exist', () => {
     expect(isPublished(PACK)).toBe(true)
   })
 
-  it('reports the built-in library pack as unpublished for now', () => {
+  it('ships a library pack that is actually fetchable', () => {
     const library = BUILT_IN_MANIFEST.packs.find((p) => p.id === 'library')!
-    expect(packState(library, null).kind).toBe('unpublished')
+    expect(isPublished(library)).toBe(true)
+    expect(packState(library, null)).toEqual({ kind: 'available' })
+  })
+
+  it('publishes packs from somewhere that needs no login', () => {
+    /*
+     * GitHub answers an unauthenticated request for a PRIVATE repo's release
+     * asset with a flat 404 — not a 403 — so a pack published from the source
+     * repo can never be installed by anyone, and the failure is
+     * indistinguishable from a missing file. That cost a whole publish cycle
+     * once. Packs come from the separate public assets repo.
+     */
+    for (const pack of BUILT_IN_MANIFEST.packs) {
+      expect(pack.url, pack.id).not.toMatch(/github\.com\/[^/]+\/forge\//)
+    }
+  })
+
+  it('never ships a pack whose id could not be a directory name', () => {
+    for (const pack of BUILT_IN_MANIFEST.packs) {
+      expect(isValidPackId(pack.id), pack.id).toBe(true)
+    }
   })
 
   it('knows installed from stale from available', () => {

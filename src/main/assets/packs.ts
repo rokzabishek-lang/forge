@@ -175,7 +175,16 @@ export async function installPack(pack: Pack, options: InstallOptions = {}): Pro
    * complete, and it is written last for exactly that reason.
    */
   const target = join(packRoot(), pack.id)
-  const staging = `${target}.installing`
+  /*
+   * Dotted, so the catalog scanner skips it.
+   *
+   * `scanAssets` treats every non-dot directory under the root as an installed
+   * pack and scans it. A staging folder left behind by a crash — the one case
+   * the `catch` below cannot clean up — would otherwise be catalogued as a
+   * second copy of everything in it. One naming rule, already enforced by the
+   * dotfile skip in `walk`, rather than a second exclusion to keep in step.
+   */
+  const staging = join(packRoot(), `.${pack.id}.installing`)
   await rm(staging, { recursive: true, force: true })
   await mkdir(staging, { recursive: true })
 

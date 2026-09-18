@@ -67,12 +67,30 @@ export const BUILT_IN_MANIFEST: PackManifest = {
     {
       id: 'library',
       name: 'Asset library',
-      summary: '88 fonts, 412 transitions, 50 title templates, SFX and props',
+      summary: '88 fonts, 412 transitions, 1,239 emoji, 50 titles, 23 sounds',
       group: 'library',
       version: 1,
-      url: 'https://github.com/rokzabishek-lang/forge/releases/download/assets-v1/library.tar.gz',
-      sha256: '',
-      bytes: 85_000_000
+      /*
+       * A SEPARATE, PUBLIC repo, not the source one.
+       *
+       * The app fetches this with a plain `fetch` and no credentials, and it
+       * must stay that way — shipping a token to reach your own assets is a
+       * token in every user's app bundle. GitHub answers an unauthenticated
+       * request for a private repo's release asset with a flat 404, so a pack
+       * published from a private repo can never be installed by anyone. Found
+       * by fetching it before publishing the checksum, which is the whole
+       * reason that order exists.
+       */
+      url: 'https://github.com/rokzabishek-lang/forge-assets/releases/download/assets-v1/library.tar.gz',
+      /*
+       * Both printed by `scripts/build-pack.mjs`, and both verified against the
+       * PUBLISHED file with no credentials before being written here — see
+       * docs/ASSETS.md for why that order is a step and not a formality.
+       * `bytes` is the compressed size, because it is what the button asks
+       * somebody to spend.
+       */
+      sha256: 'd6daf449b1e4f014bc7f0a5f89d3c137bfef0b0ec5da3195f23295e2ba3cf985',
+      bytes: 59_684_563
     }
   ]
 }

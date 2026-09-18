@@ -124,3 +124,59 @@ describe('directory aliases', () => {
     expect(stickers[0].name).toBe('🚀')
   })
 })
+
+describe('a root with installed packs under it', () => {
+  let packs = ''
+
+  beforeAll(async () => {
+    /*
+     * The shape `installPack` actually leaves: `<root>/<pack.id>/<kind>/…`.
+     *
+     * This was a real bug, and the bad kind — the download succeeded, the files
+     * were on disk, the receipt was written, and the Library said "Nothing
+     * here." Scanning only the root could never see a single one of them.
+     */
+    packs = await mkdtemp(join(tmpdir(), 'forge-assets-packs-'))
+    await mkdir(join(packs, 'library', 'fonts'), { recursive: true })
+    await mkdir(join(packs, 'stickers-telugu', 'color', 'svg'), { recursive: true })
+    await mkdir(join(packs, 'stickers-hindi', 'color', 'svg'), { recursive: true })
+    await mkdir(join(packs, '.packs'), { recursive: true })
+    await mkdir(join(packs, '.library.installing', 'fonts'), { recursive: true })
+
+    await writeFile(join(packs, 'library', 'fonts', 'BebasNeue-Regular.ttf'), 'x')
+    await writeFile(join(packs, 'stickers-telugu', 'color', 'svg', '1F525.svg'), '<svg/>')
+    await writeFile(join(packs, 'stickers-hindi', 'color', 'svg', '1F680.svg'), '<svg/>')
+    await writeFile(join(packs, '.packs', 'library.json'), '{}')
+    await writeFile(join(packs, '.library.installing', 'fonts', 'Half-Written.ttf'), 'x')
+  })
+
+  afterAll(async () => {
+    await rm(packs, { recursive: true, force: true }).catch(() => undefined)
+  })
+
+  it('finds what a pack installed, one directory down', async () => {
+    const fonts = entriesOfKind(await scanAssets(packs), 'font')
+    expect(fonts).toHaveLength(1)
+    expect(fonts[0].file).toBe('library/fonts/BebasNeue-Regular.ttf')
+  })
+
+  it('unions two packs of the same kind, which is what categories are', async () => {
+    // Someone with Telugu and Hindi installed has one sticker drawer, not two.
+    const stickers = entriesOfKind(await scanAssets(packs), 'sticker')
+    expect(stickers.map((s) => s.name).sort()).toEqual(['🔥', '🚀'])
+  })
+
+  it('ignores the receipts folder and a crashed install, not just the files in them', async () => {
+    /*
+     * A staging directory is the one thing `installPack`'s cleanup cannot
+     * remove — a crash mid-unpack leaves it. Catalogued, it would be a second,
+     * partial copy of everything in the pack. It is named with a leading dot so
+     * the same rule that skips `.packs` skips it too.
+     */
+    const catalog = await scanAssets(packs)
+    expect(catalog.entries.map((e) => e.file)).not.toContain(
+      '.library.installing/fonts/Half-Written.ttf'
+    )
+    expect(catalog.entries.some((e) => e.file.includes('.packs'))).toBe(false)
+  })
+})
