@@ -53,3 +53,7 @@ __pycache__/
 # they TAUGHT us is written down in docs/REFERENCES.md, which is committed —
 # so the findings survive even if the files do not.
 /references/recordings/
+
+# Per-machine tool permissions. The name says local; it differs on every
+# machine and blocks a rebase every time it changes.
+.claude/settings.local.json
