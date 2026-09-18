@@ -98,12 +98,18 @@ jobs:
       - name: Ensure Electron's binary is actually installed
         run: node node_modules/electron/install.js
 
+      # Test the COMMAND, not the variable. `shell: bash` runs under `-e`, so
+      # `BIN="$(node …)"` with a failing node aborts the step at the assignment
+      # and the annotation below never prints — which is the whole point of it.
+      # And `[ -e "$BIN" ]` would be unreachable anyway: electron's index.js
+      # re-downloads when dist or path.txt is missing, so `require` either
+      # throws or returns a path that exists.
       - name: Verify it before packing
         shell: bash
         run: |
-          BIN="$(node -p "require('electron')")"
-          if [ ! -e "$BIN" ]; then
-            echo "::error::Electron's binary is missing at $BIN — npm ci withheld the postinstall. See CLAUDE.md, 'A fresh Windows checkout'."
+          if ! BIN="$(node -p "require('electron')" 2>&1)"; then
+            echo "::error::Electron's binary could not be resolved — npm ci withheld the postinstall. See CLAUDE.md, 'A fresh Windows checkout'."
+            echo "$BIN"
             exit 1
           fi
           echo "Electron binary present: $BIN"
