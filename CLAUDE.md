@@ -112,8 +112,9 @@ and the build, on macOS **and** Windows for every push. The integration tests ar
 in CI deliberately: a runner's `D:\a\forge\forge` path is exactly the shape that
 breaks filter arguments.
 
-**Packaging is configured** — `electron-builder.yml`, and a CI job that builds
-an installer on each platform and uploads it as an artifact. Read
+**Packaging works** — `electron-builder.yml`, and a CI job that builds an
+installer on each platform and uploads it as an artifact. A CI-built Windows
+installer has been installed and run successfully on the Surface. Read
 `docs/PACKAGING.md` before touching it; three paths in `src/main` only resolve
 because that config puts something where they look, and none of them can fail
 in development.

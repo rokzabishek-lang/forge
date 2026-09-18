@@ -4,9 +4,14 @@ Until this existed the app worked and could not be installed, which for a
 desktop tool is the same as not existing. Everything else on the roadmap is
 features; this was the gate.
 
-**Status:** configured and wired into CI. `electron-builder.yml` is the whole
-config; `.github/workflows/ci.yml` builds an installer on each platform and
-uploads it as an artifact.
+**Status:** working. `electron-builder.yml` is the whole config;
+`.github/workflows/ci.yml` builds an installer on each platform and uploads it
+as an artifact.
+
+**A CI-built Windows installer has been installed and run successfully** — so
+the asar unpack, the bundled ffmpeg, the sidecar's placement and the first-run
+path are all confirmed on a real machine rather than inferred from a green
+tick. The only known gap is the asset library, below.
 
 ---
 
