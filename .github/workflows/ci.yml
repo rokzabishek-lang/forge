@@ -114,7 +114,34 @@ jobs:
           fi
           echo "Electron binary present: $BIN"
 
+      # `assets/` is gitignored, so a CI checkout has none — and electron-builder
+      # treats a missing extraResources source as nothing to copy rather than as
+      # an error. The result is an installer that starts, works, and has an empty
+      # Library tab, with nothing anywhere saying why. This makes the absence
+      # loud: it does not fail the build, because an installer without the asset
+      # pack is still worth having, but nobody should discover it by clicking.
+      - name: Say whether the asset library is in this build
+        shell: bash
+        run: |
+          if [ -d assets ] && [ -n "$(ls -A assets 2>/dev/null)" ]; then
+            echo "Asset library present: $(du -sh assets | cut -f1)"
+          else
+            echo "::warning::No assets/ in this checkout — the installer will ship with an EMPTY asset library (no fonts, SFX, transitions, titles or props). It is gitignored; see docs/ASSETS.md 'Open decision'."
+          fi
+
       - run: npm run ${{ matrix.script }}
+
+      # What actually landed, so the next person does not have to unpack the
+      # installer to find out. Every line here is a coupling that cannot fail
+      # in development — see docs/PACKAGING.md.
+      - name: Report what the package contains
+        shell: bash
+        run: |
+          RES=$(find dist -maxdepth 3 -type d -name resources | head -1)
+          echo "resources: $RES"
+          for want in assets sidecar app.asar app.asar.unpacked; do
+            if [ -e "$RES/$want" ]; then echo "  present: $want"; else echo "  MISSING: $want"; fi
+          done
 
       # Uploaded rather than released. A release is a deliberate act; this is
       # just "something to install on the Surface this afternoon".

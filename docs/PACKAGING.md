@@ -61,6 +61,28 @@ import from one either. That single fact is the reason for both mechanisms.
 - **`__pycache__`, `.pyc`** — noise, and compiled for whatever interpreter
   happened to be here.
 
+### The asset library is NOT in a CI-built installer
+
+`assets/` is gitignored — `docs/ASSETS.md` §"Open decision" explains why, and
+the decision is still open. A CI checkout therefore has no asset library, and
+**electron-builder treats a missing `extraResources` source as nothing to copy
+rather than as an error.** The installer builds, installs, starts and works,
+with an empty Library tab and nothing anywhere saying why.
+
+Verified by unpacking the real artifact: `ffmpeg.exe`, `ffprobe.exe`, sharp's
+native binding, the sidecar and its `requirements*.txt` were all present and
+correct; `resources/assets/` was absent entirely.
+
+This is now reported in the packaging job — a warning before the pack, and a
+listing of what landed after it. It does not fail the build, because an
+installer without the asset pack is still worth having: everything except the
+Library works, and `scanAssets` was written to degrade to an empty catalog
+rather than to fail.
+
+**The three options are in `docs/ASSETS.md`, which already prefers shipping the
+assets as a separate first-run download** — the same shape as the models and as
+yt-dlp. Until that is built, a CI installer has no library.
+
 ### What is not solved
 
 - **Neither build is signed.** macOS will refuse to open the DMG without
@@ -120,8 +142,10 @@ answers:
    unpack, and a wrong-architecture binary.
 2. **No error dialog.** `assertBinaries()` runs at startup; if ffmpeg did not
    make it into the package, this is where it says so.
-3. **The Library tab has content.** Proves `extraResources` put the assets
-   where `scanAssets` looks.
+3. **The Library tab is EMPTY, and that is expected** for a CI-built installer
+   — the asset library is gitignored and not in the package. What this step
+   actually proves is that an empty catalog degrades rather than crashes.
+   A full library needs the first-run asset download, which is unbuilt.
 4. **Import a photo and export three seconds.** The whole media pipeline, in
    one go.
 5. **Paste a YouTube link.** The first download fetches yt-dlp (~30MB) — this
