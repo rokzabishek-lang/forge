@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Package, RefreshCw, Search } from 'lucide-react'
 import type React from 'react'
 import type { AssetKind, CatalogEntry, FontMeta, TitleMeta } from '@shared/assets/catalog'
-import { isClipSticker, searchEntries } from '@shared/assets/catalog'
+import { isClipSticker, searchEntries, stickerCategoryLabel } from '@shared/assets/catalog'
 import { assetPath } from '@shared/assetPath'
 import { useCatalog } from '../catalog'
 import { useEditor } from '../store'
@@ -37,6 +37,7 @@ export function Library(): ReactNode {
   const [kind, setKind] = useState<AssetKind>('font')
   const [query, setQuery] = useState('')
   const [limit, setLimit] = useState(PAGE)
+  const [category, setCategory] = useState<string | null>(null)
   const [showPacks, setShowPacks] = useState(false)
   const autoOpenedPacks = useRef(false)
   const scrollerRef = useRef<HTMLDivElement | null>(null)
@@ -76,12 +77,42 @@ export function Library(): ReactNode {
     return totals
   }, [catalog])
 
-  const matches = useMemo(
+  const kindMatches = useMemo(
     () => searchEntries(catalog, query, kind),
     [catalog, query, kind]
   )
 
-  useEffect(() => setLimit(PAGE), [kind, query])
+  /*
+   * Sheet ⑨'s "Categories: Telugu, Hindi, trending …etc".
+   *
+   * Only for stickers, and only once there is more than one — a row that always
+   * reads "All · Telugu" is a control that has never had a decision to make.
+   * Derived from what is INSTALLED rather than from the manifest, so it lists
+   * what this person actually has rather than what they could have.
+   */
+  const categories = useMemo(() => {
+    if (kind !== 'sticker') return []
+    const seen = new Map<string, string>()
+    for (const entry of catalog?.entries ?? []) {
+      if (entry.kind !== 'sticker' || !isClipSticker(entry.meta)) continue
+      const raw = entry.meta.category
+      if (raw && !seen.has(raw)) seen.set(raw, stickerCategoryLabel(raw))
+    }
+    return [...seen].map(([raw, label]) => ({ raw, label })).sort((a, b) => a.label.localeCompare(b.label))
+  }, [catalog, kind])
+
+  const matches = useMemo(() => {
+    if (!category) return kindMatches
+    return kindMatches.filter(
+      (entry) => isClipSticker(entry.meta) && entry.meta.category === category
+    )
+  }, [kindMatches, category])
+
+  // A category chosen under Stickers means nothing under Fonts, and a filter
+  // nobody can see is a panel that looks empty for no reason.
+  useEffect(() => setCategory(null), [kind])
+
+  useEffect(() => setLimit(PAGE), [kind, query, category])
 
   // Grow the page as the sentinel comes into view, rather than rendering 1,239
   // nodes up front.
@@ -150,6 +181,35 @@ export function Library(): ReactNode {
           </button>
         ))}
       </div>
+
+      {categories.length > 1 && (
+        <div className="flex flex-wrap gap-1 border-b border-ink-800 px-2 py-1.5">
+          <button
+            onClick={() => setCategory(null)}
+            className={`rounded px-1.5 py-0.5 text-[10.5px] transition-colors ${
+              category === null
+                ? 'bg-flame-500 font-medium text-ink-950'
+                : 'bg-ink-850 text-ink-400 hover:bg-ink-800'
+            }`}
+          >
+            All
+          </button>
+          {categories.map((entry) => (
+            <button
+              key={entry.raw}
+              onClick={() => setCategory(entry.raw === category ? null : entry.raw)}
+              title={entry.raw.replace(/^\d+[_-]/, '').replace(/[_-]+/g, ' ')}
+              className={`rounded px-1.5 py-0.5 text-[10.5px] transition-colors ${
+                category === entry.raw
+                  ? 'bg-flame-500 font-medium text-ink-950'
+                  : 'bg-ink-850 text-ink-400 hover:bg-ink-800'
+              }`}
+            >
+              {entry.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div ref={scrollerRef} className="flex-1 overflow-y-auto p-2">
         {error && (

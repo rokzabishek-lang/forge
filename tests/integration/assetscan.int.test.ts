@@ -235,6 +235,7 @@ describe('clip stickers, described by the pack index', () => {
       form: 'clip',
       matte: 'stickers-telugu/stickers/reaction-107.matte.mp4',
       thumb: 'stickers-telugu/stickers/reaction-107.thumb.webp',
+      category: '01_Telugu_Memes_and_Punchlines',
       width: 512,
       height: 294,
       durationMs: 4900,
@@ -405,5 +406,42 @@ describe('sticker thumbnails', () => {
     const stickers = entriesOfKind(await scanAssets(dir), 'sticker')
     const escaping = stickers.find((s) => s.name === 'Escaping thumb')!
     expect(escaping.meta).not.toHaveProperty('thumb')
+  })
+})
+
+describe('sticker categories', () => {
+  let dir = ''
+
+  beforeAll(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'forge-assets-cat-'))
+    for (const [pack, cat] of [['stickers-telugu', '01_Telugu_Memes_and_Punchlines'], ['stickers-hindi', '02_Hindi_Meme_Punchlines']]) {
+      const d = join(dir, pack, 'stickers')
+      await mkdir(d, { recursive: true })
+      await writeFile(join(d, 'a.colour.mp4'), 'x')
+      await writeFile(join(d, 'a.matte.mp4'), 'x')
+      await writeFile(join(d, 'index.json'), JSON.stringify({
+        version: 1, category: cat,
+        stickers: [{ key: 'a', title: 'A', colour: 'a.colour.mp4', matte: 'a.matte.mp4', width: 10, height: 10, durationMs: 900, loops: false, hasAudio: false }]
+      }))
+    }
+  })
+
+  afterAll(async () => {
+    await rm(dir, { recursive: true, force: true }).catch(() => undefined)
+  })
+
+  it('records which category each sticker came from', async () => {
+    // The chip row is built from what is INSTALLED, so the category has to
+    // survive into the catalog rather than staying in the pack's index.
+    const stickers = entriesOfKind(await scanAssets(dir), 'sticker')
+    expect(stickers.map((s) => (s.meta as { category?: string }).category).sort()).toEqual([
+      '01_Telugu_Memes_and_Punchlines',
+      '02_Hindi_Meme_Punchlines'
+    ])
+  })
+
+  it('still puts the category words in tags, so search finds them', async () => {
+    const stickers = entriesOfKind(await scanAssets(dir), 'sticker')
+    expect(stickers.flatMap((s) => s.tags)).toContain('Telugu')
   })
 })

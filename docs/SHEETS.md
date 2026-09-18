@@ -66,11 +66,28 @@ Arrow to a note:
 
 > "They both same but sticker has already done so it is nothing to user"
 
-**Status — small gaps.** Tabs and search are built. Six of the seven kinds exist
-as catalog types (font, sfx, sticker, prop, title, transition). Memes and meme
-stickers are not a kind, and there are no categories at all — no Telugu, no
-Hindi, no trending. Search is text-only against names. The font tiles are also
-inert: every other kind is draggable, fonts have no handler.
+**Status — built, bar the font tiles.** Tabs and search were already there.
+What this sheet asked for and did not have is now in:
+
+**Meme stickers are a kind**, as `StickerMeta`'s second form. An emoji sticker
+is one SVG named by codepoint; a meme sticker is a keyed video cut-out — colour
+and matte, recombined with `alphamerge` — because H.264 4:2:0 cannot carry an
+alpha channel. 636 of them ship, with sound. See `docs/STICKERS.md`.
+
+**Categories exist**, and they are also the unit of download: ten packs, one per
+category, so somebody editing Telugu content never fetches SpongeBob. The chip
+row above the grid is built from what is INSTALLED rather than from the
+manifest, appears only once there is more than one category to choose between,
+and clears itself when you leave the Stickers tab.
+
+The sheet's note — *"They both same but sticker has already done so it is
+nothing to user"* — turned out to be the whole design. The keying, cropping,
+loop decision and thumbnail all happen once when the pack is built; the user
+drags a cut-out onto the timeline and has never been asked a question about any
+of it.
+
+**Still missing: the font tiles are inert.** Every other kind is draggable and
+fonts have no handler.
 
 ---
 
@@ -394,5 +411,5 @@ paid service.
 rotation, random-every-N, opacity. The looks are finished; how captions decide
 things for themselves is not.
 
-**Small finishing.** Audio fades and loudness. Library categories and meme kinds.
+**Small finishing.** Audio fades and loudness.
 The inert font tiles. Transcript-to-text-card conversion.

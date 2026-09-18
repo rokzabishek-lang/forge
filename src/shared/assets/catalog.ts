@@ -57,6 +57,15 @@ export interface ClipStickerMeta {
    * against 25.6 KB.
    */
   thumb?: string
+  /**
+   * The pack's category, as the pack states it (`01_Telugu_Memes_and_…`).
+   *
+   * Kept raw rather than pre-formatted so the chip label and the tooltip are
+   * both derived from one string — sheet ⑨ wants a category row, and somebody
+   * with four packs installed otherwise has six hundred stickers in one
+   * undifferentiated grid.
+   */
+  category?: string
   width: number
   height: number
   durationMs: number
@@ -79,6 +88,33 @@ export interface ClipStickerMeta {
 
 export function isClipSticker(meta: unknown): meta is ClipStickerMeta {
   return !!meta && (meta as ClipStickerMeta).form === 'clip'
+}
+
+/**
+ * A category name short enough to be a chip.
+ *
+ * Sheet ⑨ draws "Categories: Telugu, Hindi, trending …etc" as a row above the
+ * grid, and the panel it lives in is about 280px wide. The packs are named for
+ * a filesystem — `01_Telugu_Memes_and_Punchlines` — and printing those in full
+ * gives ten chips that wrap to five rows and stop being a row at all.
+ *
+ * So: drop the sort-order prefix and any trailing year, take the first two
+ * words, and never end on a conjunction — `Tech_and_Business_Titans` would
+ * otherwise read "Tech and". The full name still goes in the tooltip, and into
+ * `tags` so search finds the words this drops.
+ */
+export function stickerCategoryLabel(raw: string): string {
+  const words = raw
+    .replace(/^\d+[_-]/, '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+\d{4}(\s+\d{4})?\s*$/, '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+  if (words.length === 0) return ''
+  const short = words.slice(0, 2)
+  if (short.length > 1 && /^(and|&|of|the|with)$/i.test(short[1])) short.pop()
+  return short.join(' ')
 }
 
 export interface TitleMeta {
