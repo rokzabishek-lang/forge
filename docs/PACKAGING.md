@@ -89,12 +89,22 @@ import from one either. That single fact is the reason for both mechanisms.
 2. Open the run on GitHub → Artifacts → `forge-windows-latest`.
 3. Unzip, run the `.exe`.
 
-**On the Surface itself**, if you want one without waiting:
+**On the Surface itself**, if you want one without waiting — but read
+`CLAUDE.md`'s "A fresh Windows checkout" first, because `npm ci` there exits 0,
+reports no vulnerabilities, and is not finished:
 
 ```
 npm ci
+node node_modules/electron/install.js
 npm run pack:win
 ```
+
+The middle line is not optional and not one-time. On Windows, `npm ci` can
+leave `node_modules/electron/dist` empty — npm 11's allow-scripts gate withholds
+electron's postinstall, and its warning names `electron-winstaller` and
+`esbuild` but never `electron`. It recurs on every `npm ci`. `install.js`
+short-circuits when the binary is present, so running it always costs nothing.
+CI does exactly this, and fails loudly if the binary still is not there.
 
 The installer lands in `dist/`.
 

@@ -83,6 +83,31 @@ jobs:
       # out. Each platform packs itself.
       - run: npm ci
 
+      # `npm ci` can exit 0, report no vulnerabilities, and leave
+      # node_modules/electron/dist EMPTY — measured on a fresh Windows clone,
+      # where npm 11's allow-scripts gate withholds electron's postinstall and
+      # its warning names electron-winstaller and esbuild but never electron.
+      # It does not happen on macOS with the same npm, and it recurs on every
+      # `npm ci` rather than being first-run setup.
+      #
+      # install.js short-circuits when the binary is already there, so this is
+      # a no-op on a healthy tree and a repair on a broken one. The check after
+      # it exists because the failure it prevents is silent: packing without
+      # this produces either nothing or something that will not start, and
+      # electron-builder does not say which.
+      - name: Ensure Electron's binary is actually installed
+        run: node node_modules/electron/install.js
+
+      - name: Verify it before packing
+        shell: bash
+        run: |
+          BIN="$(node -p "require('electron')")"
+          if [ ! -e "$BIN" ]; then
+            echo "::error::Electron's binary is missing at $BIN — npm ci withheld the postinstall. See CLAUDE.md, 'A fresh Windows checkout'."
+            exit 1
+          fi
+          echo "Electron binary present: $BIN"
+
       - run: npm run ${{ matrix.script }}
 
       # Uploaded rather than released. A release is a deliberate act; this is
