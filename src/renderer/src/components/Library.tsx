@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Package, RefreshCw, Search } from 'lucide-react'
 import type React from 'react'
 import type { AssetKind, CatalogEntry, FontMeta, TitleMeta } from '@shared/assets/catalog'
-import { searchEntries } from '@shared/assets/catalog'
+import { isClipSticker, searchEntries } from '@shared/assets/catalog'
 import { assetPath } from '@shared/assetPath'
 import { useCatalog } from '../catalog'
 import { useEditor } from '../store'
@@ -247,7 +247,16 @@ function Tile({
     return () => observer.disconnect()
   }, [entry, onNeedFont, seen])
 
-  const url = seen ? assetUrl(root, entry.file) : ''
+  /*
+   * A clip sticker is an mp4, and the grid draws with an `<img>`.
+   *
+   * So it shows the cut-out still the pack ships instead. Without it every
+   * sticker tile is blank — the pack installs, the catalog is right, and the
+   * drawer looks empty, which is this project's favourite kind of bug.
+   */
+  const clip = entry.kind === 'sticker' && isClipSticker(entry.meta) ? entry.meta : null
+  const preview = clip?.thumb ?? entry.file
+  const url = seen ? assetUrl(root, preview) : ''
 
   const dragProps = {
     draggable: true,
@@ -354,7 +363,12 @@ function Tile({
           <div className="size-full animate-pulse rounded-sm bg-neutral-200" />
         )}
       </div>
-      {entry.kind !== 'sticker' && (
+      {/*
+        An emoji tile IS its name — the character fills it, and a caption under
+        it would just repeat the picture. A meme sticker's title is the only way
+        to tell two reaction faces apart.
+      */}
+      {(entry.kind !== 'sticker' || clip) && (
         <span className="w-full truncate px-0.5 text-center text-[9px] leading-tight text-neutral-600">
           {entry.name}
         </span>

@@ -107,100 +107,100 @@ export const BUILT_IN_MANIFEST: PackManifest = {
       name: 'Epic fails & accidents',
       summary: '63 meme stickers, with transparency and sound',
       group: 'stickers',
-      version: 1,
+      version: 2,
       url: 'https://github.com/rokzabishek-lang/forge-assets/releases/download/stickers-v1/stickers-epic-fails-accidents.tar.gz',
-      sha256: 'c41c39a864373eea0adcf8908733217067db357c18cd2690e8b85b73af8f78b5',
-      bytes: 22_608_134
+      sha256: '942e1724bbc19ecf4c7f378d62ff2670a750549683d3847b92f46adb901870a7',
+      bytes: 22_738_791
     },
     {
       id: 'stickers-global-editing-memes',
       name: 'Global editing memes',
       summary: '89 meme stickers, with transparency and sound',
       group: 'stickers',
-      version: 1,
+      version: 2,
       url: 'https://github.com/rokzabishek-lang/forge-assets/releases/download/stickers-v1/stickers-global-editing-memes.tar.gz',
-      sha256: '3bbd57cb8f0508a4196a509592a1e204b1e9b2ec801d9229542f97414ba37464',
-      bytes: 26_801_417
+      sha256: 'd44e454ef1359a28cf032ceee70136210af2a86d3d574731c79aee454a4abfb0',
+      bytes: 26_997_473
     },
     {
       id: 'stickers-global-memes-and-streamers-2025-2026',
       name: 'Global memes & streamers',
       summary: '57 meme stickers, with transparency and sound',
       group: 'stickers',
-      version: 1,
+      version: 2,
       url: 'https://github.com/rokzabishek-lang/forge-assets/releases/download/stickers-v1/stickers-global-memes-and-streamers-2025-2026.tar.gz',
-      sha256: '5e849a3033f24a6574126d7ba8f4982e28df375da31177a7642a019a731be50d',
-      bytes: 23_606_402
+      sha256: '59e9dece2d8af1e5d08d1c4e24f72cd6636e52eb643142e2d51bb1192e46da5b',
+      bytes: 23_729_039
     },
     {
       id: 'stickers-hindi-meme-punchlines',
       name: 'Hindi meme punchlines',
       summary: '90 meme stickers, with transparency and sound',
       group: 'stickers',
-      version: 1,
+      version: 2,
       url: 'https://github.com/rokzabishek-lang/forge-assets/releases/download/stickers-v1/stickers-hindi-meme-punchlines.tar.gz',
-      sha256: '089ed6c6b075bab1fdd723aa255111aa41f93933dca7de6058b48c82f9e92fbb',
-      bytes: 20_012_303
+      sha256: '41612d8ddfdefcdb89c7a555af5654f803acac6d28e341b4fe14e6d19812af60',
+      bytes: 20_253_784
     },
     {
       id: 'stickers-indian-media-and-tv-debates',
       name: 'Indian TV debates',
       summary: '55 meme stickers, with transparency and sound',
       group: 'stickers',
-      version: 1,
+      version: 2,
       url: 'https://github.com/rokzabishek-lang/forge-assets/releases/download/stickers-v1/stickers-indian-media-and-tv-debates.tar.gz',
-      sha256: 'ef87ac133ba02af01766bc60407decc890c43ff0a877550453d857b4783f2685',
-      bytes: 19_590_130
+      sha256: 'e29ea240d4e8f721a5956ac22fe15b554c3911d3532641a69cbf47b105ffe5c8',
+      bytes: 19_729_171
     },
     {
       id: 'stickers-indian-standup-and-reality-tv',
       name: 'Indian standup & reality TV',
       summary: '54 meme stickers, with transparency and sound',
       group: 'stickers',
-      version: 1,
+      version: 2,
       url: 'https://github.com/rokzabishek-lang/forge-assets/releases/download/stickers-v1/stickers-indian-standup-and-reality-tv.tar.gz',
-      sha256: '645511c81cb168505235c3522411d85c124c0796c1596cc4acf9e1462004ef33',
-      bytes: 23_496_850
+      sha256: '2e2c8d40eea52d90016f18ae73e83aa85d3759119f6f8a73967c6adc39264828',
+      bytes: 23_643_025
     },
     {
       id: 'stickers-middle-eastern-and-global-culture',
       name: 'Middle Eastern culture',
       summary: '52 meme stickers, with transparency and sound',
       group: 'stickers',
-      version: 1,
+      version: 2,
       url: 'https://github.com/rokzabishek-lang/forge-assets/releases/download/stickers-v1/stickers-middle-eastern-and-global-culture.tar.gz',
-      sha256: '1cc03699962ac594fc16b326a4b28f2a4e936111306566ea68a80abc40efbba2',
-      bytes: 31_111_235
+      sha256: 'dcd694c760e445c5e9bf51d02b92a39597d76def5aacc361e7515688e07bc067',
+      bytes: 31_228_993
     },
     {
       id: 'stickers-spongebob-cutaways',
       name: 'SpongeBob cutaways',
       summary: '7 meme stickers, with transparency and sound',
       group: 'stickers',
-      version: 1,
+      version: 2,
       url: 'https://github.com/rokzabishek-lang/forge-assets/releases/download/stickers-v1/stickers-spongebob-cutaways.tar.gz',
-      sha256: 'c4715d986be96c02080f8dda93637bb6331f979b6aeb18886279dd3280d9f7ec',
-      bytes: 429_460
+      sha256: '4cccd0923960fce996e6395983b2c6dc2755f1c7494abbaff25c8bc84b3e9c32',
+      bytes: 438_123
     },
     {
       id: 'stickers-tech-and-business-titans',
       name: 'Tech & business titans',
       summary: '51 meme stickers, with transparency and sound',
       group: 'stickers',
-      version: 1,
+      version: 2,
       url: 'https://github.com/rokzabishek-lang/forge-assets/releases/download/stickers-v1/stickers-tech-and-business-titans.tar.gz',
-      sha256: 'a1cca24129c34b709d569bd0c5097a6def7dc3b698dbd9d84db1a0a515e043c0',
-      bytes: 16_874_360
+      sha256: '27e821242a662d8ee5908136cabce04affcad8a30e0ba9aba3d14a8c2ed1dc89',
+      bytes: 16_983_431
     },
     {
       id: 'stickers-telugu-memes-and-punchlines',
       name: 'Telugu memes & punchlines',
       summary: '118 meme stickers, with transparency and sound',
       group: 'stickers',
-      version: 1,
+      version: 2,
       url: 'https://github.com/rokzabishek-lang/forge-assets/releases/download/stickers-v1/stickers-telugu-memes-and-punchlines.tar.gz',
-      sha256: '54ee52535e7020a50257ea8da07e5e3c1895745fe659118edbf6d081aff72561',
-      bytes: 39_534_257
+      sha256: 'bc7d384f53f3cae0fd8cc724e09e0a6aa94c72473b614b8549d28e1c450ecf10',
+      bytes: 39_841_798
     }
   ]
 }

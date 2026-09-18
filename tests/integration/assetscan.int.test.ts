@@ -194,7 +194,7 @@ describe('clip stickers, described by the pack index', () => {
     clips = await mkdtemp(join(tmpdir(), 'forge-assets-clips-'))
     const dir = join(clips, 'stickers-telugu', 'stickers')
     await mkdir(dir, { recursive: true })
-    for (const name of ['reaction-107.colour.mp4', 'reaction-107.matte.mp4', 'wow.colour.mp4', 'wow.matte.mp4']) {
+    for (const name of ['reaction-107.colour.mp4', 'reaction-107.matte.mp4', 'reaction-107.thumb.webp', 'wow.colour.mp4', 'wow.matte.mp4']) {
       await writeFile(join(dir, name), 'x')
     }
     await writeFile(
@@ -206,6 +206,7 @@ describe('clip stickers, described by the pack index', () => {
           {
             key: 'reaction-107', title: 'Telugu Comedy Reaction Hook 107',
             colour: 'reaction-107.colour.mp4', matte: 'reaction-107.matte.mp4',
+            thumb: 'reaction-107.thumb.webp',
             width: 512, height: 294, durationMs: 4900, loops: false, hasAudio: true
           },
           {
@@ -233,6 +234,7 @@ describe('clip stickers, described by the pack index', () => {
     expect(reaction.meta).toEqual({
       form: 'clip',
       matte: 'stickers-telugu/stickers/reaction-107.matte.mp4',
+      thumb: 'stickers-telugu/stickers/reaction-107.thumb.webp',
       width: 512,
       height: 294,
       durationMs: 4900,
@@ -353,5 +355,55 @@ describe('sounds a pack has named for itself', () => {
     expect(sfx.find((s) => s.name === 'Collect Item')!.meta).toEqual({ durationMs: 1200 })
     // Unknown stays null rather than being invented.
     expect(sfx.find((s) => s.name === '808 boom')!.meta).toEqual({ durationMs: null })
+  })
+})
+
+describe('sticker thumbnails', () => {
+  let dir = ''
+
+  beforeAll(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'forge-assets-thumb-'))
+    const pack = join(dir, 'stickers-x', 'stickers')
+    await mkdir(pack, { recursive: true })
+    for (const n of ['a.colour.mp4', 'a.matte.mp4', 'a.thumb.webp', 'b.colour.mp4', 'b.matte.mp4']) {
+      await writeFile(join(pack, n), 'x')
+    }
+    await writeFile(join(pack, 'index.json'), JSON.stringify({
+      version: 1, category: 'x',
+      stickers: [
+        { key: 'a', title: 'With thumb', colour: 'a.colour.mp4', matte: 'a.matte.mp4', thumb: 'a.thumb.webp', width: 100, height: 100, durationMs: 900, loops: false, hasAudio: false },
+        { key: 'b', title: 'No thumb', colour: 'b.colour.mp4', matte: 'b.matte.mp4', width: 100, height: 100, durationMs: 900, loops: false, hasAudio: false },
+        { key: 'c', title: 'Escaping thumb', colour: 'a.colour.mp4', matte: 'a.matte.mp4', thumb: '../../secrets.webp', width: 100, height: 100, durationMs: 900, loops: false, hasAudio: false }
+      ]
+    }))
+  })
+
+  afterAll(async () => {
+    await rm(dir, { recursive: true, force: true }).catch(() => undefined)
+  })
+
+  it('carries the thumbnail path through, since the grid draws with an img', async () => {
+    /*
+     * A clip sticker is an mp4 and the Library grid uses <img>. Without a still
+     * the whole drawer is blank tiles — the pack installs, the catalog is
+     * right, and the user sees nothing.
+     */
+    const stickers = entriesOfKind(await scanAssets(dir), 'sticker')
+    expect(stickers.find((s) => s.name === 'With thumb')!.meta).toMatchObject({
+      thumb: 'stickers-x/stickers/a.thumb.webp'
+    })
+  })
+
+  it('leaves the field off entirely when a pack ships no thumbnail', async () => {
+    // An older pack has none, and the tile has to fall back rather than point
+    // at a file that is not there.
+    const stickers = entriesOfKind(await scanAssets(dir), 'sticker')
+    expect(stickers.find((s) => s.name === 'No thumb')!.meta).not.toHaveProperty('thumb')
+  })
+
+  it('refuses a thumbnail that points outside its own directory', async () => {
+    const stickers = entriesOfKind(await scanAssets(dir), 'sticker')
+    const escaping = stickers.find((s) => s.name === 'Escaping thumb')!
+    expect(escaping.meta).not.toHaveProperty('thumb')
   })
 })

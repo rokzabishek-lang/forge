@@ -47,6 +47,16 @@ export interface ClipStickerMeta {
   form: 'clip'
   /** The matte, relative to the catalog root like `file` is. */
   matte: string
+  /**
+   * A cut-out still for the Library grid, relative like `file`.
+   *
+   * The grid draws every asset with an `<img>`, and a clip sticker is an mp4 —
+   * so without this the whole drawer is blank tiles: the pack installs, the
+   * catalog is right, and the user sees nothing. WebP because these are
+   * photographic cut-outs, which is PNG's worst case: measured at 128px, 2.8 KB
+   * against 25.6 KB.
+   */
+  thumb?: string
   width: number
   height: number
   durationMs: number

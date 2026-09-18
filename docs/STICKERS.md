@@ -403,6 +403,34 @@ Verified on a real sticker through that exact path: **63.8% solid subject, 4.1%
 soft edge, 0.00% green visible**, and the picture checked by eye rather than by
 the numbers.
 
+### Seeing one in the Library
+
+Each sticker ships a **cut-out still**, `<key>.thumb.webp`, taken from the
+middle of the finished clip.
+
+Without it the drawer is 636 blank tiles. The Library grid draws every asset
+with an `<img>`, and a clip sticker is an mp4 — so the pack installs, the
+catalog is right, and the user sees nothing, which is this project's favourite
+kind of bug.
+
+**WebP, not PNG.** These are photographic cut-outs, which is exactly PNG's worst
+case. Measured on a real sticker at 128px:
+
+| | |
+|---|---|
+| PNG | 25.6 KB → 15.5 MB for 636 |
+| PNG, palette | 8.0 KB → 4.9 MB |
+| **WebP q75** | **2.8 KB → 1.7 MB** |
+
+Nine times smaller, and alpha survives (verified: 62.2% solid, 7.0% soft edge,
+0.00% green, and looked at on a checkerboard). The bundled ffmpeg has no
+libwebp, so ffmpeg composites the pair and `sharp` — already a dependency —
+does the encode.
+
+The tile also shows the **title** for a clip sticker, where an emoji tile shows
+none: the character IS the emoji's name, but two reaction faces are only
+distinguishable by their words.
+
 ### The sound, and two bugs it uncovered
 
 A clip sticker lands with `volume: 0`, and the inspector grew a **Sound** row —

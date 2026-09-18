@@ -47,6 +47,7 @@ import { createRequire } from 'node:module'
 const require = createRequire(import.meta.url)
 const FFMPEG = require('@ffmpeg-installer/ffmpeg').path
 const FFPROBE = require('@ffprobe-installer/ffprobe').path
+const sharp = require('sharp')
 
 /** The category that is sounds, not stickers. */
 const SFX_CATEGORY = /^04_/
@@ -58,6 +59,8 @@ const MAX_EDGE = 512
 const MIN_SPAN = 0.4
 /** Below this on either axis, after scaling, it is a sliver not a subject. */
 const MIN_OUTPUT = 24
+/** Long edge of the Library grid thumbnail. Tiles render around 70px. */
+const THUMB_EDGE = 128
 /**
  * What it takes to call a clip a loop — and it is deliberately almost nothing.
  *
@@ -310,6 +313,41 @@ async function loopDelta(colour) {
   return sum / a.length
 }
 
+/**
+ * A still of the sticker, cut out, for the Library grid.
+ *
+ * The grid draws every asset with an `<img>`, and a clip sticker is an mp4 —
+ * so without this the whole drawer is blank tiles: the pack installs, the
+ * catalog is right, and the user sees nothing.
+ *
+ * **WebP, not PNG.** These are photographic cut-outs, which is PNG's worst
+ * case: measured on a real sticker at 128px, PNG is 25.6 KB and WebP q75 is
+ * **2.8 KB** — 1.7 MB for all 636 rather than 15.5 MB. The bundled ffmpeg has
+ * no libwebp, so ffmpeg composites the pair and `sharp`, which the app already
+ * depends on, does the encode.
+ *
+ * Taken from the middle of the FINISHED clip, so it shows what the sticker
+ * looks like after trimming rather than whatever was at the head of the source.
+ */
+async function makeThumb(colour, matte, out, durationMs) {
+  const at = Math.max(0, durationMs / 1000 / 2)
+  const png = await new Promise((resolve) => {
+    execFile(FFMPEG, ['-nostdin', '-v', 'error', '-ss', at.toFixed(3), '-i', colour,
+      '-ss', at.toFixed(3), '-i', matte,
+      '-filter_complex', `[0:v][1:v]alphamerge,scale=${THUMB_EDGE}:${THUMB_EDGE}:force_original_aspect_ratio=decrease`,
+      '-frames:v', '1', '-f', 'image2pipe', '-vcodec', 'png', '-'],
+      { encoding: 'buffer', maxBuffer: 1 << 24 },
+      (err, stdout) => resolve(err || !stdout?.length ? null : stdout))
+  })
+  if (!png) return false
+  try {
+    await sharp(png).webp({ quality: 75, alphaQuality: 90 }).toFile(out)
+    return true
+  } catch {
+    return false
+  }
+}
+
 /* ------------------------------------------------------------------ build */
 
 async function buildSticker(file, outDir) {
@@ -371,7 +409,9 @@ async function buildSticker(file, outDir) {
 
   const delta = await loopDelta(colour)
   const finalMs = await probe(colour)
-  const sizes = await Promise.all([stat(colour), stat(matte)])
+  const thumb = join(outDir, `${key}.thumb.webp`)
+  const madeThumb = await makeThumb(colour, matte, thumb, finalMs?.durationMs ?? info.durationMs)
+  const sizes = await Promise.all([stat(colour), stat(matte), madeThumb ? stat(thumb) : null])
 
   return {
     file,
@@ -380,6 +420,7 @@ async function buildSticker(file, outDir) {
       title: titleFor(file),
       colour: basename(colour),
       matte: basename(matte),
+      ...(madeThumb ? { thumb: basename(thumb) } : {}),
       width,
       height,
       durationMs: finalMs?.durationMs ?? info.durationMs,
@@ -388,7 +429,7 @@ async function buildSticker(file, outDir) {
         delta !== null && delta < LOOP_DELTA && (finalMs?.durationMs ?? info.durationMs) <= LOOP_MAX_MS,
       loopDelta: delta === null ? null : Math.round(delta * 10) / 10
     },
-    bytes: sizes[0].size + sizes[1].size,
+    bytes: sizes[0].size + sizes[1].size + (sizes[2]?.size ?? 0),
     trimmed: trim ? { from: +trim.from.toFixed(2), to: +trim.to.toFixed(2), was: info.durationMs } : null,
     source: { width: info.width, height: info.height, box }
   }

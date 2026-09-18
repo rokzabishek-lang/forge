@@ -273,6 +273,9 @@ export async function scanAssets(root = assetsRoot()): Promise<AssetCatalog> {
         meta: {
           form: 'clip',
           matte: rel(join(dir, sticker.matte)),
+          ...(typeof sticker.thumb === 'string' && !sticker.thumb.includes('/')
+            ? { thumb: rel(join(dir, sticker.thumb)) }
+            : {}),
           width: Number(sticker.width) || 0,
           height: Number(sticker.height) || 0,
           durationMs: Number(sticker.durationMs) || 0,
