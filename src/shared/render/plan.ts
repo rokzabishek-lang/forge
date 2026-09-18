@@ -665,6 +665,25 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
     inputIndex++
   }
 
+  /*
+   * A clip sticker's matte, as an input.
+   *
+   * Seeked and limited exactly like the colour stream it belongs to, so the two
+   * stay in step — a matte running at its own pace is a cut-out that slides off
+   * its subject, which looks like a broken key rather than a timing bug.
+   */
+  const assetMatteInputs = new Map<string, number>()
+  for (const { clip, asset } of entries) {
+    if (!asset.matte) continue
+    args.push(
+      '-ss', seconds(clip.inPoint, fps),
+      '-t', seconds(sourceFramesFor(clip), fps),
+      '-i', asset.matte
+    )
+    assetMatteInputs.set(clip.id, inputIndex)
+    inputIndex++
+  }
+
   /* Mask inputs come before audio so video input indices stay contiguous. */
   const lookupTransition = (id: string): TransitionDef | null =>
     request.extraTransitions?.find((t) => t.id === id) ?? transitionById(id)
@@ -1109,8 +1128,28 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
      * wiped on, has three shapes; multiplying them is what makes all three
      * survive rather than the last one winning.
      */
+    /*
+     * The sticker's own cut-out, on the same footing as every other shape.
+     *
+     * Scaled to the clip's box for the same reason the wipe is: alphamerge
+     * refuses two streams of different sizes, and a sticker fitted to a box is
+     * no longer canvas-sized. Going through the multiply chain rather than
+     * straight to alphamerge is what lets a sticker also be masked, or wiped
+     * on, without one shape silently replacing another.
+     */
+    const stickerIndex = assetMatteInputs.get(clip.id)
+    let stickerLabel: string | null = null
+    if (stickerIndex !== undefined) {
+      filters.push(
+        `[${stickerIndex}:v]format=gray,scale=${Math.round(box.width)}:${Math.round(box.height)},` +
+          `setsar=1[mt${i}]`
+      )
+      stickerLabel = `[mt${i}]`
+    }
+
     const matteLabel = clip.matte ? matteLabels.get(clip.matte.clipId) : undefined
     const shapes = [
+      stickerLabel,
       matteLabel ?? null,
       mask?.mode === 'reveal' ? shapeLabel : null,
       wipeLabel

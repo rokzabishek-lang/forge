@@ -368,8 +368,44 @@ and nothing else, and an index naming a path outside its directory is refused.
 Everything else is trimmed to its content range, which is worth real time:
 *Two very boring minutes later* goes 4018ms → 1267ms.
 
+### Placing one, and drawing it
+
+**Built.** A sticker drags from the Library onto the timeline like any other
+asset and exports correctly.
+
+The matte lives on the **asset**, as `MediaAsset.matte` — a property of the
+file, travelling with every copy. `clip.matte` is an unrelated feature that
+points at another clip on the timeline. Main resolves the pairing from the
+catalog when the asset is placed, rather than trusting a path from the
+renderer, and takes the title from the same entry: the filename is a safe key
+like `13-tomorrow-for-sure` and the words live in the catalog.
+
+**At render**, the matte is an extra input seeked exactly like the colour it
+belongs to, turned into a grey stencil and multiplied into the same chain that
+carries masks and wipes. Through the multiply rather than straight to
+`alphamerge`, because `alphamerge` REPLACES alpha — a sticker that is also
+masked would otherwise lose one of the two shapes.
+
+**In the preview** the problem is different and was nearly a trap. The existing
+matte compositor uses `destination-in`, which reads the shape's ALPHA. That
+works for a text PNG, where the bright parts and the opaque parts are the same
+parts. A sticker matte is opaque grey everywhere, so `destination-in` keeps the
+whole rectangle — a green box pasted over the shot.
+
+Canvas 2D has no luma-to-alpha operator, but it accepts an SVG filter, and
+`feColorMatrix` writes alpha from a weighted sum of RGB. **Measured in the
+harness: input luma 0/85/170/255 comes out as alpha 0/85/170/255 exactly**, on
+the GPU, with no per-pixel pass. `color-interpolation-filters="sRGB"` is
+load-bearing — the SVG default is linearRGB, which would gamma-shift the matte
+and soften every edge.
+
+Verified on a real sticker through that exact path: **63.8% solid subject, 4.1%
+soft edge, 0.00% green visible**, and the picture checked by eye rather than by
+the numbers.
+
 ### Still to build
 
-Drag-to-canvas and `alphamerge` at render — which `plan.ts` already does for
-masks, so the render half is mostly wiring. Then the audio: muted by default,
-with a toggle.
+The audio toggle — the stickers carry sound and `hasAudio` reaches the catalog,
+but nothing mutes or unmutes one yet. And `loops` is stored and not yet obeyed:
+every sticker currently plays once, which for this vault is the right answer 630
+times out of 636.

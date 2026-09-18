@@ -14,7 +14,7 @@ import { startRender, type RenderOptions } from './render/renderJob'
 import { runGraphicsSelfTest } from './graphics/tier2'
 import { transitionsFromMasks, type TransitionDef } from '@shared/transitions/registry'
 import type { MaskTag } from '@shared/transitions/classify'
-import { entriesOfKind } from '@shared/assets/catalog'
+import { entriesOfKind, isClipSticker, type ClipStickerMeta } from '@shared/assets/catalog'
 import { toAsset } from './assets'
 import {
   prepareCaptions,
@@ -428,7 +428,25 @@ export function registerIpc(getWindow: () => BrowserWindow | null): JobQueue {
     if (ok.length === 0) {
       throw new Error(failed[0]?.error ?? `Could not read ${placeableName(file)}`)
     }
-    return toAsset({ ...ok[0], name: placeableName(file) }, projectFps)
+
+    /*
+     * A clip sticker brings its alpha with it.
+     *
+     * The catalog is the only place that knows a `…colour.mp4` has a matte
+     * beside it, and main owns the catalog — so the pairing is resolved here
+     * rather than trusted from the renderer, which would let any path be passed
+     * off as a matte. Its title comes from the same entry: the filename is a
+     * safe key like `13-tomorrow-for-sure`, and the words are in the catalog.
+     */
+    const entry = (await loadCatalog()).entries.find((e) => e.file === file)
+    const sticker = entry?.kind === 'sticker' && isClipSticker(entry.meta) ? entry : null
+
+    const asset = toAsset(
+      { ...ok[0], name: sticker ? sticker.name : placeableName(file) },
+      projectFps
+    )
+    if (sticker) asset.matte = resolveAssetFile((sticker.meta as ClipStickerMeta).matte)
+    return asset
   })
 
   ipcMain.handle('assets:catalog', async (_e, force: unknown) => {

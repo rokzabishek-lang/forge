@@ -48,7 +48,7 @@ export function mattedSource(
   rect: { sx: number; sy: number; sw: number; sh: number },
   width: number,
   height: number
-): CanvasImageSource | null {
+): HTMLCanvasElement | null {
   if (width < 1 || height < 1) return null
   const scratch = scratchFor(key, Math.round(width), Math.round(height))
   if (!scratch) return null
@@ -67,4 +67,75 @@ export function mattedSource(
 /** Drop a clip's scratch canvas — it was deleted, or is no longer matted. */
 export function forgetMatte(key: string): void {
   scratches.delete(key)
+}
+
+/* --------------------------------------------------- luma as alpha */
+
+/**
+ * The same operation for a matte that is BRIGHT rather than opaque.
+ *
+ * A clip sticker's matte is a greyscale video: every pixel is fully opaque and
+ * the alpha lives in the brightness. `destination-in` reads alpha, so handing
+ * it one of these keeps the whole rectangle — a green box pasted over the shot,
+ * which is precisely what a dropped matte looks like.
+ *
+ * Canvas 2D has no luma-to-alpha operator, but it does take an SVG filter, and
+ * `feColorMatrix` writes alpha from a weighted sum of RGB. Measured in the
+ * harness on a 4-pixel ramp: input luma 0/85/170/255 comes out as alpha
+ * 0/85/170/255 exactly. It runs on the GPU, so there is no per-pixel pass here
+ * at all — which matters when this happens for every sticker on every frame.
+ *
+ * `color-interpolation-filters="sRGB"` is load-bearing. The SVG default is
+ * linearRGB, which would silently gamma-shift the matte and soften every edge.
+ */
+const FILTER_ID = 'forge-luma-alpha'
+let filterReady = false
+
+function ensureLumaFilter(): void {
+  if (filterReady || typeof document === 'undefined') return
+  if (!document.getElementById(FILTER_ID)) {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+    svg.setAttribute('width', '0')
+    svg.setAttribute('height', '0')
+    svg.style.position = 'absolute'
+    svg.innerHTML =
+      `<filter id="${FILTER_ID}" color-interpolation-filters="sRGB">` +
+      // RGB forced to white, alpha = Rec.709 luma. Only the alpha is used.
+      `<feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0.2126 0.7152 0.0722 0 0"/>` +
+      `</filter>`
+    document.body.appendChild(svg)
+  }
+  filterReady = true
+}
+
+/**
+ * A clip sticker, cut out by its own matte.
+ *
+ * Both streams are drawn whole and at the same size: the pair was authored
+ * together frame for frame, so anything that moved one relative to the other
+ * would slide the cut-out off its subject.
+ */
+export function lumaMattedSource(
+  key: string,
+  colour: CanvasImageSource,
+  matte: CanvasImageSource,
+  width: number,
+  height: number
+): HTMLCanvasElement | null {
+  if (width < 1 || height < 1) return null
+  ensureLumaFilter()
+  const scratch = scratchFor(key, Math.round(width), Math.round(height))
+  if (!scratch) return null
+
+  const { canvas, ctx } = scratch
+  ctx.filter = 'none'
+  ctx.globalCompositeOperation = 'source-over'
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+  ctx.drawImage(colour, 0, 0, canvas.width, canvas.height)
+  ctx.globalCompositeOperation = 'destination-in'
+  ctx.filter = `url(#${FILTER_ID})`
+  ctx.drawImage(matte, 0, 0, canvas.width, canvas.height)
+  ctx.filter = 'none'
+  ctx.globalCompositeOperation = 'source-over'
+  return canvas
 }

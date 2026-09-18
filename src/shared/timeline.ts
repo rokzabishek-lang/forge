@@ -55,6 +55,20 @@ export interface MediaAsset {
     pattern: string
     count: number
   }
+
+  /**
+   * A greyscale video holding this asset's alpha, beside `path`.
+   *
+   * Clip stickers only. H.264 4:2:0 cannot carry an alpha channel at all, so a
+   * keyed cut-out ships as a PAIR — colour here, matte there — recombined with
+   * `alphamerge` at render. The colour file still has the green background in
+   * its RGB; the matte is what hides it.
+   *
+   * On the ASSET rather than the clip, because it is a property of the file and
+   * travels with every copy of it. `clip.matte` is a different thing entirely:
+   * that points at another clip on the timeline.
+   */
+  matte?: string
 }
 
 export interface Transform {

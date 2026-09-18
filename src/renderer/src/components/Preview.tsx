@@ -19,7 +19,7 @@ import { TextOverlay } from './TextOverlay'
 import { TransformOverlay } from './TransformOverlay'
 import { MaskOverlay } from './MaskOverlay'
 import { forgetGrade, gradeRegion, gradedSource } from '../grade'
-import { forgetMatte, mattedSource } from '../matte'
+import { forgetMatte, lumaMattedSource, mattedSource } from '../matte'
 import { forgetMask, maskedSource } from '../maskPreview'
 import { forgetTextPreview, textPreviewCanvas } from '../textCanvas'
 import { clipSpeed } from '@shared/render/speed'
@@ -122,6 +122,15 @@ interface Layer {
    * export, which bakes on its way out, still applied it. The two must agree.
    */
   matteClip?: Clip
+  /**
+   * A clip sticker's own alpha, as a greyscale video beside its colour.
+   *
+   * Nothing to do with `matteElement`, which is another CLIP being used as a
+   * stencil. This one is a property of the file: H.264 cannot carry alpha, so a
+   * keyed cut-out ships as a pair and the colour half still has the green it
+   * was keyed from sitting in its RGB.
+   */
+  stickerMatte?: HTMLVideoElement
   /**
    * Depth planes, far to near, when this clip renders as parallax.
    *
@@ -369,6 +378,43 @@ export function Preview(): ReactNode {
     return image
   }, [repaint])
 
+  /**
+   * The greyscale half of a clip sticker, pooled beside the colour it belongs to.
+   *
+   * Keyed `<clip>#matte` so the ordinary pool machinery — cleanup, pausing what
+   * is off screen — can find it from the clip id, and so two copies of the same
+   * sticker at different moments each get their own playhead rather than
+   * fighting over one element's currentTime.
+   */
+  const stickerMatteFor = useCallback(
+    (clip: Clip, asset: MediaAsset): HTMLVideoElement | undefined => {
+      if (!asset.matte) return undefined
+      const key = `${clip.id}#matte`
+      const existing = pool.current.get(key)
+      if (existing instanceof HTMLVideoElement) return existing
+
+      const url = mediaUrl(asset.matte)
+      const video = document.createElement('video')
+      // Same reason as the colour half: without CORS approval the grade pass
+      // cannot texture from anything drawn off this element.
+      video.crossOrigin = 'anonymous'
+      withoutCorsOnError(video, url)
+      video.src = url
+      video.preload = 'auto'
+      video.playsInline = true
+      // It is a stencil. Whatever audio the pair carries belongs to the colour.
+      video.muted = true
+      video.addEventListener('loadeddata', repaint)
+      video.addEventListener('seeked', repaint)
+      video.addEventListener('canplay', repaint)
+      video.style.display = 'none'
+      holderRef.current?.appendChild(video)
+      pool.current.set(key, video)
+      return video
+    },
+    [repaint]
+  )
+
   const elementFor = useCallback((clip: Clip, asset: MediaAsset): MediaElement => {
     // Generated artwork is overwritten in place, so the path alone cannot tell
     // the pool that the image changed. Keying by version does — and the version
@@ -459,7 +505,9 @@ export function Preview(): ReactNode {
       })
     )
     for (const [clipId, element] of pool.current) {
-      if (live.has(clipId)) continue
+      // A sticker's matte is pooled as `<clip>#matte`; it lives and dies with
+      // the clip it belongs to rather than having an entry of its own.
+      if (live.has(clipId.split('#')[0])) continue
       if (element instanceof HTMLVideoElement) element.pause()
       element.remove()
       pool.current.delete(clipId)
@@ -553,6 +601,27 @@ export function Preview(): ReactNode {
         const target = framesToSeconds(sourceFrameFor(clip, frame), fps)
         if (Math.abs(video.currentTime - target) > (isPlaying ? DRIFT_TOLERANCE : 0.02)) {
           video.currentTime = target
+        }
+
+        /*
+         * The sticker's matte, driven to the same instant.
+         *
+         * Not left to play on its own: two video elements started separately
+         * drift, and a matte a few frames off its colour is a cut-out sliding
+         * around its subject — which reads as a broken key rather than as a
+         * sync problem. Held to the SAME target as the colour, so any drift
+         * correction applies to both.
+         */
+        const matte = pool.current.get(`${clip.id}#matte`)
+        if (matte instanceof HTMLVideoElement) {
+          activeIds.add(`${clip.id}#matte`)
+          if (Math.abs(matte.currentTime - target) > (isPlaying ? DRIFT_TOLERANCE : 0.02)) {
+            matte.currentTime = target
+          }
+          const rate = clipSpeed(clip)
+          if (Math.abs(matte.playbackRate - rate) > 0.001) matte.playbackRate = rate
+          if (isPlaying && matte.paused) void matte.play().catch(() => undefined)
+          if (!isPlaying && !matte.paused) matte.pause()
         }
         /*
          * Play at the clip's own rate.
@@ -681,11 +750,12 @@ export function Preview(): ReactNode {
 
         return {
           clip, asset, element, alpha, progress, elapsed, planes, keyed,
-          matteElement, matteClip: shapeClip
+          matteElement, matteClip: shapeClip,
+          stickerMatte: stickerMatteFor(clip, asset)
         }
       })
     },
-    [project, elementFor, planeFor]
+    [project, elementFor, planeFor, stickerMatteFor]
   )
 
   /* ---------------------------------------------------------- draw loop */
@@ -769,6 +839,32 @@ export function Preview(): ReactNode {
           { frame: playhead - layer.clip.start, fps }
         )
         if (live) return live
+      }
+
+      /*
+       * A clip sticker, cut out by the matte that travels with it.
+       *
+       * Applied to the SOURCE rather than alongside the other stencils, because
+       * this alpha belongs to the file and not to anything on the timeline: the
+       * colour half still has green in its RGB, and every path from here — the
+       * grade, the mask, both viewports — has to see the cut-out version or the
+       * sticker is a green rectangle in one of them.
+       */
+      if (
+        layer.stickerMatte &&
+        elementReady(layer.stickerMatte) &&
+        elementReady(layer.element) &&
+        layer.asset.width &&
+        layer.asset.height
+      ) {
+        const cut = lumaMattedSource(
+          `${layer.clip.id}#sticker`,
+          layer.element,
+          layer.stickerMatte,
+          layer.asset.width,
+          layer.asset.height
+        )
+        if (cut) return cut
       }
       return layer.element
     }
