@@ -52,6 +52,7 @@ export function Inspector(): ReactNode {
   const notify = useEditor((s) => s.notify)
   const setTransform = useEditor((s) => s.setTransform)
   const setColor = useEditor((s) => s.setColor)
+  const setClipVolume = useEditor((s) => s.setClipVolume)
   const chooseLut = useEditor((s) => s.chooseLut)
   const setPath = useEditor((s) => s.setPath)
   const addWaypoint = useEditor((s) => s.addWaypoint)
@@ -677,6 +678,42 @@ export function Inspector(): ReactNode {
               */}
               {/* Speed belongs next to duration: it is the other way to change one. */}
               <SpeedPanel clip={clip} asset={asset} />
+
+              {/*
+                Sound, for anything that has some.
+
+                The render has always honoured `clip.volume` and nothing could
+                set it, so every clip played its source at full volume with no
+                way to say otherwise. Clip stickers made that unbearable: they
+                carry loud speech and land muted, and without this there would
+                be no way to hear them at all.
+              */}
+              {asset?.hasAudio && (
+                <div className="space-y-1.5 border-t border-ink-850 pt-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10.5px] text-ink-400">Sound</span>
+                    <button
+                      onClick={() => setClipVolume(clip.id, (clip.volume ?? 1) > 0 ? 0 : 1)}
+                      title={(clip.volume ?? 1) > 0 ? 'Mute this clip' : 'Unmute this clip'}
+                      className={`rounded px-1.5 py-0.5 text-[10px] transition-colors ${
+                        (clip.volume ?? 1) > 0
+                          ? 'bg-ink-800 text-ink-400 hover:bg-ink-700 hover:text-ink-200'
+                          : 'bg-flame-500 font-medium text-ink-950 hover:bg-flame-400'
+                      }`}
+                    >
+                      {(clip.volume ?? 1) > 0 ? 'Mute' : 'Muted'}
+                    </button>
+                  </div>
+                  <Slider
+                    label="Level"
+                    value={Math.round((clip.volume ?? 1) * 100)}
+                    min={0}
+                    max={100}
+                    suffix="%"
+                    onChange={(v) => setClipVolume(clip.id, v / 100)}
+                  />
+                </div>
+              )}
 
               {/*
                * The mask sits above the colour controls on purpose: in grade

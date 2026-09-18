@@ -423,6 +423,16 @@ interface EditorState {
   /** How long a clip stays on screen, in frames. */
   setClipDuration: (clipId: string, frames: number) => void
   /**
+   * How loud this clip's own audio is, 0 to 1.
+   *
+   * The render has always honoured `clip.volume` and nothing could set it, so
+   * every clip played its source at full volume with no way to say otherwise.
+   * That became a real problem with clip stickers, which carry loud speech and
+   * land muted — with no control, "muted by default" would have meant "silent
+   * forever".
+   */
+  setClipVolume: (clipId: string, volume: number) => void
+  /**
    * Slow motion and fast motion.
    *
    * Keeps the same footage and changes how long the clip sits on the timeline,
@@ -1917,7 +1927,17 @@ export const useEditor = create<EditorState>((set, get) => ({
               start: slot.start,
               duration,
               inPoint: 0,
-              volume: 1,
+              /*
+               * A clip sticker lands MUTED.
+               *
+               * 92% of the meme vault is at conversational loudness or louder,
+               * and the sound is often the joke — so it ships (docs/STICKERS.md)
+               * — but six stickers dropped onto a timeline is six people
+               * talking at once, which is nobody's intent. The Sound row in the
+               * inspector turns it up, and unmuting is one drag where muting
+               * six would be six.
+               */
+              volume: asset!.matte ? 0 : 1,
               transform: { x: 0, y: 0, scale: 1, rotation: 0, opacity: 1 },
               color: { brightness: 0, contrast: 1, saturation: 1 }
             }
@@ -2582,6 +2602,14 @@ export const useEditor = create<EditorState>((set, get) => ({
         const ceiling = maxDurationAtSpeed(c, asset, clipSpeed(c))
         return { ...c, duration: Math.max(1, Math.min(ceiling, Math.round(frames))) }
       })
+    }))
+  },
+
+  setClipVolume: (clipId, volume) => {
+    const clamped = Math.max(0, Math.min(1, volume))
+    get().update((p) => ({
+      ...p,
+      clips: p.clips.map((c) => (c.id === clipId ? { ...c, volume: clamped } : c))
     }))
   },
 

@@ -403,9 +403,25 @@ Verified on a real sticker through that exact path: **63.8% solid subject, 4.1%
 soft edge, 0.00% green visible**, and the picture checked by eye rather than by
 the numbers.
 
+### The sound, and two bugs it uncovered
+
+A clip sticker lands with `volume: 0`, and the inspector grew a **Sound** row —
+a mute toggle and a level — for any clip whose asset has audio.
+
+That row had to exist, because shipping the audio without it turned out to be
+worse than not shipping it:
+
+**Nothing in the app could set `clip.volume`.** The render has always honoured
+it (`volume=` in the audio chain) and no control anywhere wrote it, so every
+clip played its source at full volume with no way to say otherwise. A sticker
+landing muted would have been a sticker that could never be heard.
+
+**The preview ignored it for video clips.** Only the audio-track pool applied
+`clip.volume`; a video track's sound played at full volume whatever the clip
+asked for, so the preview and the export disagreed. Invisible until stickers
+arrived, because until then nothing ever set a volume to anything but 1.
+
 ### Still to build
 
-The audio toggle — the stickers carry sound and `hasAudio` reaches the catalog,
-but nothing mutes or unmutes one yet. And `loops` is stored and not yet obeyed:
-every sticker currently plays once, which for this vault is the right answer 630
-times out of 636.
+`loops` is stored and not yet obeyed: every sticker plays once, which for this
+vault is the right answer 630 times out of 636.

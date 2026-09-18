@@ -633,6 +633,15 @@ export function Preview(): ReactNode {
          */
         const rate = clipSpeed(clip)
         if (Math.abs(video.playbackRate - rate) > 0.001) video.playbackRate = rate
+        /*
+         * A video clip's own sound, at the level the clip says.
+         *
+         * Only the AUDIO pool honoured `clip.volume`, so a video track's audio
+         * played at full volume here whatever the clip asked for — and the
+         * export, which has always applied it, disagreed. Clip stickers made
+         * that visible: they land muted and would have talked anyway.
+         */
+        video.volume = Math.max(0, Math.min(1, clip.volume ?? 1))
         if (isPlaying && video.paused) void video.play().catch(() => undefined)
         if (!isPlaying && !video.paused) video.pause()
       }
