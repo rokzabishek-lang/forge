@@ -202,7 +202,54 @@ export async function scanAssets(root = assetsRoot()): Promise<AssetCatalog> {
     })
   }
 
-  for (const file of await walkKind(root, 'sticker')) {
+  const stickerFiles = await walkKind(root, 'sticker')
+
+  /*
+   * Clip stickers, described by an `index.json` the pack ships beside them.
+   *
+   * They cannot be read from their filenames the way emoji can: a keyed cut-out
+   * is a PAIR of files, and its title, duration and whether it loops are
+   * decisions made once when the pack was built (docs/STICKERS.md). Probing 646
+   * of them on every scan to rediscover that would cost more than the whole rest
+   * of the walk.
+   */
+  for (const indexFile of stickerFiles.filter((file) => basename(file) === 'index.json')) {
+    const dir = dirname(indexFile)
+    let parsed: { stickers?: unknown[]; category?: string }
+    try {
+      parsed = JSON.parse(await readFile(indexFile, 'utf8'))
+    } catch {
+      // A corrupt index costs its pack's stickers, not the whole catalog.
+      continue
+    }
+    const category = typeof parsed.category === 'string' ? parsed.category : ''
+    for (const raw of Array.isArray(parsed.stickers) ? parsed.stickers : []) {
+      const sticker = raw as Record<string, unknown>
+      if (typeof sticker.colour !== 'string' || typeof sticker.matte !== 'string') continue
+      // Never let an index name a file outside its own directory.
+      if (sticker.colour.includes('/') || sticker.matte.includes('/')) continue
+      const colourPath = rel(join(dir, sticker.colour))
+      const title = typeof sticker.title === 'string' && sticker.title ? sticker.title : sticker.colour
+      entries.push({
+        id: `sticker:${slugify(colourPath)}`,
+        kind: 'sticker',
+        name: title,
+        file: colourPath,
+        tags: [...title.split(/\s+/), ...category.replace(/^\d+_/, '').split('_')].filter(Boolean),
+        meta: {
+          form: 'clip',
+          matte: rel(join(dir, sticker.matte)),
+          width: Number(sticker.width) || 0,
+          height: Number(sticker.height) || 0,
+          durationMs: Number(sticker.durationMs) || 0,
+          loops: sticker.loops === true,
+          hasAudio: sticker.hasAudio === true
+        }
+      })
+    }
+  }
+
+  for (const file of stickerFiles) {
     if (extname(file).toLowerCase() !== '.svg') continue
     const filename = basename(file)
     const codepoints = codepointsFromStickerFile(filename)
@@ -214,7 +261,7 @@ export async function scanAssets(root = assetsRoot()): Promise<AssetCatalog> {
       name: char || codepoints.join('-'),
       file: rel(file),
       tags: [char, ...codepoints].filter(Boolean),
-      meta: { codepoints, char }
+      meta: { form: 'emoji', codepoints, char }
     })
   }
 

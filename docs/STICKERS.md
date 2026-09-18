@@ -30,6 +30,71 @@ Eleven categories, and the mix is the point — Telugu and Hindi punchlines,
 global editing memes, reels audio hooks, SpongeBob cutaways, fails, tech
 titans, streamers, Indian TV debates, standup, Middle Eastern culture.
 
+## What is ACTUALLY in there — all 845 measured
+
+The section above says 845 stickers. **There are 646.** Every number below comes
+from probing all of them, not from sampling one.
+
+| | files | |
+|---|---|---|
+| **usable stickers** | **646** | a subject survives keying |
+| sound effects, not stickers | 105 | all of `04_Reels_Audio_Hooks_and_SFX` |
+| dead — keying leaves nothing | 91 | **60 of them SpongeBob** |
+| unreadable | 3 | |
+
+**`04_Reels_Audio_Hooks_and_SFX` is not stickers.** It is sound effects that
+happen to be delivered as mp4, and it is the only category where **not one file
+has a green corner** — keying returns the whole 1920×1080 frame every time,
+because there is nothing to cut out. The names say it plainly: *Duck Quack*,
+*The Purge Siren*, *Party Horn*, *Windows Error Crash*, *Sad Hamster Violin*.
+94 of the 105 carry loud audio. These belong with the 23 SFX already in the
+asset library, taking it to **128 sounds** — not in a sticker pack.
+
+**SpongeBob is gone.** 60 of 72 key to nothing: the file is flat green for its
+whole duration, subject and all. Verified frame by frame on one — 100% green at
+eight timestamps across fourteen seconds. The matting removed everything. 12
+survive.
+
+### Every sticker has audio, and the audio is often the joke
+
+All 845 carry an AAC stream, and **92% are at −30 dB mean or louder** (category
+means run −9 to −26 dB, peaks at 0 dB). This document used to plan them as
+silent overlays, which for *"Telugu Comedy Reaction Hook"* or *"What! what the
+fu"* throws away the punchline.
+
+**Decided: keep the audio, muted by default.** It rides inside `colour.mp4` and
+costs **+34%** — 62 KB per sticker, 114 MB → **152 MB** for the set, about 15 MB
+per category pack. A sticker lands silent with a toggle in the inspector.
+Muting what shipped is a checkbox; unmuting what did not means rebuilding and
+republishing every pack.
+
+### Two ways of counting that were both wrong
+
+Worth writing down, because both looked authoritative and both were measuring
+the wrong thing.
+
+**One frame is not a clip.** Sampling green coverage at t=1s called 226 files
+blank. Sampling ten points across each clip's duration rescued **89** of them —
+their subject simply appears later.
+
+**Green coverage measures SIZE, not absence.** Of the 137 still called blank,
+looking at the pictures showed tiny figures floating in a huge green field —
+a 384×346 subject in a 1920×1080 frame is 97% green and perfectly usable, because
+cropping to the alpha box is the next step anyway. Switching the test to *"does
+keying produce a box at all"* rescued **46 more**. The authoritative test is the
+alpha bounding box, which is what the pipeline computes regardless.
+
+Both were caught by looking at the frames instead of the numbers.
+
+### `ffmpeg` eats stdin
+
+Any shell loop of the form `find … | while read f; do ffmpeg -i "$f" …; done`
+silently corrupts itself: ffmpeg reads stdin, consuming the file list feeding
+the loop, so alternate entries arrive truncated at the front and fail with
+`No such file or directory` on a path that visibly exists. **Pass `-nostdin`.**
+The app is not exposed to this — `src/main` spawns with argument arrays, never a
+shell — but every measurement script in this document is.
+
 ## The measurement that changed the plan
 
 **The matted stickers carry no alpha channel.**
@@ -120,13 +185,39 @@ Per sticker, one pass:
 6. compare first and last frame → store `loops` on the catalog entry
 7. record name, category, dimensions, duration
 
-Measured output:
+On the reference file: **180 KB** silent (128 colour + 52 matte), **242 KB**
+with audio, and 1.2 s to encode a 4.9 s clip.
 
-| | |
-|---|---|
-| per sticker | **187 KB** (133 colour + 54 matte) — **29% of the original** |
-| all 845 | **~154 MB**, vs 539 MB raw |
-| **one category pack** | **~14 MB** |
+**The whole vault, built: 636 stickers and 105 sounds, 220 MB across 11
+archives, 22 minutes.**
+
+That is well over the 152 MB this document first projected, and the reason is
+duration, not the recipe. The reference clip is 4.9 s and **the median sticker
+is 6.0 s, p90 is 12 s and the longest is 18 s** — so per-sticker cost runs to
+346 KB, not 242 KB. Extrapolating a size from one file is extrapolating its
+length.
+
+| pack | stickers | compressed |
+|---|---|---|
+| Telugu memes & punchlines | 118 | 38 MB |
+| Middle Eastern culture | 52 | 30 MB |
+| Global editing memes | 89 | 26 MB |
+| Global memes & streamers | 57 | 23 MB |
+| Indian standup & reality TV | 54 | 22 MB |
+| Epic fails & accidents | 63 | 22 MB |
+| Hindi meme punchlines | 90 | 19 MB |
+| Indian TV debates | 55 | 19 MB |
+| Tech & business titans | 51 | 16 MB |
+| **Meme sound effects** | 105 sounds | 6 MB |
+| SpongeBob cutaways | 7 | 0.4 MB |
+
+Each is its own download, so a 38 MB worst case is fine — the asset library
+itself is 57 MB. Nobody fetches 220 MB.
+
+The crop box on the reference file measures **942×542 of 1280×720**, reproducing
+the figure above exactly, and the recombined pair measures **53.6% solid
+subject, 4.9% soft edge, 0.00% green**. The recipe is sound; it was the count of
+files it applies to that was wrong.
 
 Verified by recombining the pair: **45% clean, 48.7% solid subject, 6% soft
 edge, 0.00% green.** The subject fraction nearly doubled from 28% purely from
@@ -203,8 +294,73 @@ a one-shot. Store the answer on the catalogue entry. The user drags a sticker
 and it behaves correctly, having never seen a dialog — which is the difference
 between a stack of features and one tool.
 
+### Measured: this vault contains no loops
+
+The method above is right and the answer for this source is **almost always
+one-shot**. Across all 636, the first-to-last frame difference is one smooth
+population — a hump at 20–50 with a thin tail to zero and **no gap anywhere**.
+There is no threshold separating "authored to loop" from "happens to start and
+end on a similar frame", because scraped meme footage contains no authored
+loops. A meme is a punchline.
+
+A first cut at delta < 12 called **129 of 636** loops, including **40 of 63
+accident clips**. Repeating a ten-second accident to fill a thirty-second clip
+is not something anybody asked for.
+
+The two errors are not equally bad: a one-shot playing once never looks wrong,
+a repeating punchline always does. So the rule is near-identical **and** short —
+delta < 2 and under 3 s — which **6 of 636** meet. The mechanism stays for packs
+that really are authored loops, which is what sparkles, fire and confetti will
+be.
+
 ## Status
 
-Not built. `AssetKind` already includes `'sticker'`, so the catalogue has a
-place for these; what does not exist is the import conversion, the alpha
-storage, the loop detection, or the drag-to-canvas path.
+**Built: the pipeline and the catalog. Not built: placing one on the timeline.**
+
+`scripts/build-stickers.mjs` walks the vault and emits one directory per
+category, laid out the way `installPack` leaves it, so each goes straight to
+`scripts/build-pack.mjs`:
+
+    dist/stickers/stickers-telugu/stickers/<key>.colour.mp4
+                                          /<key>.matte.mp4
+                                          /index.json
+
+Filenames come from a safe key with the title kept in the index, per "Two
+problems in the source material" above — and `build-pack.mjs` refuses an illegal
+name outright, so a pack that would break on Windows cannot be built.
+
+`04_Reels_Audio_Hooks_and_SFX` goes to `sfx-meme-sounds` as plain `.m4a`,
+needing no new code: they are ordinary sounds once the video is dropped.
+
+### What the catalog knows
+
+`StickerMeta` is now a union — `form: 'emoji'` for the codepoint SVGs,
+`form: 'clip'` for a keyed pair — and `CATALOG_VERSION` is 2 so old caches are
+thrown away rather than guessed at. A clip carries its matte, dimensions,
+duration, `loops` and `hasAudio`.
+
+The metadata comes from the pack's `index.json`, not from probing: a clip's
+title and loop behaviour are decisions made once at build time and cannot be
+read back off a filename, and probing 646 files on every scan would cost more
+than the entire rest of the walk. A corrupt index costs its own pack's stickers
+and nothing else, and an index naming a path outside its directory is refused.
+
+### Three quality gates, each from a file that got through without them
+
+- **No subject after keying** — 91 files, 60 of them SpongeBob.
+- **Subject on screen under 0.4s** — the clip is dead air with a flash at one
+  end. Found because `12 - Tomorrow` shipped 2.0s of blank: it has a single
+  stray frame of content at t=0 and the rest at t=1.9, so taking the outer
+  envelope of content frames called it a 1.9s subject filling the whole clip.
+  **The measure is the longest CONTIGUOUS run**, not first-to-last.
+- **Under 24px after scaling** — `MIN_SUBJECT` guards the source box, and a
+  1510×41 subtitle bar passes it happily, then scales to 512×14.
+
+Everything else is trimmed to its content range, which is worth real time:
+*Two very boring minutes later* goes 4018ms → 1267ms.
+
+### Still to build
+
+Drag-to-canvas and `alphamerge` at render — which `plan.ts` already does for
+masks, so the render half is mostly wiring. Then the audio: muted by default,
+with a toggle.

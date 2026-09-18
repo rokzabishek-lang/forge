@@ -281,7 +281,8 @@ describe('layering a fetched manifest over the built-in one', () => {
       BUILT_IN_MANIFEST,
       remote([{ ...PACK, id: '../escape' }, { ...PACK, url: 'http://insecure' }, { id: 'x' }])
     )
-    expect(packs.map((p) => p.id)).toEqual(['library'])
+    // Every built-in survives, and none of the three bad entries got in.
+    expect(packs.map((p) => p.id)).toEqual(BUILT_IN_MANIFEST.packs.map((p) => p.id))
   })
 })
 

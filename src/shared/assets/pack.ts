@@ -32,8 +32,8 @@ export interface Pack {
   name: string
   /** What the user is being asked to spend bandwidth on, in their words. */
   summary: string
-  /** Groups packs in the UI: the asset library, or a sticker category. */
-  group: 'library' | 'stickers'
+  /** Groups packs in the UI: the asset library, sounds, or a sticker category. */
+  group: 'library' | 'sounds' | 'stickers'
   /** Bumped when the CONTENTS change, which is what makes a pack stale. */
   version: number
   url: string
@@ -91,6 +91,116 @@ export const BUILT_IN_MANIFEST: PackManifest = {
        */
       sha256: 'd6daf449b1e4f014bc7f0a5f89d3c137bfef0b0ec5da3195f23295e2ba3cf985',
       bytes: 59_684_563
+    },
+    {
+      id: 'sfx-meme-sounds',
+      name: 'Meme sound effects',
+      summary: '105 sound effects — quacks, sirens, horns, error chimes',
+      group: 'sounds',
+      version: 1,
+      url: 'https://github.com/rokzabishek-lang/forge-assets/releases/download/stickers-v1/sfx-meme-sounds.tar.gz',
+      sha256: '',
+      bytes: 6_642_078
+    },
+    {
+      id: 'stickers-epic-fails-accidents',
+      name: 'Epic fails & accidents',
+      summary: '63 meme stickers, with transparency and sound',
+      group: 'stickers',
+      version: 1,
+      url: 'https://github.com/rokzabishek-lang/forge-assets/releases/download/stickers-v1/stickers-epic-fails-accidents.tar.gz',
+      sha256: '',
+      bytes: 22_608_134
+    },
+    {
+      id: 'stickers-global-editing-memes',
+      name: 'Global editing memes',
+      summary: '89 meme stickers, with transparency and sound',
+      group: 'stickers',
+      version: 1,
+      url: 'https://github.com/rokzabishek-lang/forge-assets/releases/download/stickers-v1/stickers-global-editing-memes.tar.gz',
+      sha256: '',
+      bytes: 26_801_417
+    },
+    {
+      id: 'stickers-global-memes-and-streamers-2025-2026',
+      name: 'Global memes & streamers',
+      summary: '57 meme stickers, with transparency and sound',
+      group: 'stickers',
+      version: 1,
+      url: 'https://github.com/rokzabishek-lang/forge-assets/releases/download/stickers-v1/stickers-global-memes-and-streamers-2025-2026.tar.gz',
+      sha256: '',
+      bytes: 23_606_402
+    },
+    {
+      id: 'stickers-hindi-meme-punchlines',
+      name: 'Hindi meme punchlines',
+      summary: '90 meme stickers, with transparency and sound',
+      group: 'stickers',
+      version: 1,
+      url: 'https://github.com/rokzabishek-lang/forge-assets/releases/download/stickers-v1/stickers-hindi-meme-punchlines.tar.gz',
+      sha256: '',
+      bytes: 20_012_303
+    },
+    {
+      id: 'stickers-indian-media-and-tv-debates',
+      name: 'Indian TV debates',
+      summary: '55 meme stickers, with transparency and sound',
+      group: 'stickers',
+      version: 1,
+      url: 'https://github.com/rokzabishek-lang/forge-assets/releases/download/stickers-v1/stickers-indian-media-and-tv-debates.tar.gz',
+      sha256: '',
+      bytes: 19_590_130
+    },
+    {
+      id: 'stickers-indian-standup-and-reality-tv',
+      name: 'Indian standup & reality TV',
+      summary: '54 meme stickers, with transparency and sound',
+      group: 'stickers',
+      version: 1,
+      url: 'https://github.com/rokzabishek-lang/forge-assets/releases/download/stickers-v1/stickers-indian-standup-and-reality-tv.tar.gz',
+      sha256: '',
+      bytes: 23_496_850
+    },
+    {
+      id: 'stickers-middle-eastern-and-global-culture',
+      name: 'Middle Eastern culture',
+      summary: '52 meme stickers, with transparency and sound',
+      group: 'stickers',
+      version: 1,
+      url: 'https://github.com/rokzabishek-lang/forge-assets/releases/download/stickers-v1/stickers-middle-eastern-and-global-culture.tar.gz',
+      sha256: '',
+      bytes: 31_111_235
+    },
+    {
+      id: 'stickers-spongebob-cutaways',
+      name: 'SpongeBob cutaways',
+      summary: '7 meme stickers, with transparency and sound',
+      group: 'stickers',
+      version: 1,
+      url: 'https://github.com/rokzabishek-lang/forge-assets/releases/download/stickers-v1/stickers-spongebob-cutaways.tar.gz',
+      sha256: '',
+      bytes: 429_460
+    },
+    {
+      id: 'stickers-tech-and-business-titans',
+      name: 'Tech & business titans',
+      summary: '51 meme stickers, with transparency and sound',
+      group: 'stickers',
+      version: 1,
+      url: 'https://github.com/rokzabishek-lang/forge-assets/releases/download/stickers-v1/stickers-tech-and-business-titans.tar.gz',
+      sha256: '',
+      bytes: 16_874_360
+    },
+    {
+      id: 'stickers-telugu-memes-and-punchlines',
+      name: 'Telugu memes & punchlines',
+      summary: '118 meme stickers, with transparency and sound',
+      group: 'stickers',
+      version: 1,
+      url: 'https://github.com/rokzabishek-lang/forge-assets/releases/download/stickers-v1/stickers-telugu-memes-and-punchlines.tar.gz',
+      sha256: '',
+      bytes: 39_534_257
     }
   ]
 }
@@ -151,7 +261,7 @@ function isPack(value: unknown): value is Pack {
     isValidPackId(p.id) &&
     typeof p.name === 'string' &&
     typeof p.summary === 'string' &&
-    (p.group === 'library' || p.group === 'stickers') &&
+    (p.group === 'library' || p.group === 'sounds' || p.group === 'stickers') &&
     Number.isInteger(p.version) &&
     p.version > 0 &&
     typeof p.url === 'string' &&
@@ -276,12 +386,16 @@ export function packButton(
  * Packs in the order they should be offered.
  *
  * The asset library first — it is the one that changes what the rest of the app
- * can do, where a sticker category only adds stickers. Then categories by name,
- * so a list that grows to a dozen stays somewhere the eye can find a row again.
+ * can do, where a sticker category only adds stickers. Sounds next, because one
+ * pack of sound effects is useful to everybody and a sticker category is useful
+ * to the people who edit in that language. Then categories by name, so a list
+ * that grows to a dozen stays somewhere the eye can find a row again.
  */
+const GROUP_ORDER: Record<Pack['group'], number> = { library: 0, sounds: 1, stickers: 2 }
+
 export function orderPacks(packs: PackListing[]): PackListing[] {
   return [...packs].sort((a, b) => {
-    if (a.group !== b.group) return a.group === 'library' ? -1 : 1
+    if (a.group !== b.group) return GROUP_ORDER[a.group] - GROUP_ORDER[b.group]
     return a.name.localeCompare(b.name)
   })
 }

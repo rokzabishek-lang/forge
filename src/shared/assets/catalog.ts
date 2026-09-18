@@ -23,11 +23,52 @@ export interface SfxMeta {
   durationMs: number | null
 }
 
-export interface StickerMeta {
+/**
+ * Stickers come in two shapes, and they have nothing in common but the drawer
+ * they live in.
+ *
+ * An EMOJI is one SVG named by codepoint. A CLIP is a keyed video cut-out —
+ * a colour `.mp4` beside a matte `.mp4`, recombined with `alphamerge` at render,
+ * which is the same pairing `plan.ts` already uses for masks. H.264 4:2:0
+ * cannot carry an alpha channel, so a single file was never an option; see
+ * `docs/STICKERS.md`.
+ */
+export type StickerMeta = EmojiStickerMeta | ClipStickerMeta
+
+export interface EmojiStickerMeta {
+  form: 'emoji'
   /** Unicode codepoints the filename encodes, e.g. ["1F525"]. */
   codepoints: string[]
   /** The actual character, for search. */
   char: string
+}
+
+export interface ClipStickerMeta {
+  form: 'clip'
+  /** The matte, relative to the catalog root like `file` is. */
+  matte: string
+  width: number
+  height: number
+  durationMs: number
+  /**
+   * Authored to repeat, so it fills the host clip rather than playing once.
+   *
+   * Decided when the pack is built, by comparing the first and last frame, so
+   * the app never shows anybody a dialog about playback semantics. Stretching
+   * is never offered: a 2s reaction across 30s plays at 1/15 speed, and with a
+   * meme the timing is the joke.
+   */
+  loops: boolean
+  /**
+   * Muted by default when placed. 92% of the vault is at conversational
+   * loudness or louder and for a talking meme the sound IS the joke, so it
+   * ships — but six stickers all talking at once is not what anybody wanted.
+   */
+  hasAudio: boolean
+}
+
+export function isClipSticker(meta: unknown): meta is ClipStickerMeta {
+  return !!meta && (meta as ClipStickerMeta).form === 'clip'
 }
 
 export interface TitleMeta {
@@ -61,7 +102,14 @@ export interface AssetCatalog {
   entries: CatalogEntry[]
 }
 
-export const CATALOG_VERSION = 1
+/**
+ * 2: stickers gained a `form` discriminator and video clips.
+ *
+ * `loadCatalog` throws away a cache whose version does not match, which is the
+ * point of bumping it — a catalog written before clips existed has emoji
+ * entries with no `form`, and nothing downstream should have to guess.
+ */
+export const CATALOG_VERSION = 2
 
 /**
  * Fonts that ship with macOS and/or Windows. These are referenced by family name

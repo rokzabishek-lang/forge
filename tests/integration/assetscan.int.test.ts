@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { scanAssets, catalogSummary } from '../../src/main/assets/scan'
@@ -178,5 +178,129 @@ describe('a root with installed packs under it', () => {
       '.library.installing/fonts/Half-Written.ttf'
     )
     expect(catalog.entries.some((e) => e.file.includes('.packs'))).toBe(false)
+  })
+})
+
+describe('clip stickers, described by the pack index', () => {
+  let clips = ''
+
+  beforeAll(async () => {
+    /*
+     * A keyed cut-out is a PAIR of files — H.264 4:2:0 cannot carry alpha — and
+     * its title, duration and loop behaviour are decided once when the pack is
+     * built. None of that can be read back from a filename, so the pack ships
+     * an index.json and the scan reads it.
+     */
+    clips = await mkdtemp(join(tmpdir(), 'forge-assets-clips-'))
+    const dir = join(clips, 'stickers-telugu', 'stickers')
+    await mkdir(dir, { recursive: true })
+    for (const name of ['reaction-107.colour.mp4', 'reaction-107.matte.mp4', 'wow.colour.mp4', 'wow.matte.mp4']) {
+      await writeFile(join(dir, name), 'x')
+    }
+    await writeFile(
+      join(dir, 'index.json'),
+      JSON.stringify({
+        version: 1,
+        category: '01_Telugu_Memes_and_Punchlines',
+        stickers: [
+          {
+            key: 'reaction-107', title: 'Telugu Comedy Reaction Hook 107',
+            colour: 'reaction-107.colour.mp4', matte: 'reaction-107.matte.mp4',
+            width: 512, height: 294, durationMs: 4900, loops: false, hasAudio: true
+          },
+          {
+            key: 'wow', title: 'Wow', colour: 'wow.colour.mp4', matte: 'wow.matte.mp4',
+            width: 300, height: 300, durationMs: 1200, loops: true, hasAudio: false
+          }
+        ]
+      })
+    )
+    // An emoji pack alongside, because both shapes live in the same drawer.
+    const emoji = join(clips, 'library', 'color', 'svg')
+    await mkdir(emoji, { recursive: true })
+    await writeFile(join(emoji, '1F525.svg'), '<svg/>')
+  })
+
+  afterAll(async () => {
+    await rm(clips, { recursive: true, force: true }).catch(() => undefined)
+  })
+
+  it('reads a clip sticker with everything the timeline needs', async () => {
+    const stickers = entriesOfKind(await scanAssets(clips), 'sticker')
+    const reaction = stickers.find((s) => s.name.includes('Reaction Hook'))!
+    expect(reaction).toBeDefined()
+    expect(reaction.file).toBe('stickers-telugu/stickers/reaction-107.colour.mp4')
+    expect(reaction.meta).toEqual({
+      form: 'clip',
+      matte: 'stickers-telugu/stickers/reaction-107.matte.mp4',
+      width: 512,
+      height: 294,
+      durationMs: 4900,
+      loops: false,
+      hasAudio: true
+    })
+  })
+
+  it('carries the loop decision through, so the app never has to ask', async () => {
+    // Stretching a 2s reaction across a 30s clip plays it at 1/15 speed, and
+    // with a meme the timing is the joke. One-shot or loop, decided at build.
+    const stickers = entriesOfKind(await scanAssets(clips), 'sticker')
+    expect(stickers.find((s) => s.name === 'Wow')!.meta).toMatchObject({ loops: true })
+    expect(stickers.find((s) => s.name.includes('Reaction'))!.meta).toMatchObject({ loops: false })
+  })
+
+  it('keeps emoji and clips in the same drawer, told apart by form', async () => {
+    const stickers = entriesOfKind(await scanAssets(clips), 'sticker')
+    expect(stickers).toHaveLength(3)
+    expect(stickers.filter((s) => (s.meta as { form: string }).form === 'clip')).toHaveLength(2)
+    const emoji = stickers.find((s) => (s.meta as { form: string }).form === 'emoji')!
+    expect(emoji.name).toBe('🔥')
+  })
+
+  it('gives each clip a distinct id, even with the same filename in two packs', async () => {
+    /*
+     * Ids come from the relative path, not the key. Two category packs are very
+     * likely to both contain a `wow`, and duplicate ids mean the wrong sticker
+     * comes back from a lookup.
+     */
+    const second = join(clips, 'stickers-hindi', 'stickers')
+    await mkdir(second, { recursive: true })
+    await writeFile(join(second, 'wow.colour.mp4'), 'x')
+    await writeFile(join(second, 'wow.matte.mp4'), 'x')
+    await writeFile(join(second, 'index.json'), JSON.stringify({
+      version: 1, category: '02_Hindi', stickers: [{
+        key: 'wow', title: 'Wow', colour: 'wow.colour.mp4', matte: 'wow.matte.mp4',
+        width: 100, height: 100, durationMs: 900, loops: false, hasAudio: false
+      }]
+    }))
+
+    const stickers = entriesOfKind(await scanAssets(clips), 'sticker')
+    const ids = stickers.map((s) => s.id)
+    expect(new Set(ids).size).toBe(ids.length)
+    await rm(join(clips, 'stickers-hindi'), { recursive: true, force: true })
+  })
+
+  it('refuses an index that names a file outside its own directory', async () => {
+    const dir = join(clips, 'stickers-telugu', 'stickers')
+    const good = await readFile(join(dir, 'index.json'), 'utf8')
+    await writeFile(join(dir, 'index.json'), JSON.stringify({
+      version: 1, category: 'x', stickers: [{
+        key: 'escape', title: 'Escape', colour: '../../../etc/passwd', matte: 'a.matte.mp4',
+        width: 10, height: 10, durationMs: 1, loops: false, hasAudio: false
+      }]
+    }))
+    const stickers = entriesOfKind(await scanAssets(clips), 'sticker')
+    expect(stickers.some((s) => s.file.includes('passwd'))).toBe(false)
+    await writeFile(join(dir, 'index.json'), good)
+  })
+
+  it('loses one pack to a corrupt index, not the whole catalog', async () => {
+    const dir = join(clips, 'stickers-telugu', 'stickers')
+    const good = await readFile(join(dir, 'index.json'), 'utf8')
+    await writeFile(join(dir, 'index.json'), '{ not json at all')
+    const catalog = await scanAssets(clips)
+    // The emoji in the other pack is untouched.
+    expect(entriesOfKind(catalog, 'sticker').map((s) => s.name)).toEqual(['🔥'])
+    await writeFile(join(dir, 'index.json'), good)
   })
 })
