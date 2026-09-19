@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import {
   DEFAULT_PAPER,
   PAPER_LOOKS,
@@ -456,5 +458,47 @@ describe('a long run of clippings', () => {
     expect(clippingCount(none)).toBe(1)
     expect(paperFrames(none)).toBeGreaterThan(0)
     expect(paperFrameAt(none, 0).index).toBe(0)
+  })
+})
+
+describe('a clip that draws itself', () => {
+  /*
+   * Guards the bug that made the preview permanently black.
+   *
+   * Text and clippings both paint from their spec onto a canvas in the
+   * preview, and both exist on the timeline before their file does — on
+   * purpose, so adding one is instant. The readiness gate said
+   * `layer.clip.text ? true : elementReady(layer.element)`, so a paper clip
+   * fell to the second branch and waited on an `<img>` pointing at a file
+   * that had not been written. The layer was never ready, nothing drew, and
+   * the timeline showed a clip over a black frame with no error anywhere.
+   *
+   * Asserted against the source because the failure is in the render loop's
+   * readiness logic, and jsdom has no canvas, no image loading and no
+   * `readyState` — a mounted test would report ready for everything and
+   * certify the bug. The real check is driving the harness; this is the cheap
+   * guard that fails the moment the branch forgets one of them.
+   */
+  const preview = readFileSync(
+    resolve(__dirname, '../src/renderer/src/components/Preview.tsx'),
+    'utf8'
+  )
+
+  it('lets both kinds past the readiness gate', () => {
+    expect(preview).toMatch(/const drawsItself = \(layer: Layer\): boolean =>/)
+    expect(preview).toMatch(/Boolean\(layer\.clip\.text \?\? layer\.clip\.paper\)/)
+    expect(preview).toMatch(/drawsItself\(layer\) \? true : elementReady\(layer\.element\)/)
+    // The old one-sided form must not come back.
+    expect(preview).not.toMatch(/layer\.clip\.text \? true : elementReady/)
+  })
+
+  it('draws clippings live rather than from the baked file', () => {
+    // The effect IS the cut from page to page, so a preview that waited for
+    // the sequence would show one frozen page while the export played a run.
+    expect(preview).toContain('paperPreviewCanvas')
+    const paper = preview.indexOf('if (layer.clip.paper)')
+    const text = preview.indexOf('if (layer.clip.text)')
+    expect(paper).toBeGreaterThan(-1)
+    expect(text).toBeGreaterThan(-1)
   })
 })

@@ -107,6 +107,8 @@ import {
 } from '@shared/timeline'
 import { useCatalog } from './catalog'
 import { bakeText, bakeTextSequence } from './textCanvas'
+import { bakePaperSequence, paperDuration } from './paperCanvas'
+import { DEFAULT_PAPER, type PaperSpec } from '@shared/render/paper'
 import {
   DEFAULT_PIP,
   pipTransform,
@@ -391,6 +393,12 @@ interface EditorState {
   setText: (clipId: string, patch: Partial<Omit<TextSpec, 'version'>>) => Promise<void>
   /** A flat card of colour, for text to sit on or as a wash between shots. */
   addSolidClip: (trackId: string, startFrame: number) => Promise<string | null>
+  /** A run of newspaper clippings with a word highlighted across them. */
+  addPaperClip: (trackId: string, startFrame: number, keyword?: string) => Promise<string | null>
+  /** Change a paper run. Re-bakes in the background; the preview is live. */
+  setPaper: (clipId: string, patch: Partial<PaperSpec>) => void
+  /** Write the run's frames to disk. Nothing waits on it; the preview is live. */
+  rebakePaper: (clipId: string) => Promise<void>
   /** A grade over everything on the tracks below, for as long as it runs. */
   addAdjustmentLayer: (trackId: string, startFrame: number) => Promise<string | null>
   setSolid: (clipId: string, patch: Partial<Omit<SolidSpec, 'version'>>) => Promise<void>
@@ -1676,6 +1684,114 @@ export const useEditor = create<EditorState>((set, get) => ({
       .catch((err) => notify(err instanceof Error ? err.message : String(err)))
 
     return clipId
+  },
+
+  addPaperClip: async (trackId, startFrame, keyword) => {
+    const { project, notify } = get()
+    const track = project.tracks.find((t) => t.id === trackId)
+    if (!track || track.locked || track.kind !== 'video') {
+      notify('Clippings go on a video track', 'info')
+      return null
+    }
+
+    const clipId = `paper-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
+    const spec: PaperSpec = {
+      ...DEFAULT_PAPER,
+      keyword: (keyword ?? 'BREAKING').toUpperCase(),
+      // A fresh seed per clip, so two runs in one edit are two different
+      // stacks of paper rather than the same twenty pages twice.
+      seed: Math.floor(Math.random() * 100000) + 1
+    }
+    const { width, height, fps } = project.settings
+    const duration = paperDuration(spec, fps)
+    const assetId = `paper-asset-${clipId}`
+
+    /*
+     * On the timeline in the same tick as the click, exactly as text is.
+     *
+     * The bake writes twenty full-canvas PNGs, which is far too long to hold a
+     * click for — and none of it is needed to show the clip, because the
+     * preview draws the pages itself from this same spec.
+     */
+    get().update((p) => {
+      // Clippings go OVER footage; that is the whole point of the alpha. So
+      // this climbs a track rather than queueing after what is already there.
+      const slot = stackOverlay(p, trackId, startFrame, duration)
+      return {
+        ...slot.project,
+        assets: [
+          ...slot.project.assets,
+          {
+            id: assetId,
+            path: '',
+            name: `${spec.keyword} — clippings`,
+            kind: 'image',
+            durationFrames: Math.max(duration, Math.round(fps * 10)),
+            width,
+            height,
+            fps: null,
+            hasVideo: true,
+            hasAudio: false,
+            size: 0
+          }
+        ],
+        clips: [
+          ...slot.project.clips,
+          {
+            id: clipId,
+            assetId,
+            trackId: slot.trackId,
+            start: slot.start,
+            duration,
+            inPoint: 0,
+            volume: 1,
+            transform: { x: 0, y: 0, scale: 1, rotation: 0, opacity: 1 },
+            color: { brightness: 0, contrast: 1, saturation: 1 },
+            paper: spec
+          }
+        ]
+      }
+    })
+    get().revealClip(clipId)
+    void get().rebakePaper(clipId)
+    return clipId
+  },
+
+  setPaper: (clipId, patch) => {
+    get().update((p) => ({
+      ...p,
+      clips: p.clips.map((c) =>
+        c.id === clipId && c.paper ? { ...c, paper: { ...c.paper, ...patch } } : c
+      )
+    }))
+    /*
+     * The preview is live, so nothing waits on this. It exists so the file on
+     * disk is warm before an export asks — and the export rebakes every
+     * generated clip anyway, so a missed write cannot produce a wrong frame.
+     */
+    void get().rebakePaper(clipId)
+  },
+
+  rebakePaper: async (clipId) => {
+    const { project, notify } = get()
+    const clip = project.clips.find((c) => c.id === clipId)
+    if (!clip?.paper) return
+    const { width, height, fps } = project.settings
+    try {
+      const baked = await bakePaperSequence(clip.paper, clipId, width, height, Math.round(fps * 20))
+      if (!baked) return
+      get().update((p) => ({
+        ...p,
+        assets: p.assets.map((a) =>
+          a.id === clip.assetId
+            ? { ...a, path: baked.pattern.replace('%05d', '00000'),
+                frames: { pattern: baked.pattern, count: baked.frames } }
+            : a
+        )
+      }))
+    } catch (err) {
+      notify(err instanceof Error ? err.message : String(err))
+    }
   },
 
   setText: async (clipId, patch) => {

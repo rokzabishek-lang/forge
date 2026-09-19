@@ -24,6 +24,7 @@ import { forgetGrade, gradeRegion, gradedSource } from '../grade'
 import { forgetMatte, lumaMattedSource, mattedSource } from '../matte'
 import { forgetMask, maskedSource } from '../maskPreview'
 import { forgetTextPreview, textPreviewCanvas } from '../textCanvas'
+import { paperPreviewCanvas } from '../paperCanvas'
 import { clipSpeed } from '@shared/render/speed'
 import { activeCaptionStyle, captionAt, drawCaptions } from '../captionPreview'
 import { captionSourceClip } from '@shared/captions/timeline'
@@ -896,8 +897,21 @@ export function Preview(): ReactNode {
         ? element.readyState >= 2
         : element.complete && element.naturalWidth > 0
 
+    /*
+     * A clip that DRAWS itself is always ready.
+     *
+     * Text and clippings both paint from their spec on a canvas here, so
+     * neither has anything to wait for — and both exist on the timeline
+     * before their file does, deliberately, so adding one is instant.
+     * Gating them on an `<img>` that has not been written yet leaves the
+     * layer permanently unready and the preview permanently black, which is
+     * exactly what clippings did until this said `paper` as well as `text`.
+     */
+    const drawsItself = (layer: Layer): boolean =>
+      Boolean(layer.clip.text ?? layer.clip.paper)
+
     const ready = (layer: Layer): boolean =>
-      layer.clip.text ? true : elementReady(layer.element)
+      drawsItself(layer) ? true : elementReady(layer.element)
 
     /*
      * Graded on the GPU before it is drawn.
@@ -916,6 +930,25 @@ export function Preview(): ReactNode {
      * is written in the background where nobody is waiting for it.
      */
     const sourceFor = (layer: Layer): MediaElement | HTMLCanvasElement => {
+      /*
+       * Clippings are drawn live too, and they have to be.
+       *
+       * Unlike a caption this never settles — the effect IS the cut from page
+       * to page — so waiting on a baked file would show one frozen page while
+       * the run played in the export. The preview draws the same pages the
+       * bake does, from the same spec.
+       */
+      if (layer.clip.paper) {
+        const live = paperPreviewCanvas(
+          layer.clip.id,
+          layer.clip.paper,
+          ASPECTS[aspect].width,
+          ASPECTS[aspect].height,
+          { frame: playhead - layer.clip.start, fps }
+        )
+        if (live) return live
+      }
+
       if (layer.clip.text) {
         const live = textPreviewCanvas(
           layer.clip.id,

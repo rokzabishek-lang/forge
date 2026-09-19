@@ -104,14 +104,48 @@ Nothing looked broken — the pages just repeated, which is the one thing a
 ripple exists not to do. `pick()` now steps by the first stride coprime with
 the length.
 
-## Not done yet
+## How to use it
 
-**It is not wired into the app.** The layout and the painter are finished and
-tested; there is no way to create one from the UI and nothing bakes it. The
-rails exist and are the right ones — `bakeTextSequence` in
-`src/renderer/src/textCanvas.ts` already calls a painter once per frame and
-writes numbered PNGs with alpha, which is exactly what a paper run needs, and
-means it composites over footage with no green screen anywhere.
+**Media tab → `+ Newspaper clippings`.** It lands on a track above whatever is
+there, because the alpha is the point. Select it and the Inspector has the
+word, the four looks, Pages and Frames-each, and a **Customise** section for
+size, tilt & tear, texture, your own headline and masthead, the marker colour,
+and *Shuffle the pages* for a different stack at the same settings.
+
+Changing Pages or Frames-each **retimes the clip**. Otherwise asking for forty
+pages plays twenty and stops, which reads as the count being ignored rather
+than the clip being too short — the failure would show up somewhere other than
+the control that caused it.
+
+| file | what |
+|---|---|
+| `src/renderer/src/paperCanvas.ts` | live preview + the sequence bake |
+| `src/renderer/src/components/PaperPanel.tsx` | the controls |
+| `clip.paper` | the spec, beside `clip.text` and `clip.solid` |
+
+**Fonts are loaded as a set, not per page.** The face changes from clipping to
+clipping, so loading lazily would bake the first pages in a fallback and the
+later ones correctly — a run that drifts into focus, which reads as a bug in
+the effect rather than a loading order.
+
+### The gate that made the preview black
+
+Text and clippings both draw themselves, and both exist on the timeline before
+their file does. The preview's readiness check said:
+
+```ts
+layer.clip.text ? true : elementReady(layer.element)
+```
+
+so a paper clip fell to the second branch and waited on an `<img>` pointing at
+a sequence that had not been written. The layer was never ready, nothing drew,
+and the timeline showed a clip over a **black frame with no error anywhere**.
+It is now `drawsItself(layer)`, covering both, and `tests/paper.test.ts`
+asserts the branch against the source — jsdom has no canvas, no image loading
+and no `readyState`, so a mounted test would report ready for everything and
+certify the bug.
+
+## Not done yet
 
 **Real paper photographs**, in two forms worth keeping apart:
 

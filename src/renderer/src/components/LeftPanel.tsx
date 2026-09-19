@@ -33,6 +33,7 @@ const TABS: { id: Tab; label: string }[] = [
 export function LeftPanel(): ReactNode {
   const [tab, setTab] = useState<Tab>('media')
   const addTextClip = useEditor((s) => s.addTextClip)
+  const addPaperClip = useEditor((s) => s.addPaperClip)
   const addSolidClip = useEditor((s) => s.addSolidClip)
   const addAdjustmentLayer = useEditor((s) => s.addAdjustmentLayer)
   const playhead = useEditor((s) => s.playhead)
@@ -88,6 +89,20 @@ export function LeftPanel(): ReactNode {
                 className="flex-1 rounded bg-ink-800 px-2 py-1 text-[10.5px] text-ink-300 hover:bg-ink-700 hover:text-ink-100"
               >
                 + Grade
+              </button>
+            </div>
+            {/*
+              On its own row: it is a longer word than the other three and a
+              four-up row clipped "Clippings" to "Clipp" at the default panel
+              width — the same lesson the loudness presets taught.
+            */}
+            <div className="flex shrink-0 gap-1 border-b border-ink-800 px-2 pb-2">
+              <button
+                onClick={() => void addPaperClip(topVideoTrack, playhead)}
+                title="A word highlighted across a run of torn newspaper clippings, over your footage"
+                className="flex-1 rounded bg-ink-800 px-2 py-1 text-[10.5px] text-ink-300 hover:bg-ink-700 hover:text-ink-100"
+              >
+                + Newspaper clippings
               </button>
             </div>
             <div className="min-h-0 flex-1">

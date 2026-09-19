@@ -27,6 +27,7 @@ import { maxTransitionFrames, transitionBase } from '@shared/timeline'
 import { LOUDNESS_TARGETS } from '@shared/render/loudness'
 import { LayoutPanel } from './LayoutPanel'
 import { MaskPanel } from './MaskPanel'
+import { PaperPanel } from './PaperPanel'
 import { SpeedPanel } from './SpeedPanel'
 import { TextStylePicker } from './TextStylePicker'
 import { TextAnimationPicker } from './TextAnimationPicker'
@@ -731,6 +732,9 @@ export function Inspector(): ReactNode {
               */}
               {/* Speed belongs next to duration: it is the other way to change one. */}
               <SpeedPanel clip={clip} asset={asset} />
+
+              {/* A run of clippings, for the clips that are one. */}
+              {clip.paper && <PaperPanel clip={clip} />}
 
               {/*
                 Sound, for anything that has some.

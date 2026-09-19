@@ -2,6 +2,7 @@ import type { MediaKind } from './types'
 import type { KeyframeTracks } from './render/keyframes'
 import { isNeutralCurves, type Curves } from './render/colourCurve'
 import { DEFAULT_LOUDNESS } from './render/loudness'
+import type { PaperSpec } from './render/paper'
 import type { Mask } from './render/mask'
 import type { Transcript } from './transcript'
 
@@ -284,6 +285,16 @@ export interface Clip {
    * and clearer as a real clip than as a special case in the renderer.
    */
   solid?: SolidSpec
+  /**
+   * A run of newspaper clippings with a word highlighted across them.
+   *
+   * Like `text`, this is a clip that DRAWS itself rather than one that shows a
+   * file: the pages are baked to a numbered PNG sequence with alpha and held
+   * by `tpad`, so it composites over footage with no green screen. See
+   * render/paper.ts for the layout and docs/PAPER.md for why this look and not
+   * the other three on the reference site.
+   */
+  paper?: PaperSpec
   /**
    * Set when an automation rule created this clip.
    *
