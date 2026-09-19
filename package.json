@@ -4,6 +4,7 @@
   "description": "Forge \u2014 desktop media toolbox for video, audio and images",
   "main": "./out/main/index.js",
   "author": "spyker",
+  "license": "MIT",
   "private": true,
   "scripts": {
     "dev": "electron-vite dev",
