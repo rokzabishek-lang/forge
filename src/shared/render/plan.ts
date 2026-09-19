@@ -17,6 +17,7 @@ import { curvesFilter } from './colourCurve'
 import { isFullFrameMask, maskExpression } from './mask'
 import { safeCrop, type Size } from './crop'
 import { atempoChain, clipSpeed, sourceFramesFor, speedVideoFilter } from './speed'
+import { audioFadeFilters } from './audioFade'
 import {
   DEFAULT_SHAKE_DECAY,
   DEFAULT_SHAKE_HZ,
@@ -1356,6 +1357,18 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
        */
       ...atempoChain(clipSpeed(clip)),
       volumeFilter,
+      /*
+       * Fades after the level, before the delay.
+       *
+       * After the level so a fade multiplies whatever the envelope drew rather
+       * than arguing with it — the two are separate controls and both apply.
+       * Before the delay because `afade` is told a time, and until `adelay`
+       * runs the clip's stream still begins at zero however far along the
+       * timeline the clip sits. Putting these after the delay would need every
+       * fade offset by the clip's position, and getting it wrong would push a
+       * fade-out past the end of the stream, where it silently does nothing.
+       */
+      ...audioFadeFilters(clip, fps),
       /*
        * One delay per channel, repeated — not `:all=1`.
        *

@@ -54,7 +54,25 @@ const TOO_NEW: { pattern: RegExp; since: string; why: string }[] = [
   { pattern: /\bspeechnorm\b/, since: '4.3', why: 'dynaudnorm is the old one' },
   { pattern: /\b(colorize|exposure|dblur|shufflepixels|thistogram)\b/, since: '4.3', why: 'no' },
   { pattern: /\b(colorcorrect|colorcontrast|monochrome|estdif|adenorm)\b/, since: '4.4', why: 'no' },
-  { pattern: /\b(asupercut|asubcut|asuperpass|asuperstop)\b/, since: '4.4', why: 'highpass/lowpass' }
+  { pattern: /\b(asupercut|asubcut|asuperpass|asuperstop)\b/, since: '4.4', why: 'highpass/lowpass' },
+  /*
+   * `afade` itself is from 2013 and is safe. Its CURVE list is not uniformly
+   * safe, and it is an unusually easy thing to reach for: the names sit in one
+   * dropdown-looking list in `-h filter=afade`, and nothing about `losi`
+   * announces that it is fifteen years newer than `tri`.
+   *
+   * The list is an append-only enum, so the index IS the age ordering. The
+   * curves we use are `tri` (0) and `qsin` (1) — both from the filter's first
+   * commit. These four are the top of the list on the 4.4 build here and are
+   * not verified against the 2018-12-17 Windows snapshot; `sinc`/`isinc` are
+   * plainly newer than it. If one of them is genuinely wanted, run it on
+   * Windows CI first and move it out of this list with the measurement.
+   */
+  {
+    pattern: /curve=(losi|nofade|sinc|isinc)\b/,
+    since: 'unverified on the 2018 build',
+    why: 'afade — tri and qsin are curve 0 and 1, from the original commit'
+  }
 ]
 
 const W = 640

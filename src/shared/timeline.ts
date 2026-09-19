@@ -213,6 +213,19 @@ export interface Clip {
    */
   speed?: number
   /**
+   * Frames of fade at the head and the tail of the clip's sound.
+   *
+   * Deliberately NOT the same thing as the `volume` envelope, and multiplied
+   * with it rather than replacing it: the envelope says *quiet it here*, a
+   * fade says *do not start or stop abruptly*. See render/audioFade.ts.
+   *
+   * In frames like everything else on the timeline, so a fade survives being
+   * re-timed the same way a cut does. Absent means no fade, which is what
+   * every clip made before this had.
+   */
+  fadeIn?: Frames
+  fadeOut?: Frames
+  /**
    * Invent the in-between frames rather than repeating them.
    *
    * Only meaningful below 1× — speeding up discards frames and has nothing to

@@ -170,11 +170,17 @@ WHERE-THINGS-ARE.md for the mapping, which is the whole of the difficulty: the
 clip shows a *window* of the file, and getting that wrong draws a perfectly
 convincing picture of the wrong moment.
 
-**Still missing:** **no audio fades** — no `afade` anywhere, the only fade in
-the codebase being a video transition — and no loudness normalisation, so two
-exports can land at different levels. The envelope can be drawn into a fade by
-hand now, which makes the absence less sharp but not less real: nobody should
-have to place four points to soften an entry.
+**Fades are built too**, as a third control alongside the envelope and
+ducking: grips at the clip's top corners, `afade` at render, multiplied with
+the envelope rather than replacing it. The curve is `qsin` rather than linear
+and the reason is measured — EFFECTS.md §26, which also records why the filter
+sits between `volume` and `adelay` and nowhere else.
+
+**Still missing:** no loudness normalisation, so two exports can land at
+different levels. And no **crossfade** between adjacent clips — `acrossfade`
+exists and is old enough, but it needs two clips that overlap, and overlap on
+one track is a ripple-insert problem the timeline cannot express yet. The same
+gap blocks the sticker "extend" option on sheet ⑨.
 
 ---
 

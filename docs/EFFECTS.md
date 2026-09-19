@@ -1914,3 +1914,82 @@ than asserting a literal, so the two sides of the IPC cannot drift apart.
 One lens — every regex that parses ffmpeg's stderr, where CRLF was the obvious
 suspect — read 46 files and found **nothing**. Worth recording, so nobody pays
 for that search twice.
+
+---
+
+## 26. Audio fades — `afade`, and which curve is old enough
+
+Fades were the last obvious hole in the audio path: no `afade` anywhere, and
+the only way to soften an entry was to place four points on the drawn volume
+envelope by hand.
+
+**`afade` itself is not the risk.** The filter is from 2013, comfortably older
+than the 2018-12-17 Windows snapshot (§25), and `t` / `st` / `d` are all
+original options. What needed checking was the **curve**.
+
+`-h filter=afade` lists nineteen of them in one flat list, and nothing about
+`losi` announces that it is years newer than `tri`. But the list is an
+**append-only enum**, so the index is the age ordering:
+
+```
+nofade -1   tri 0   qsin 1   esin 2   hsin 3   log 4   ipar 5   qua 6
+cub 7   squ 8   cbr 9   par 10   exp 11   iqsin 12   ihsin 13
+dese 14   desi 15   losi 16   sinc 17   isinc 18
+```
+
+`tri` and `qsin` are 0 and 1 — the filter's first commit. Everything with a
+high index is a later addition, and the four at the top of the list
+(`losi`, `nofade`, `sinc`, `isinc`) are now in `tests/oldestFfmpeg.test.ts`'s
+blocklist. That is an argument from the binary's own output rather than from a
+release note, which is the distinction §25 was written about.
+
+**Which curve, measured.** A 4s 440Hz tone faded out over its last two
+seconds, sampled in quarter-second windows against a flat control at −21.1 dB:
+
+| curve | 10% in | 50% in | 85% in |
+|---|---|---|---|
+| `tri` | −1.9 dB | −7.8 dB | −17.6 dB |
+| `qsin` | −0.4 dB | −4.6 dB | −13.7 dB |
+
+Linear amplitude drops away early and then crawls, which is why a `tri`
+fade-out on music sounds like someone pulling the plug halfway through. `qsin`
+holds the level and then goes. It is the default here.
+
+The full `qsin` fade-out shape, on a 6s tone fading over its last two, is
+worth having written down so nobody has to re-measure to pick a test
+threshold:
+
+```
+control −21.1   4.5s −22.5   5.0s −25.7   5.4s −30.2   5.7s −38.5   5.85s −44.5
+```
+
+**Where it goes in the chain, and why that is the whole correctness.**
+
+```
+aformat → aresample → atempo → volume → afade → adelay
+```
+
+*After* `volume` so a fade **multiplies** whatever the envelope drew rather
+than replacing it — they are separate controls and both apply, as in any DAW.
+*Before* `adelay` because `afade` is handed an absolute time, and until the
+delay runs the clip's stream still begins at zero however far along the
+timeline the clip sits. A fade written after the delay would need every time
+offset by the clip's position, and getting that wrong pushes a fade-out's
+start past the end of the stream, where **it silently does nothing**. That is
+the same units trap the volume envelope hit, from the same cause.
+
+**`afade=t=out` is told where the fade BEGINS**, not where it ends. A two
+second fade on a six second clip is `st=4:d=2`. The mirror-image bug renders a
+clip already silent for its last four seconds, which reads as the fade length
+being ignored rather than as an off-by-a-start-time.
+
+**Overlapping fades are made to meet, not rejected.** Trim a clip down under
+fades that were already set and the two walk through each other; `afade=out`
+would then start before `afade=in` finished and the clip would go quiet in the
+middle and stay there. `clipFades` reduces both in proportion until they sum
+to the clip exactly.
+
+Six mutations checked, including both halves of the chain order. The
+integration test measures decibels out of a rendered file rather than
+asserting the filter string — §1 is the reason — and it runs on Windows CI,
+which is what finally settles `qsin` on the 2018 build.

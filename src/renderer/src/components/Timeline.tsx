@@ -13,6 +13,7 @@ import { useEditor } from '../store'
 import { useCatalog } from '../catalog'
 import { VolumeEnvelope } from './VolumeEnvelope'
 import { ClipWaveform } from './ClipWaveform'
+import { FadeHandles } from './FadeHandles'
 import { acceptsKind, isAssetDrag, readDragPayload, type DragPayload } from '../dragPayload'
 
 type DragMode = 'move' | 'trim-start' | 'trim-end'
@@ -459,7 +460,7 @@ export function Timeline(): ReactNode {
                     return (
                       <div
                         key={clip.id}
-                        className={`absolute top-1.5 bottom-1.5 overflow-hidden rounded-md border text-[11px] transition-colors ${
+                        className={`group/clip absolute top-1.5 bottom-1.5 overflow-hidden rounded-md border text-[11px] transition-colors ${
                           selected
                             ? 'border-flame-500 bg-flame-500/25'
                             : 'border-ink-600 bg-ink-700/70 hover:bg-ink-700'
@@ -533,6 +534,25 @@ export function Timeline(): ReactNode {
                           onPointerUp={endDrag}
                           onPointerCancel={endDrag}
                         />
+
+                        {/*
+                          Fade grips, above even the trim handles.
+
+                          They overlap the top of both trim strips by a few
+                          pixels, which is the same compromise Resolve makes —
+                          the corner is where everyone reaches for a fade, and
+                          the rest of the strip's height still trims. They only
+                          become a target when the clip is hovered or selected,
+                          so a timeline of clips nobody is fading loses nothing.
+                        */}
+                        {asset?.hasAudio && (
+                          <FadeHandles
+                            clip={clip}
+                            zoom={zoom}
+                            height={TRACK_HEIGHT - 12}
+                            selected={selected}
+                          />
+                        )}
                       </div>
                     )
                   })}

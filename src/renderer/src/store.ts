@@ -456,6 +456,12 @@ interface EditorState {
    */
   setClipVolume: (clipId: string, volume: number) => void
   /**
+   * Fade the clip's sound in or out over `frames`.
+   *
+   * Zero removes the fade. Clamped so the two fades cannot pass each other.
+   */
+  setFade: (clipId: string, edge: 'in' | 'out', frames: number) => void
+  /**
    * Slow motion and fast motion.
    *
    * Keeps the same footage and changes how long the clip sits on the timeline,
@@ -2747,6 +2753,32 @@ export const useEditor = create<EditorState>((set, get) => ({
     get().update((p) => ({
       ...p,
       clips: p.clips.map((c) => (c.id === clipId ? { ...c, volume: clamped } : c))
+    }))
+  },
+
+  setFade: (clipId, edge, frames) => {
+    get().update((p) => ({
+      ...p,
+      clips: p.clips.map((c) => {
+        if (c.id !== clipId) return c
+        const key = edge === 'in' ? 'fadeIn' : 'fadeOut'
+        const other = edge === 'in' ? c.fadeOut ?? 0 : c.fadeIn ?? 0
+        /*
+         * A fade stops where the other one starts.
+         *
+         * Clamping here rather than only in `clipFades` means the drag itself
+         * stops at the right place: without it the handle keeps following the
+         * pointer while the sound stops changing, which reads as the control
+         * having broken.
+         */
+        const room = Math.max(0, c.duration - other)
+        const value = Math.max(0, Math.min(room, Math.round(frames)))
+        if (value === 0) {
+          const { [key]: _cleared, ...rest } = c
+          return rest as typeof c
+        }
+        return { ...c, [key]: value }
+      })
     }))
   },
 

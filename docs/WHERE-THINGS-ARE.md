@@ -247,6 +247,20 @@ This is the **drawn** kind, the Ableton kind: *quiet here, because I say so*.
 It is not ducking, which is automatic and lives on an audio track's `duck`
 flag. Both should exist; they answer different questions.
 
+**Fades are the third thing, and also separate.** Grips at the top corners of
+any clip with sound: drag inwards to fade up or down, double-click to remove.
+The shaded ramp is always drawn so a fade is visible without hunting; the
+grips only appear on hover or when the clip is selected, because an
+always-live target eleven pixels into the trim strip would quietly take a
+slice of trimming away from every clip nobody is fading. The two fades cannot
+pass each other — they meet and stop.
+
+A fade **multiplies** the envelope rather than replacing it, which is what a
+DAW does and why they are separate controls: softening an entry should not
+mean redrawing a curve you already shaped. `audioFade.ts` has the `qsin`
+measurement and EFFECTS.md §26 has the chain-order reasoning, which is the
+whole correctness of it.
+
 **What an overlay on a clip may take.** The envelope first shipped as a
 full-bleed `absolute inset-0 z-10` div with `onPointerDown` on it, which is the
 obvious way to make a line clickable — and it made **every clip with sound in
