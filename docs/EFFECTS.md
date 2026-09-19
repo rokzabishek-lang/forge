@@ -1993,3 +1993,60 @@ Six mutations checked, including both halves of the chain order. The
 integration test measures decibels out of a rendered file rather than
 asserting the filter string — §1 is the reason — and it runs on Windows CI,
 which is what finally settles `qsin` on the 2018 build.
+
+---
+
+## 27. Crossfades — overlap IS the crossfade, and `acrossfade` is not needed
+
+Two findings, and the second one deleted most of the work the first implied.
+
+**Overlapping clips were 3 dB hot.** `anchorTransition` genuinely overlaps its
+two clips — that overlap *is* the video dissolve — so for the length of every
+dissolve both soundtracks played at once, at full. Rendered through the real
+plan with 440Hz against 1170Hz and measured inside one file:
+
+```
+before overlap  -24.1     in overlap  -21.1     after  -24.1      jump +3.0 dB
+```
+
+Exactly what two uncorrelated signals summing gives, because that is what it
+was. Nothing wrote a fade because nothing knew to.
+
+*(The −24.1 against a raw file's −21.1 is not a second bug. It is the mono →
+stereo upmix in `aformat=channel_layouts=stereo`, which is power-preserving
+and therefore −3 dB per channel. The `mixFilters` pad-and-scale formula was
+checked in isolation and is unity: A alone, A mixed with silence, and
+`normalize=0` all measure −21.1.)*
+
+**`acrossfade` is unnecessary.** An equal-power crossfade is just an overlap
+with `afade=out` on one side and `afade=in` on the other — and `qsin` against
+`qsin` sums flat. Measured over a two-second overlap:
+
+| | 2.0s | 4.2s | 5.0s | 5.8s | 7.0s |
+|---|---|---|---|---|---|
+| source, no fade | −21.1 | −21.1 | −21.1 | −21.1 | — |
+| overlap + `qsin`/`qsin` | −21.1 | −21.1 | −21.1 | −21.1 | −21.1 |
+| **`acrossfade=c1=qsin:c2=qsin`** | −21.1 | −21.1 | −21.1 | −21.1 | −21.1 |
+| overlap + `tri`/`tri` | −21.1 | −22.7 | **−23.9** | −21.5 | −21.1 |
+
+The overlap-plus-fades row and ffmpeg's own `acrossfade` row are the same
+numbers. So `acrossfade` buys nothing — and it would cost a great deal: it is
+a **two-input filter that consumes both streams and emits one**, which would
+force the audio graph from "delay each clip and mix them all" into "build a
+concatenation chain per track". Every clip in this project is an independent
+padded input into one `amix` (§25), and that structure is load-bearing for the
+2018 Windows build.
+
+The `tri` row is why the curve matters here rather than being taste: a linear
+crossfade has a **2.8 dB hole** in the middle of every join.
+
+**So the rule is: overlap on a track means crossfade**, derived at render in
+`fadesWithNeighbours` rather than stored. It is true of every overlap however
+it arose — a dropped transition, the crossfade action, a reel the automation
+built — without any of them having to remember. An explicit fade always wins,
+tested with `fadeIn: 0` specifically, since "no fade here despite the overlap"
+is a real answer and the falsy one.
+
+Neighbours are read **per track**. Two tracks overlapping is the whole point
+of having two; treating that as an edit point would duck the music every time
+a sound effect landed on it.

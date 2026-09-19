@@ -1183,6 +1183,80 @@ export function nearestTransitionTarget(
   return { clip: null, reason: 'Drop a transition on or near a cut between two clips' }
 }
 
+/**
+ * How many frames two clips on the same track share. Zero when they do not.
+ *
+ * Lives here rather than beside the fades that use it so the dependency runs
+ * one way: `render/audioFade.ts` reaches into the timeline for geometry, and
+ * the timeline never reaches back into the renderer.
+ */
+export function overlapFrames(
+  outgoing: Pick<Clip, 'start' | 'duration'>,
+  incoming: Pick<Clip, 'start' | 'duration'>
+): Frames {
+  const end = outgoing.start + outgoing.duration
+  return Math.max(0, Math.min(end, incoming.start + incoming.duration) - incoming.start)
+}
+
+/**
+ * Slide a clip back onto the one before it, so their sound crosses over.
+ *
+ * The overlap IS the crossfade — `fadesWithNeighbours` derives an equal-power
+ * pair from it at render, and the explicit fades written here make it visible
+ * on the clip and adjustable by its grips afterwards.
+ *
+ * The overlap is taken by moving the INCOMING clip back, not by lengthening
+ * the outgoing one. That matters: lengthening a clip needs source material
+ * past its out point, and a music clip trimmed to the end of the file has
+ * none — the "extra" would be silence, so the outgoing half would cross-fade
+ * into nothing and the join would gap instead of blending. Moving the incoming
+ * clip back uses frames both clips already have.
+ *
+ * Everything later on the track follows, which closes the timeline up around
+ * the join. That is the opposite of `anchorTransition`'s choice, and
+ * deliberately: a crossfade is a statement about two pieces of MUSIC meeting,
+ * and the thing that must not move is the join, not the grid. A reel cut to
+ * beats uses `anchorTransition`; a DJ dropping one track over another uses
+ * this.
+ */
+export function crossfadeAt(project: Project, clipId: string, durationFrames: Frames): Project {
+  const clip = project.clips.find((c) => c.id === clipId)
+  if (!clip) return project
+  const previous = clipBefore(project, clip)
+  if (!previous) return project
+
+  // Already overlapping: change the overlap by the difference rather than
+  // stacking a second one on top of the first.
+  const already = overlapFrames(previous, clip)
+  const room = Math.max(0, Math.min(previous.duration - 1, clip.duration - 1))
+  const frames = Math.max(1, Math.min(Math.round(durationFrames), room))
+  const shift = frames - already
+  if (shift === 0 && clip.fadeIn === frames && previous.fadeOut === frames) return project
+
+  return {
+    ...project,
+    clips: project.clips.map((c) => {
+      if (c.trackId !== clip.trackId) {
+        return c
+      }
+      if (c.id === previous.id) {
+        return { ...c, fadeOut: frames }
+      }
+      if (c.id === clipId) {
+        return { ...c, start: Math.max(0, c.start - shift), fadeIn: frames }
+      }
+      return c.start > clip.start ? { ...c, start: Math.max(0, c.start - shift) } : c
+    })
+  }
+}
+
+/** How much of a crossfade this clip could take with the one before it. */
+export function maxCrossfadeFrames(project: Project, clip: Clip): Frames {
+  const previous = clipBefore(project, clip)
+  if (!previous) return 0
+  return Math.max(0, Math.min(previous.duration - 1, clip.duration - 1))
+}
+
 /** The clip a transition blends from, if any. */
 export function clipBefore(project: Project, clip: Clip): Clip | null {
   const onTrack = clipsOnTrack(project, clip.trackId)

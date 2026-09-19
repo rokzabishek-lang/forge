@@ -53,6 +53,7 @@ export function Inspector(): ReactNode {
   const setTransform = useEditor((s) => s.setTransform)
   const setColor = useEditor((s) => s.setColor)
   const setClipVolume = useEditor((s) => s.setClipVolume)
+  const crossfadeWithPrevious = useEditor((s) => s.crossfadeWithPrevious)
   const chooseLut = useEditor((s) => s.chooseLut)
   const setPath = useEditor((s) => s.setPath)
   const addWaypoint = useEditor((s) => s.addWaypoint)
@@ -712,6 +713,25 @@ export function Inspector(): ReactNode {
                     suffix="%"
                     onChange={(v) => setClipVolume(clip.id, v / 100)}
                   />
+
+                  {/*
+                    Crossfade needs a button because it cannot be a drag.
+
+                    Every other fade control is on the clip, which is where
+                    they belong — but this one has to CREATE the overlap it
+                    fades across, and the drag that would do it is already
+                    taken: dragging a clip onto its neighbour sequences it
+                    clear, and that behaviour is load-bearing for stacked
+                    layers like grids and filmstrips. So the button makes the
+                    overlap, and the grips on the clip shape it afterwards.
+                  */}
+                  <button
+                    onClick={() => crossfadeWithPrevious(clip.id)}
+                    title="Overlap this clip with the one before it on its track and cross the sound over"
+                    className="w-full rounded bg-ink-800 px-2 py-1 text-[10px] text-ink-300 transition-colors hover:bg-ink-700 hover:text-ink-100"
+                  >
+                    Crossfade with the clip before
+                  </button>
                 </div>
               )}
 

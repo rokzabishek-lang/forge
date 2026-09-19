@@ -261,6 +261,19 @@ mean redrawing a curve you already shaped. `audioFade.ts` has the `qsin`
 measurement and EFFECTS.md §26 has the chain-order reasoning, which is the
 whole correctness of it.
 
+**Overlap on a track means crossfade**, and that is derived rather than
+stored — so it is true of a dropped video transition as much as of a
+deliberate crossfade. Until this existed, every dissolve played both
+soundtracks at full and measured 3 dB hot. Explicit fades still win.
+
+The one audio control that is *not* on the clip is **Crossfade with the clip
+before**, in the Inspector's Sound row, because it has to CREATE the overlap
+it fades across and the drag that would do it is already taken: dragging a
+clip onto its neighbour sequences it clear, which is load-bearing for stacked
+layers like grids and filmstrips (see `moveClip`'s `stacked` check). So the
+button makes the overlap — sliding the incoming clip back and closing the
+track up behind it — and the grips on the clip shape it afterwards.
+
 **What an overlay on a clip may take.** The envelope first shipped as a
 full-bleed `absolute inset-0 z-10` div with `onPointerDown` on it, which is the
 obvious way to make a line clickable — and it made **every clip with sound in

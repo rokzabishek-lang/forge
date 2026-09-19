@@ -176,11 +176,22 @@ the envelope rather than replacing it. The curve is `qsin` rather than linear
 and the reason is measured — EFFECTS.md §26, which also records why the filter
 sits between `volume` and `adelay` and nowhere else.
 
+**Crossfades are built.** They were written up here as blocked — *"overlap on
+one track is a ripple-insert problem the timeline cannot express yet"* — and
+that was simply wrong, stated without looking. `anchorTransition` has always
+overlapped its two clips; the model expressed overlap all along. Worse, that
+overlap was going out **3 dB hot**, because two clips sharing frames both
+played at full: every video dissolve, since dissolves existed.
+
+So the rule now is that overlap on a track *means* crossfade, derived at
+render. `crossfadeAt` makes the overlap by sliding the incoming clip back —
+never by lengthening the outgoing one, which would need source past its out
+point and would cross-fade into silence on any clip trimmed to the end of its
+file. EFFECTS.md §27 has the measurements, including why `acrossfade` is not
+used.
+
 **Still missing:** no loudness normalisation, so two exports can land at
-different levels. And no **crossfade** between adjacent clips — `acrossfade`
-exists and is old enough, but it needs two clips that overlap, and overlap on
-one track is a ripple-insert problem the timeline cannot express yet. The same
-gap blocks the sticker "extend" option on sheet ⑨.
+different levels.
 
 ---
 

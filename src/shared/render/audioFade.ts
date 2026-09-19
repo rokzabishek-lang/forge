@@ -1,4 +1,4 @@
-import type { Clip, Frames } from '../timeline'
+import { overlapFrames, type Clip, type Frames } from '../timeline'
 
 /**
  * Fades in and out of a clip's sound.
@@ -81,6 +81,47 @@ export function clipFades(clip: FadedClip): Fades {
 export function hasFades(clip: FadedClip): boolean {
   const fades = clipFades(clip)
   return fades.in > 0 || fades.out > 0
+}
+
+/**
+ * Overlap on a track MEANS crossfade.
+ *
+ * Nothing set this before, and the result was measurable: a video dissolve
+ * genuinely overlaps its two clips (see `anchorTransition`), so for the length
+ * of every dissolve both soundtracks played at once, at full. Rendered and
+ * measured on two tones, the overlap came back **3.0 dB hot** against either
+ * side of it — which is exactly what two uncorrelated signals summing sounds
+ * like, because that is what it was.
+ *
+ * Derived rather than stored, so it is true of every overlap however it was
+ * made — a dropped transition, a crossfade action, a reel the automation
+ * built — without any of them having to remember to write it down.
+ *
+ * An explicit fade always wins. Someone who has drawn a fade on this edge has
+ * said what they want there, and quietly replacing it with an overlap-derived
+ * one would undo work with no way to see why.
+ *
+ * The curve does the rest: `qsin` out against `qsin` in is equal power, so the
+ * two halves sum flat. Measured against ffmpeg's own `acrossfade=c1=qsin:
+ * c2=qsin` over a two-second overlap of 440Hz and 1170Hz — both hold −21.1 dB
+ * straight through, identical. `tri` on the same overlap dips to −23.9, the
+ * textbook hole in the middle of a linear crossfade. That measurement is also
+ * why this does not use `acrossfade` at all: it is a two-input filter that
+ * would force the whole graph from "mix independent streams" into "concatenate
+ * a chain", for an output that is the same samples.
+ */
+export function fadesWithNeighbours(
+  clip: Clip,
+  previous: Clip | null,
+  next: Clip | null
+): FadedClip {
+  const into = previous ? overlapFrames(previous, clip) : 0
+  const outOf = next ? overlapFrames(clip, next) : 0
+  return {
+    duration: clip.duration,
+    fadeIn: clip.fadeIn !== undefined ? clip.fadeIn : into > 0 ? into : undefined,
+    fadeOut: clip.fadeOut !== undefined ? clip.fadeOut : outOf > 0 ? outOf : undefined
+  }
 }
 
 /**

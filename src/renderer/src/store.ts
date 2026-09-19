@@ -19,6 +19,7 @@ import type {
 import { DEFAULT_COLOR, DEFAULT_TEXT, clipCoversFrame } from '@shared/timeline'
 import type { Mask, MaskShape } from '@shared/render/mask'
 import { clipSpeed, maxDurationAtSpeed, withClipSpeed } from '@shared/render/speed'
+import { defaultFadeFrames } from '@shared/render/audioFade'
 import { normalisePath, pathAt } from '@shared/render/path'
 import { normaliseKeys, type Ease, type Keyframe, type KeyedProperty } from '@shared/render/keyframes'
 import { transitionById } from '@shared/transitions/registry'
@@ -83,9 +84,12 @@ import {
   anchorTransition as anchorTransitionOn,
   removeTransition as removeTransitionFrom,
   addTrack as addTrackTo,
+  clipBefore,
   clipEnd,
   clipsOnTrack,
+  crossfadeAt,
   emptyProject,
+  maxCrossfadeFrames,
   findFreeSlot,
   overlapsOn,
   MAX_TRACKS,
@@ -461,6 +465,12 @@ interface EditorState {
    * Zero removes the fade. Clamped so the two fades cannot pass each other.
    */
   setFade: (clipId: string, edge: 'in' | 'out', frames: number) => void
+  /**
+   * Overlap this clip with the one before it on its track, so they cross over.
+   *
+   * Zero frames undoes it. Everything later on the track closes up behind.
+   */
+  crossfadeWithPrevious: (clipId: string, frames?: number) => void
   /**
    * Slow motion and fast motion.
    *
@@ -2780,6 +2790,29 @@ export const useEditor = create<EditorState>((set, get) => ({
         return { ...c, [key]: value }
       })
     }))
+  },
+
+  crossfadeWithPrevious: (clipId, frames) => {
+    const { project, notify } = get()
+    const clip = project.clips.find((c) => c.id === clipId)
+    if (!clip) return
+    const room = maxCrossfadeFrames(project, clip)
+    if (room <= 0) {
+      /*
+       * Silently doing nothing is how the transition drop used to fail, and it
+       * read as the whole feature being broken rather than as this particular
+       * clip having nothing to cross into.
+       */
+      notify(
+        clipBefore(project, clip)
+          ? 'These two clips are too short to cross over'
+          : 'A crossfade needs a clip before it on the same track',
+        'info'
+      )
+      return
+    }
+    const want = frames ?? defaultFadeFrames(project.settings.fps)
+    get().update((p) => crossfadeAt(p, clipId, Math.min(want, room)))
   },
 
   setPath: (clipId, path) => {

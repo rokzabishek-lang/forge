@@ -17,7 +17,7 @@ import { curvesFilter } from './colourCurve'
 import { isFullFrameMask, maskExpression } from './mask'
 import { safeCrop, type Size } from './crop'
 import { atempoChain, clipSpeed, sourceFramesFor, speedVideoFilter } from './speed'
-import { audioFadeFilters } from './audioFade'
+import { audioFadeFilters, fadesWithNeighbours } from './audioFade'
 import {
   DEFAULT_SHAKE_DECAY,
   DEFAULT_SHAKE_HZ,
@@ -1293,6 +1293,30 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
   const musicLabels: string[] = []
   const otherLabels: string[] = []
 
+  /*
+   * A clip's fades, including the ones its neighbours imply.
+   *
+   * Sorted per track once rather than per clip, because `addAudio` runs for
+   * every clip and a timeline of a few hundred would otherwise sort inside the
+   * loop. The neighbours are on the clip's OWN track — an overlap with
+   * something on another track is a layer, not an edit point, and two tracks
+   * playing at once is the whole purpose of having two.
+   */
+  const byTrack = new Map<string, Clip[]>()
+  for (const c of project.clips) {
+    const list = byTrack.get(c.trackId)
+    if (list) list.push(c)
+    else byTrack.set(c.trackId, [c])
+  }
+  for (const list of byTrack.values()) list.sort((a, b) => a.start - b.start)
+
+  const withNeighbourFades = (clip: Clip): Clip => {
+    const lane = byTrack.get(clip.trackId) ?? []
+    const i = lane.findIndex((c) => c.id === clip.id)
+    const fades = fadesWithNeighbours(clip, i > 0 ? lane[i - 1] : null, lane[i + 1] ?? null)
+    return { ...clip, fadeIn: fades.fadeIn, fadeOut: fades.fadeOut }
+  }
+
   const addAudio = (index: number, clip: Clip, label: string, into: string[]): void => {
     const volume = clip.volume ?? 1
     /*
@@ -1368,7 +1392,7 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
        * fade offset by the clip's position, and getting it wrong would push a
        * fade-out past the end of the stream, where it silently does nothing.
        */
-      ...audioFadeFilters(clip, fps),
+      ...audioFadeFilters(withNeighbourFades(clip), fps),
       /*
        * One delay per channel, repeated — not `:all=1`.
        *
