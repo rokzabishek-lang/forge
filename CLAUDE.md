@@ -171,8 +171,10 @@ before switching, and do not edit the same files from both at once.
 Windows clone should show a clean `git status`. If it does not, stop and work
 out why before committing anything.
 
-On the macOS machine the assistant's sandbox blocks writes to `.git/`, so
-**commits and pushes are run by the user by hand**. On Windows it does not: the
-assistant commits and pushes directly. That machine has no global git identity,
+**Git works on both machines now.** The macOS sandbox used to block writes to
+`.git/`, and this file said so for a long time after it stopped being true —
+the constraint was taken as permanent and never retested. `git pull` and
+`git commit` both work here. Retest a documented limit before planning around
+it. That machine has no global git identity,
 so `user.name` and `user.email` are set per-repo there — check `git config
 --local --list` if a commit lands under the wrong name.

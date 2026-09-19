@@ -11,6 +11,7 @@ import {
 } from '@shared/timeline'
 import { useEditor } from '../store'
 import { useCatalog } from '../catalog'
+import { VolumeEnvelope } from './VolumeEnvelope'
 import { acceptsKind, isAssetDrag, readDragPayload, type DragPayload } from '../dragPayload'
 
 type DragMode = 'move' | 'trim-start' | 'trim-end'
@@ -472,6 +473,22 @@ export function Timeline(): ReactNode {
                         <div className="px-2 text-[10px] text-ink-400">
                           {formatTimecode(clip.duration, fps)}
                         </div>
+
+                        {/*
+                          The volume line, on the clip that makes the sound.
+                          
+                          Only where there IS sound: a line over a photograph
+                          is a control that cannot do anything. It sits above
+                          the body so it can be grabbed, and below the trim
+                          handles so the edges still trim.
+                        */}
+                        {asset?.hasAudio && (
+                          <VolumeEnvelope
+                            clip={clip}
+                            zoom={zoom}
+                            height={TRACK_HEIGHT - 12}
+                          />
+                        )}
 
                         {/* Trim handles. Wide enough to hit, narrow enough not to eat the body. */}
                         <div

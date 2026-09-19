@@ -153,9 +153,21 @@ waveforms, one of them showing a marked region. Two notes:
 **Status — small gaps.** Multitrack, waveforms and per-clip volume are built.
 Ducking is real — music drops under speech via `sidechaincompress`. Layering
 works, and adding a second sound now stacks onto another track rather than
-queueing after the first. **There are still no audio fades** — no `afade`
-anywhere; the only fade in the codebase is a video transition — and no loudness
-normalisation, so two exports can land at different levels.
+queueing after the first.
+
+**"Controlling music" is now two separate things, and both are wanted.**
+Ducking is the automatic one. The other is a **drawn volume envelope** on the
+clip — the Ableton shape: grab the line, drag a point, quiet it *here* because
+you say so. That is built: `volume` keyframes, drawn on the clip in the
+timeline, compiled to `volume=…:eval=frame` (measured, EFFECTS.md §1). It is
+also what makes the app interesting to DJs, who drop a clip into a set and
+reach for the line rather than a menu.
+
+**Still missing:** no waveform is drawn on the timeline clip — the trimmer has
+one, the clip does not — so the envelope is aimed at something invisible. And
+still **no audio fades**: no `afade` anywhere, the only fade in the codebase
+being a video transition, and no loudness normalisation, so two exports can
+land at different levels.
 
 ---
 

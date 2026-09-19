@@ -14,8 +14,14 @@ The window is four areas: **left panel**, **preview**, **inspector** (right), an
 
 Four tabs across the top.
 
-**Media** — your imported files. `+ Import` brings in photos, video and music.
-Double-click anything to drop it on the timeline at the playhead.
+**Media** — your imported files as a **grid of thumbnails**, not a list of
+names: a camera gives you IMG_4821 and DSC_0037, so the picture is the only
+thing that identifies a shot and the name is a caption over it. Video shows a
+frame from 0.5s in, because the first frame of a clip is very often black.
+
+**Drag a tile onto the timeline** to say which track and when; double-click to
+append it to the first track of the right kind. Drag one onto the **picture**
+and a chip offers what it should become — see the preview below.
 
 Three buttons above it make clips out of nothing:
 
@@ -26,7 +32,8 @@ Three buttons above it make clips out of nothing:
 | `+ Grade` | An adjustment layer. Grades every track **below** it, for as long as it runs. |
 
 **Library** — the shipped assets: transitions, stickers, props, sounds, titles.
-Drag onto the timeline. Transitions must be dropped on a clip's incoming edge.
+Drag onto the timeline, or onto the picture. Transitions must be dropped on a
+clip's incoming edge.
 
 The **package button** beside the search box opens the **asset packs** — the
 downloads that put things in here in the first place. It opens on its own the
@@ -66,6 +73,22 @@ the playhead is over it, and handles can only exist over a frame being drawn.
 The tool strip runs down the left of the picture: Select, Reframe, Thirds, Safe
 areas, **Text**, Mask, Blur — and Paint, which is greyed because painting pixels frame by
 frame is a long way off and worth being honest about.
+
+**Text** here means words ON this picture. `+ Text` in the left panel adds a
+text clip to the timeline. Both make the same kind of clip; where you reach for
+it is what says which you meant.
+
+**Dropping onto the picture.** The canvas takes a drag from the pool or the
+library. It lands on the top video track at the playhead, filled to the frame,
+and a chip offers the other two readings: a corner **picture-in-picture**, or a
+**blurred background** — which is sent underneath everything, since a blurred
+copy drawn on top hides the shot it was meant to sit behind. Each choice writes
+ordinary transform and mask values, so none of them is a mode and the result
+stays draggable. A sound dropped here is refused: it has no appearance.
+
+**Resizing is free-form.** Four corner handles move both axes independently and
+four edge handles move one — drag a side for width, the top for height. Hold
+shift on a corner to keep the proportions.
 
 The split view (Source | Output) is in the inspector under **Preview**. Drag the
 divider in the picture to compare; double-click it for an even split.
@@ -180,6 +203,28 @@ the top of the list draws on top of the picture. Audio sits below.
 
 `+V` and `+A` add tracks. The eye hides a video track; the speaker mutes an audio
 one — both exclude it from the export.
+
+**A clip moves in both axes.** Drag it sideways in time and up or down through
+the layers in one gesture, onto a lane of the same kind and never onto a locked
+one. This did not exist until recently — the drag only read `clientX`, so a
+clip could never leave the track it was born on. That is why picture-in-picture
+felt pointless: there was no way to get a second video above a first one for it
+to be in front OF.
+
+**The volume line is drawn on the clip.** Any clip whose asset has sound
+carries an envelope: click the line to add a point, drag a point in time *and*
+level, double-click one to remove it. They are ordinary `volume` keyframes —
+the same ones the inspector's curve editor writes — compiled at render into
+`volume=…:eval=frame`, which is measured to work (EFFECTS.md §1).
+
+This is the **drawn** kind, the Ableton kind: *quiet here, because I say so*.
+It is not ducking, which is automatic and lives on an audio track's `duck`
+flag. Both should exist; they answer different questions.
+
+**Missing here, in the order you would notice:** no waveform on the clip, which
+makes the volume line harder to aim than it should be — you are drawing against
+something you cannot see. Then no copy, paste or duplicate; no multi-select; no
+markers; and no audio fades.
 
 ---
 

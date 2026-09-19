@@ -20,6 +20,17 @@ frames and reading the pixels back.
 | Zoom | `zoompan` `z` | **Yes** | Counts output frames in `on`, not seconds. |
 | **Size** | `scale` with `eval=frame` | **NO** | Re-evaluates and does **not** follow its expression. Asked for 192px→495px, got a constant 138px. |
 | **Crop w/h** | `crop` | **NO** | Resolves `w`/`h` once at configuration. Same trap. |
+| **Volume** | `volume` with `eval=frame` | **Yes** | Genuinely follows its expression, unlike `scale` above. Measured on a 4s tone with `if(lt(t,2),1,0.25)`: second half came back **12.0 dB** down, which is 0.25× to within rounding. This is what the drawn volume envelope compiles to. |
+
+`eval=frame` is therefore **not** a property of the build — it is a property of
+each filter. `scale` accepts it and ignores it; `volume` accepts it and honours
+it. Neither can be inferred from the other, so each one has to be measured.
+
+The envelope's `t` is **clip-relative**, because `adelay` sits after `volume` in
+the audio chain: at that point the stream starts at zero whatever the clip's
+position on the timeline. A test whose clip started at frame 0 could not tell
+that apart from timeline time and passed against a deliberately wrong time
+base — the test now starts a clip a second in.
 
 So animated *size* does not exist. A punch-in is expressed as a zoom into the
 picture, which is what it wants to be anyway — and the UI says "Zoom", not
