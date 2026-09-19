@@ -32,3 +32,36 @@ describe('drop acceptance', () => {
     expect(DRAG_MIME).not.toBe('text/plain')
   })
 })
+
+describe('dragging out of the media pool', () => {
+  it('sends a sound to an audio track and a picture to a video one', () => {
+    /*
+     * `kind` only says where the drag came from — the library or the pool —
+     * so it cannot answer this on its own. A pool asset carries what it
+     * actually is alongside it.
+     */
+    const song: DragPayload = { kind: 'media', file: '/x/a.mp3', name: 'song', assetId: 'a1', mediaKind: 'audio' }
+    const photo: DragPayload = { kind: 'media', file: '/x/a.jpg', name: 'photo', assetId: 'a2', mediaKind: 'image' }
+    const shot: DragPayload = { kind: 'media', file: '/x/a.mp4', name: 'shot', assetId: 'a3', mediaKind: 'video' }
+
+    expect(acceptsKind(song, 'audio')).toBe(true)
+    expect(acceptsKind(song, 'video')).toBe(false)
+    expect(acceptsKind(photo, 'video')).toBe(true)
+    expect(acceptsKind(photo, 'audio')).toBe(false)
+    expect(acceptsKind(shot, 'video')).toBe(true)
+    expect(acceptsKind(shot, 'audio')).toBe(false)
+  })
+
+  it('leaves every library kind exactly as it was', () => {
+    // Widening `kind` must not quietly change where a sticker or a transition
+    // is allowed to land.
+    const of = (kind: DragPayload['kind']): DragPayload => ({ kind, file: 'f', name: 'n' })
+    expect(acceptsKind(of('sfx'), 'audio')).toBe(true)
+    expect(acceptsKind(of('sfx'), 'video')).toBe(false)
+    expect(acceptsKind(of('transition'), 'video')).toBe(true)
+    expect(acceptsKind(of('sticker'), 'video')).toBe(true)
+    expect(acceptsKind(of('prop'), 'video')).toBe(true)
+    expect(acceptsKind(of('title'), 'video')).toBe(true)
+    expect(acceptsKind(of('title'), 'audio')).toBe(false)
+  })
+})

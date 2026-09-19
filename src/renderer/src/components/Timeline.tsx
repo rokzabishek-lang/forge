@@ -38,6 +38,7 @@ export function Timeline(): ReactNode {
   const setPlayhead = useEditor((s) => s.setPlayhead)
   const select = useEditor((s) => s.select)
   const moveClip = useEditor((s) => s.moveClip)
+  const placePoolAsset = useEditor((s) => s.placePoolAsset)
   const trimClipStart = useEditor((s) => s.trimClipStart)
   const trimClipEnd = useEditor((s) => s.trimClipEnd)
   const begin = useEditor((s) => s.begin)
@@ -133,6 +134,13 @@ export function Timeline(): ReactNode {
         return
       }
 
+      // Already imported: reuse the asset rather than reading the file again,
+      // which would put a second copy of the same photograph in the pool.
+      if (payload.kind === 'media' && payload.assetId) {
+        placePoolAsset(payload.assetId, trackId, frame)
+        return
+      }
+
       // Titles are generated from a template rather than placed as a file.
       if (payload.kind === 'title') {
         await placeTitle(payload.file, payload.name, trackId, frame)
@@ -141,7 +149,7 @@ export function Timeline(): ReactNode {
 
       await placeLibraryAsset(payload.file, payload.name, trackId, frame)
     },
-    [notify, placeLibraryAsset, placeTitle, setTransition, select]
+    [notify, placeLibraryAsset, placePoolAsset, placeTitle, setTransition, select]
   )
 
   const snapTargets = useSnapTargets()

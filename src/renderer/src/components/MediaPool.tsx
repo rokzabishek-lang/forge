@@ -4,8 +4,61 @@ import type { MediaAsset } from '@shared/timeline'
 import { formatDuration, formatBytes } from '@shared/time'
 import { framesToSeconds } from '@shared/timeline'
 import { useEditor } from '../store'
+import { mediaUrl } from '../media'
+import { setDragPayload } from '../dragPayload'
+import type { DragPayload } from '@shared/dragPayload'
 
 const ICON = { video: Film, audio: Music, image: ImageIcon }
+
+/**
+ * What a pool tile carries while being dragged.
+ *
+ * `assetId` is what separates this from a library drag: the file is already
+ * imported and probed, so the drop reuses it rather than reading it again.
+ * `mediaKind` rides along because a sound belongs on an audio track and a
+ * picture does not, and the payload is all the drop target gets to look at.
+ */
+function poolPayload(asset: MediaAsset): DragPayload {
+  return {
+    kind: 'media',
+    file: asset.path,
+    name: asset.name,
+    assetId: asset.id,
+    mediaKind: asset.kind
+  }
+}
+
+/**
+ * A frame of the thing, rather than its filename.
+ *
+ * Video gets a `<video>` seeked a little way in — `#t=0.5` rather than 0,
+ * because the first frame of a clip is very often black and a grid of black
+ * squares identifies nothing. Audio has no picture to show, so it keeps an
+ * icon and leans on its name.
+ */
+function Thumbnail({ asset }: { asset: MediaAsset }): ReactNode {
+  if (!asset.path || asset.kind === 'audio') {
+    const Icon = ICON[asset.kind]
+    return (
+      <div className="flex size-full items-center justify-center bg-ink-800">
+        <Icon size={20} className="text-ink-600" />
+      </div>
+    )
+  }
+  const url = mediaUrl(asset.path)
+  if (asset.kind === 'video') {
+    return (
+      <video
+        src={`${url}#t=0.5`}
+        preload="metadata"
+        muted
+        playsInline
+        className="size-full object-cover"
+      />
+    )
+  }
+  return <img src={url} alt="" loading="lazy" className="size-full object-cover" />
+}
 
 export function MediaPool(): ReactNode {
   const project = useEditor((s) => s.project)
@@ -88,70 +141,80 @@ export function MediaPool(): ReactNode {
             <div className="text-[11px] text-ink-600">video, audio or images</div>
           </div>
         ) : (
-          project.assets.map((asset) => {
-            const Icon = ICON[asset.kind]
-            return (
-              <div
-                key={asset.id}
-                onDoubleClick={() => addAssetToTimeline(asset.id)}
-                title="Double-click to add to the timeline"
-                className="group flex cursor-default items-center gap-2.5 border-b border-ink-850 px-3 py-2 hover:bg-ink-850"
-              >
-                <Icon size={14} className="shrink-0 text-ink-600" />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-[12px] text-ink-200">{asset.name}</div>
-                  <div className="truncate text-[10.5px] text-ink-400">{details(asset)}</div>
-                </div>
-                {(() => {
-                  const job = transcribing[asset.id]
-                  const hasTranscript = Boolean(project.transcripts[asset.id])
-                  if (job) {
-                    return (
+          <div className="grid grid-cols-3 gap-1.5 p-2">
+            {project.assets.map((asset) => {
+              const Icon = ICON[asset.kind]
+              const job = transcribing[asset.id]
+              const hasTranscript = Boolean(project.transcripts[asset.id])
+              return (
+                <div
+                  key={asset.id}
+                  draggable
+                  onDragStart={(e) => setDragPayload(e, poolPayload(asset))}
+                  onDoubleClick={() => addAssetToTimeline(asset.id)}
+                  title={`${asset.name}\n${details(asset)}\n\nDrag onto the timeline, or double-click`}
+                  className="group relative aspect-square cursor-grab overflow-hidden rounded-md border border-ink-700 bg-ink-850 hover:border-flame-500 active:cursor-grabbing"
+                >
+                  <Thumbnail asset={asset} />
+
+                  {/*
+                    The name, over the picture rather than beside it.
+
+                    A list of filenames is unreadable when the files are
+                    IMG_4821 and DSC_0037, which is what a camera gives you —
+                    the picture is the only thing that identifies a shot, so it
+                    gets the tile and the name gets a caption.
+                  */}
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink-950/95 to-transparent px-1 pb-0.5 pt-3">
+                    <div className="truncate text-[9px] leading-tight text-ink-200">{asset.name}</div>
+                  </div>
+
+                  <div className="pointer-events-none absolute left-1 top-1 rounded bg-ink-950/75 p-0.5">
+                    <Icon size={10} className="text-ink-300" />
+                  </div>
+
+                  {asset.kind !== 'image' && (
+                    <span className="pointer-events-none absolute right-1 top-1 rounded bg-ink-950/75 px-1 text-[9px] tabular-nums text-ink-300">
+                      {formatDuration(framesToSeconds(asset.durationFrames, project.settings.fps))}
+                    </span>
+                  )}
+
+                  {job ? (
+                    <button
+                      onClick={() => cancelTranscribe(asset.id)}
+                      title={job.message ?? 'Transcribing — click to cancel'}
+                      className="absolute inset-x-1 bottom-4 flex items-center justify-center gap-1 rounded bg-flame-500/90 px-1 py-0.5 text-[9px] font-medium text-ink-950"
+                    >
+                      <Loader2 size={9} className="animate-spin" />
+                      {job.progress === null ? 'analysing' : `${Math.round(job.progress * 100)}%`}
+                      <X size={8} />
+                    </button>
+                  ) : (
+                    asset.kind !== 'image' && (
                       <button
-                        onClick={() => cancelTranscribe(asset.id)}
-                        title={job.message ?? 'Transcribing — click to cancel'}
-                        className="flex shrink-0 items-center gap-1 rounded bg-flame-500/25 px-1.5 py-0.5 text-[10px] font-medium text-flame-300 ring-1 ring-flame-500/60 hover:bg-flame-500/40"
+                        onClick={() => void transcribeAsset(asset.id)}
+                        disabled={!sidecarReady}
+                        title={
+                          !sidecarReady
+                            ? 'The AI sidecar is not running'
+                            : hasTranscript
+                              ? 'Transcribed — click to redo'
+                              : 'Transcribe'
+                        }
+                        className={`absolute bottom-4 right-1 rounded p-1 transition-opacity disabled:opacity-30 ${
+                          hasTranscript
+                            ? 'bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-500/50'
+                            : 'bg-ink-950/75 text-ink-300 opacity-0 group-hover:opacity-100 hover:text-ink-100'
+                        }`}
                       >
-                        <Loader2 size={10} className="animate-spin" />
-                        {job.progress === null ? 'analysing' : `${Math.round(job.progress * 100)}%`}
-                        <X size={9} />
+                        <Captions size={11} />
                       </button>
                     )
-                  }
-                  return (
-                    <>
-                      {asset.kind !== 'image' && (
-                        <button
-                          onClick={() => void transcribeAsset(asset.id)}
-                          disabled={!sidecarReady}
-                          title={
-                            !sidecarReady
-                              ? 'The AI sidecar is not running'
-                              : hasTranscript
-                                ? 'Transcribed — click to redo'
-                                : 'Transcribe'
-                          }
-                          className={`shrink-0 rounded p-1 transition-opacity hover:bg-ink-700 disabled:opacity-30 ${
-                            hasTranscript
-                              ? 'bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/40'
-                              : 'text-ink-400 opacity-60 group-hover:opacity-100 hover:text-ink-200'
-                          }`}
-                        >
-                          <Captions size={12} />
-                        </button>
-                      )}
-                      <button
-                        onClick={() => addAssetToTimeline(asset.id)}
-                        className="shrink-0 rounded px-1.5 py-0.5 text-[10px] text-ink-600 opacity-0 group-hover:opacity-100 hover:bg-ink-700 hover:text-ink-200"
-                      >
-                        Add
-                      </button>
-                    </>
-                  )
-                })()}
-              </div>
-            )
-          })
+                  )}
+                </div>
+              )
+            })}
+          </div>
         )}
       </div>
 

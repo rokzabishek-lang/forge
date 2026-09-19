@@ -397,6 +397,14 @@ interface EditorState {
     trackId: string,
     startFrame: number
   ) => Promise<void>
+  /**
+   * Put an asset that is ALREADY imported onto a track at a frame.
+   *
+   * Dragging out of the media pool, as opposed to `addAssetToTimeline`, which
+   * appends to the first track of the right kind. Dragging is how you say
+   * WHICH track and WHEN, so neither is guessed here.
+   */
+  placePoolAsset: (assetId: string, trackId: string, startFrame: number) => void
 
   /** Trim in SOURCE frames — what the waveform trimmer manipulates. */
   setSourceRange: (clipId: string, inPoint: number, outPoint: number) => void
@@ -1950,6 +1958,53 @@ export const useEditor = create<EditorState>((set, get) => ({
     } catch (err) {
       notify(err instanceof Error ? err.message : String(err))
     }
+  },
+
+  placePoolAsset: (assetId, trackId, startFrame) => {
+    const { project, notify, aspect } = get()
+    const asset = project.assets.find((a) => a.id === assetId)
+    const track = project.tracks.find((t) => t.id === trackId)
+    if (!asset || !track || track.locked) return
+    if ((asset.kind === 'audio') !== (track.kind === 'audio')) {
+      notify(asset.kind === 'audio' ? 'Sounds go on an audio track' : 'That belongs on a video track', 'info')
+      return
+    }
+
+    const fps = project.settings.fps
+    // A still has no natural length; three seconds reads as deliberate — the
+    // same figure `placeLibraryAsset` uses, so a photo behaves the same
+    // wherever it was dragged from.
+    const duration = asset.kind === 'image' ? Math.round(fps * 3) : asset.durationFrames
+    const clipId = `clip-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
+
+    get().update((p) => {
+      /*
+       * Dropped ONTO a moment, so the time stays and the track climbs.
+       *
+       * Sliding it later would put it on a different shot from the one it was
+       * aimed at, and the aim is the whole gesture.
+       */
+      const slot = stackOverlay(p, trackId, startFrame, duration)
+      return {
+        ...slot.project,
+        clips: [
+          ...slot.project.clips,
+          {
+            id: clipId,
+            assetId,
+            trackId: slot.trackId,
+            start: slot.start,
+            duration,
+            inPoint: 0,
+            volume: 1,
+            transform: { x: 0, y: 0, scale: 1, rotation: 0, opacity: 1 },
+            color: { brightness: 0, contrast: 1, saturation: 1 },
+            crop: asset.kind === 'audio' ? undefined : solveCrop(asset, aspect)
+          }
+        ]
+      }
+    })
+    get().revealClip(clipId)
   },
 
   setKeyframe: (clipId, property, frame, value, ease) => {
