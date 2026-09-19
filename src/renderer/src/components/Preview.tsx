@@ -13,6 +13,7 @@ import { mediaUrl } from '../media'
 import { motionSourceRect } from '@shared/render/motion'
 import { clipBox, parallaxBakeFor, planeShare } from '@shared/render/plan'
 import { pathAt } from '@shared/render/path'
+import { clockStep, needsReanchor, type ClockAnchor } from '@shared/render/clock'
 import { valueAt } from '@shared/render/keyframes'
 import { CropOverlay } from './CropOverlay'
 import { TextOverlay } from './TextOverlay'
@@ -272,7 +273,12 @@ export function Preview(): ReactNode {
    */
   const pool = useRef(new Map<string, MediaElement>())
   const audioRefs = useRef(new Map<string, HTMLAudioElement>())
-  const clockRef = useRef<{ at: number; frame: number } | null>(null)
+  /**
+   * The timeline's clock: when playback was anchored, and the last frame the
+   * clock itself wrote. `wrote` is what tells a scrub apart from our own
+   * advance — see `needsReanchor`.
+   */
+  const clockRef = useRef<{ anchor: ClockAnchor; wrote: number } | null>(null)
   /** Report a blocked play() once, not sixty times a second. */
   const audioWarned = useRef(false)
 
@@ -710,7 +716,9 @@ export function Preview(): ReactNode {
   }, [playhead, playing, syncMedia])
 
   useEffect(() => {
-    clockRef.current = playing ? { at: performance.now(), frame: playhead } : null
+    clockRef.current = playing
+      ? { anchor: { at: performance.now(), frame: playhead }, wrote: playhead }
+      : null
     if (!playing) syncMedia(playhead, false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing])
@@ -1242,48 +1250,41 @@ export function Preview(): ReactNode {
       }
 
       if (playing) {
-        const layers = layersAtFrame(playhead)
-        const clock = layers.find(
-          (l) => l.element instanceof HTMLVideoElement && !l.element.paused
-        )
-        let next: number | null = null
-
-        if (clock && clock.element instanceof HTMLVideoElement) {
-          // A playing video is the most accurate clock available.
-          next = clock.clip.start + Math.round(clock.element.currentTime * fps) - clock.clip.inPoint
-          clockRef.current = { at: performance.now(), frame: next }
-        } else {
-          // Stills and gaps have no media clock, so fall back to wall time.
-          const anchor = clockRef.current
-          if (anchor) {
-            next = anchor.frame + Math.round(((performance.now() - anchor.at) / 1000) * fps)
-          }
-        }
+        const now = performance.now()
 
         /*
-         * Finite, not just non-null.
+         * Re-anchor whenever something else moved the playhead.
          *
-         * A media element can report a NaN currentTime while it is still
-         * starting, and NaN survives every comparison below — the playhead
-         * freezes and the canvas goes blank with no error anywhere.
+         * A scrub, Home, or clicking the ruler during playback changes the
+         * playhead without touching the clock, and computing from the stale
+         * anchor would drag it straight back. The old code never hit this
+         * because a media element rewrote the playhead every tick anyway,
+         * which hid the problem rather than solving it.
          */
-        if (next !== null && Number.isFinite(next)) {
-          const end = projectDuration(project)
-          if (next >= end) {
-            if (loop) {
-              // Re-anchor the wall clock too, or the next tick computes a frame
-              // from the old anchor and jumps straight back to the end.
-              clockRef.current = { at: performance.now(), frame: 0 }
-              setPlayhead(0)
-              syncMedia(0, true)
-            } else {
-              setPlaying(false)
-              setPlayhead(end)
-            }
-          } else {
-            setPlayhead(next)
-            syncMedia(next, true)
-          }
+        if (!clockRef.current || needsReanchor(clockRef.current.wrote, playhead)) {
+          clockRef.current = { anchor: { at: now, frame: playhead }, wrote: playhead }
+        }
+
+        const step = clockStep(
+          clockRef.current.anchor,
+          now,
+          fps,
+          projectDuration(project),
+          loop
+        )
+
+        if (step.kind === 'loop') {
+          clockRef.current = { anchor: { at: now, frame: 0 }, wrote: 0 }
+          setPlayhead(0)
+          syncMedia(0, true)
+        } else if (step.kind === 'stop') {
+          setPlaying(false)
+          setPlayhead(step.frame)
+          clockRef.current = null
+        } else {
+          clockRef.current.wrote = step.frame
+          setPlayhead(step.frame)
+          syncMedia(step.frame, true)
         }
       }
       raf = requestAnimationFrame(tick)
@@ -1342,9 +1343,17 @@ export function Preview(): ReactNode {
   // shape belongs to the selected clip wherever its pixels happen to be.
   const showMask = previewTool === 'mask' && selectedClip?.mask !== undefined
 
+  /*
+   * No `splitRatio` condition — that was the bug.
+   *
+   * The Reframe BUTTON was lifted out of the split view and into the tool
+   * strip, with a note in Toolbox saying that comparing source against output
+   * has nothing to do with choosing a crop. This gate was left behind, so
+   * pressing Reframe with the split closed did nothing at all: the tool was
+   * moved and its visibility still depended on the place it moved from.
+   */
   const showCrop =
     previewTool === 'crop' &&
-    splitRatio > 0.15 &&
     topLayer !== null &&
     topLayer.clip.id === selectedClipId &&
     topLayer.clip.crop !== undefined

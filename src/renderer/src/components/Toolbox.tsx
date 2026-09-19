@@ -1,6 +1,6 @@
 import { type ReactNode } from 'react'
 import { Crop, Grid3x3, MousePointer2, Scan, Brush, Circle, Droplet, Type } from 'lucide-react'
-import { useEditor } from '../store'
+import { solveCrop, useEditor } from '../store'
 import { defaultMask, type MaskMode } from '@shared/render/mask'
 
 /**
@@ -48,6 +48,9 @@ export function Toolbox(): ReactNode {
   const selected = useEditor((s) => s.project.clips.find((c) => c.id === s.selectedClipId) ?? null)
   const setMask = useEditor((s) => s.setMask)
   const addTextClip = useEditor((s) => s.addTextClip)
+  const setCrop = useEditor((s) => s.setCrop)
+  const aspect = useEditor((s) => s.aspect)
+  const assets = useEditor((s) => s.project.assets)
   const playhead = useEditor((s) => s.playhead)
   const tracks = useEditor((s) => s.project.tracks)
 
@@ -62,6 +65,30 @@ export function Toolbox(): ReactNode {
     const video = tracks.filter((t) => t.kind === 'video' && !t.locked)
     const top = video[video.length - 1] ?? tracks.find((t) => t.kind === 'video')
     if (top) await addTextClip(top.id, playhead)
+  }
+
+  /**
+   * Reframe, with something to actually drag.
+   *
+   * The overlay draws nothing when the clip has no `crop`, and most clips have
+   * none: `solveCrop` returns undefined when the source already matches the
+   * project's aspect — "no crop needed" — and library assets never get one at
+   * all. So pressing Reframe on a 9:16 clip in a 9:16 project did nothing,
+   * silently, which is the same failure the Mask button below was written to
+   * avoid: pressing a tool must always leave something on screen.
+   *
+   * A full-frame rectangle is the honest starting point. It changes no pixels
+   * until it is dragged.
+   */
+  const startCrop = (): void => {
+    setPreviewTool('crop')
+    if (!selectedClipId || !selected || selected.crop) return
+    const asset = assets.find((a) => a.id === selected.assetId)
+    if (!asset?.width || !asset?.height) return
+    setCrop(
+      selectedClipId,
+      solveCrop(asset, aspect) ?? { x: 0, y: 0, width: asset.width, height: asset.height }
+    )
   }
 
   /*
@@ -95,10 +122,13 @@ export function Toolbox(): ReactNode {
     {
       id: 'crop',
       label: 'Reframe',
-      hint: 'Drag the crop rectangle on the picture',
+      hint: selected
+        ? 'Drag the crop rectangle on the picture'
+        : 'Select a clip first — a crop belongs to one clip',
       icon: Crop,
       active: previewTool === 'crop',
-      onClick: () => setPreviewTool('crop')
+      onClick: selected ? startCrop : undefined,
+      soon: 'select a clip first'
     },
     {
       id: 'thirds',
