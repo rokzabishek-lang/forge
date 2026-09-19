@@ -20,6 +20,9 @@ import { useEditor } from '../store'
 const DOT = 7
 const PADDING = 4
 
+/** How far either side of the line counts as grabbing it, in pixels. */
+const REACH = 5
+
 export function VolumeEnvelope({
   clip,
   zoom,
@@ -31,6 +34,7 @@ export function VolumeEnvelope({
   height: number
 }): ReactNode {
   const setKeyframes = useEditor((s) => s.setKeyframes)
+  const select = useEditor((s) => s.select)
   const dragging = useRef<number | null>(null)
   const boxRef = useRef<HTMLDivElement | null>(null)
 
@@ -88,17 +92,26 @@ export function VolumeEnvelope({
   }
 
   /**
-   * A click on the line adds a point there.
+   * A click ON THE LINE adds a point there.
    *
-   * The first one on an un-drawn clip starts from the clip's flat level rather
-   * than from wherever the pointer landed vertically — otherwise the first
-   * touch silently changes the volume of the whole clip, which is not what
-   * "add a point" should mean.
+   * On the line, not anywhere on the clip. The first version of this took the
+   * whole clip body — and since it stops propagation, that quietly made every
+   * clip with sound in it immovable: no dragging along the timeline, no
+   * dragging to another track, no trimming, not even selecting. One control
+   * ate every other gesture the clip had.
+   *
+   * The first point on an un-drawn clip starts from the clip's flat level
+   * rather than from wherever the pointer landed vertically — otherwise the
+   * first touch silently changes the volume of the whole clip, which is not
+   * what "add a point" should mean.
    */
   const addPoint = (event: ReactPointerEvent): void => {
     event.stopPropagation()
     const point = at(event)
     if (!point) return
+    // Touching a clip selects it everywhere else in the editor; the line is
+    // not an exception just because it also does something.
+    select(clip.id)
     const value = keys.length === 0 ? flat : point.value
     commit([...keys, { frame: point.frame, value, ease: 'linear' }])
   }
@@ -124,22 +137,47 @@ export function VolumeEnvelope({
           `L ${width} ${yOf(valueAt(keys, clip.duration, clip.duration, flat))}`
         ].join(' ')
 
+  /*
+   * The container passes pointers straight through, and only the line and its
+   * points take them back. That is what keeps the clip underneath draggable.
+   */
   return (
-    <div
-      ref={boxRef}
-      className="absolute inset-0 z-10"
-      onPointerDown={addPoint}
-      title="Click the line to add a point · drag to shape it · double-click a point to remove it"
-    >
-      <svg width={width} height={height} className="pointer-events-none absolute inset-0 overflow-visible">
-        <path d={path} fill="none" stroke="rgb(245,154,117)" strokeWidth={1.5} />
+    <div ref={boxRef} className="pointer-events-none absolute inset-0 z-10">
+      <svg
+        width={width}
+        height={height}
+        className="pointer-events-none absolute inset-0 overflow-visible"
+      >
+        {/*
+          An invisible fat copy of the line, purely to be hit. `stroke` hit
+          testing follows the stroke geometry rather than what it is painted
+          with, so a transparent one ten pixels wide is a grabbable line
+          without being a visible one.
+        */}
+        <path
+          d={path}
+          fill="none"
+          stroke="rgba(0,0,0,0)"
+          strokeWidth={REACH * 2}
+          style={{ pointerEvents: 'stroke', cursor: 'crosshair' }}
+          onPointerDown={addPoint}
+        >
+          <title>Click the line to add a point · drag a point to shape it · double-click to remove</title>
+        </path>
+        <path
+          d={path}
+          fill="none"
+          stroke="rgb(245,154,117)"
+          strokeWidth={1.5}
+          className="pointer-events-none"
+        />
       </svg>
       {keys.map((key, index) => (
         <span
           key={`${key.frame}-${index}`}
           onPointerDown={grab(index)}
           onDoubleClick={removePoint(index)}
-          className="absolute rounded-full border border-ink-950 bg-flame-400 hover:bg-flame-300"
+          className="pointer-events-auto absolute rounded-full border border-ink-950 bg-flame-400 hover:bg-flame-300"
           style={{
             width: DOT,
             height: DOT,
