@@ -12,6 +12,7 @@ import {
 import { useEditor } from '../store'
 import { useCatalog } from '../catalog'
 import { VolumeEnvelope } from './VolumeEnvelope'
+import { ClipWaveform } from './ClipWaveform'
 import { acceptsKind, isAssetDrag, readDragPayload, type DragPayload } from '../dragPayload'
 
 type DragMode = 'move' | 'trim-start' | 'trim-end'
@@ -469,18 +470,41 @@ export function Timeline(): ReactNode {
                         onPointerUp={endDrag}
                         onPointerCancel={endDrag}
                       >
-                        <div className="truncate px-2 pt-1 text-ink-200">{asset?.name ?? 'missing'}</div>
-                        <div className="px-2 text-[10px] text-ink-400">
-                          {formatTimecode(clip.duration, fps)}
+                        {/*
+                          The sound itself, underneath everything.
+
+                          First in the clip so it paints behind the name and
+                          behind the volume line — it is what they are both
+                          about, not something to read over.
+                        */}
+                        {asset?.hasAudio && (
+                          <ClipWaveform
+                            clip={clip}
+                            asset={asset}
+                            zoom={zoom}
+                            height={TRACK_HEIGHT - 12}
+                            fps={fps}
+                            selected={selected}
+                          />
+                        )}
+
+                        <div className="pointer-events-none relative">
+                          <div className="truncate px-2 pt-1 text-ink-200 [text-shadow:0_1px_2px_rgb(10_12_15/0.9)]">
+                            {asset?.name ?? 'missing'}
+                          </div>
+                          <div className="px-2 text-[10px] text-ink-400 [text-shadow:0_1px_2px_rgb(10_12_15/0.9)]">
+                            {formatTimecode(clip.duration, fps)}
+                          </div>
                         </div>
 
                         {/*
                           The volume line, on the clip that makes the sound.
-                          
+
                           Only where there IS sound: a line over a photograph
-                          is a control that cannot do anything. It sits above
-                          the body so it can be grabbed, and below the trim
-                          handles so the edges still trim.
+                          is a control that cannot do anything. Its container
+                          takes no pointer events — only the line and its
+                          points do — so the body still drags and the edges
+                          still trim.
                         */}
                         {asset?.hasAudio && (
                           <VolumeEnvelope
@@ -490,16 +514,20 @@ export function Timeline(): ReactNode {
                           />
                         )}
 
-                        {/* Trim handles. Wide enough to hit, narrow enough not to eat the body. */}
+                        {/*
+                          Trim handles. Wide enough to hit, narrow enough not to
+                          eat the body — and above the volume line, so an edge
+                          the line happens to pass through still trims.
+                        */}
                         <div
-                          className="absolute left-0 top-0 h-full w-2 cursor-w-resize bg-transparent hover:bg-flame-500/60"
+                          className="absolute left-0 top-0 z-20 h-full w-2 cursor-w-resize bg-transparent hover:bg-flame-500/60"
                           onPointerDown={startDrag('trim-start', clip)}
                           onPointerMove={onClipMove}
                           onPointerUp={endDrag}
                           onPointerCancel={endDrag}
                         />
                         <div
-                          className="absolute right-0 top-0 h-full w-2 cursor-e-resize bg-transparent hover:bg-flame-500/60"
+                          className="absolute right-0 top-0 z-20 h-full w-2 cursor-e-resize bg-transparent hover:bg-flame-500/60"
                           onPointerDown={startDrag('trim-end', clip)}
                           onPointerMove={onClipMove}
                           onPointerUp={endDrag}

@@ -163,11 +163,18 @@ timeline, compiled to `volume=…:eval=frame` (measured, EFFECTS.md §1). It is
 also what makes the app interesting to DJs, who drop a clip into a set and
 reach for the line rather than a menu.
 
-**Still missing:** no waveform is drawn on the timeline clip — the trimmer has
-one, the clip does not — so the envelope is aimed at something invisible. And
-still **no audio fades**: no `afade` anywhere, the only fade in the codebase
-being a video transition, and no loudness normalisation, so two exports can
-land at different levels.
+**The sheet's waveform lanes are now real on the timeline too.** They were only
+ever in the trimmer, so the envelope above was aimed at something invisible.
+Full height on a sound file, the lower half on a video clip — see
+WHERE-THINGS-ARE.md for the mapping, which is the whole of the difficulty: the
+clip shows a *window* of the file, and getting that wrong draws a perfectly
+convincing picture of the wrong moment.
+
+**Still missing:** **no audio fades** — no `afade` anywhere, the only fade in
+the codebase being a video transition — and no loudness normalisation, so two
+exports can land at different levels. The envelope can be drawn into a fade by
+hand now, which makes the absence less sharp but not less real: nobody should
+have to place four points to soften an entry.
 
 ---
 

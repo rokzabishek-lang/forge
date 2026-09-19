@@ -211,20 +211,56 @@ clip could never leave the track it was born on. That is why picture-in-picture
 felt pointless: there was no way to get a second video above a first one for it
 to be in front OF.
 
-**The volume line is drawn on the clip.** Any clip whose asset has sound
-carries an envelope: click the line to add a point, drag a point in time *and*
-level, double-click one to remove it. They are ordinary `volume` keyframes —
-the same ones the inspector's curve editor writes — compiled at render into
-`volume=…:eval=frame`, which is measured to work (EFFECTS.md §1).
+**The waveform is drawn on the clip.** Any clip whose asset has sound shows it:
+full height on a sound file, the **lower half** on a video clip, which is what
+Premiere and Resolve both do and leaves the top for the name now and thumbnails
+later. It stays on video clips because speech lives there — a one-camera
+wedding's vows are V1's audio, not a separate track, and "cut just before he
+says it" is the cut you would otherwise scrub blind for.
+
+`ClipWaveform.tsx` draws it; `@shared/render/waveBars.ts` decides *what* to
+draw and is where the hard part lives. A clip shows a **window** of its source —
+trimmed at both ends, and consuming `duration × speed` frames of file per
+frame of timeline — while the peaks array spans the whole file. Three things
+that are easy to get wrong and impossible to see afterwards, because a waveform
+of the wrong part of the sound looks exactly as convincing as the right one:
+
+- index by the peaks' **own** `durationMs`, not the asset's `durationFrames` —
+  a video whose container claims ten seconds can carry eight of sound
+- **aggregate** buckets per column rather than sampling one, or a snare
+  disappears and reappears as you zoom
+- ask for buckets **proportional to the source** (`bucketsForSource`, 20/s,
+  clamped 200–4000) — a fixed 600 over a ten-minute podcast is one a second, so
+  a two-second answer cut out of it gets two bars
+
+The canvas is capped at two pixels per available bucket and stretched with CSS,
+so a ten-minute clip at maximum zoom is a few thousand pixels of canvas rather
+than two hundred thousand — which a canvas cannot allocate at all.
+
+**The volume line is drawn over it.** Click the line to add a point, drag a
+point in time *and* level, double-click one to remove it. They are ordinary
+`volume` keyframes — the same ones the inspector's curve editor writes —
+compiled at render into `volume=…:eval=frame`, which is measured to work
+(EFFECTS.md §1).
 
 This is the **drawn** kind, the Ableton kind: *quiet here, because I say so*.
 It is not ducking, which is automatic and lives on an audio track's `duck`
 flag. Both should exist; they answer different questions.
 
-**Missing here, in the order you would notice:** no waveform on the clip, which
-makes the volume line harder to aim than it should be — you are drawing against
-something you cannot see. Then no copy, paste or duplicate; no multi-select; no
-markers; and no audio fades.
+**What an overlay on a clip may take.** The envelope first shipped as a
+full-bleed `absolute inset-0 z-10` div with `onPointerDown` on it, which is the
+obvious way to make a line clickable — and it made **every clip with sound in
+it immovable**: no dragging, no cross-track drag, no trimming, no selecting.
+Clicking a clip added a volume point instead of picking it up. So: the
+container is `pointer-events-none`, the line takes pointers back through a
+transparent fat stroke (`pointerEvents: 'stroke'`), the dots opt in
+individually, the trim handles sit at `z-20` above it all, and the waveform
+never takes a pointer at all. `tests/clipOverlays.test.ts` guards each of
+those against the source — jsdom implements neither stacking contexts nor
+hit testing, so a mounted-component test would have certified the bug.
+
+**Missing here, in the order you would notice:** no copy, paste or duplicate;
+no multi-select; no markers; and no audio fades.
 
 ---
 

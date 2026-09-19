@@ -233,6 +233,17 @@ async function videoSeconds(url: string): Promise<number> {
 /** Which synthetic files are video, and how long each one is. */
 const videoFiles = new Map<string, number>()
 
+/**
+ * The same length the asset record claims.
+ *
+ * A waveform is indexed by the peaks' own duration, so a stub that disagreed
+ * with `asset()` would draw every clip's sound stretched or squashed — and it
+ * would look like a bug in the mapping rather than a bug in the fixture.
+ */
+function fakeDurationMs(path: string): number {
+  return Math.round((videoFiles.get(path) ?? 12) * 1000)
+}
+
 function asset(path: string, name: string, fps: number, kind: MediaAsset['kind']): MediaAsset {
   const size = made.get(path) ?? { width: 1600, height: 1067 }
   return {
@@ -441,11 +452,31 @@ export function installHarnessBridge(): void {
     analyseBeats: async (_path: string, range?: { startMs?: number; endMs?: number }) =>
       fakeBeats((range?.endMs ?? 30_000) - (range?.startMs ?? 0)),
 
-    peaks: async (_path: string, buckets = 400) => ({
-      values: Array.from({ length: buckets }, (_, i) => 0.3 + 0.5 * Math.abs(Math.sin(i / 7))),
-      buckets,
-      durationMs: 30_000
-    }),
+    /*
+     * Peaks are INTERLEAVED min/max pairs — two numbers per bucket, the
+     * trough and the crest. This returned one number per bucket, which is a
+     * different array with the same field name: anything reading it as pairs
+     * read half the file at twice the rate, with every trough taken from the
+     * next bucket's crest. The trimmer never noticed because it draws
+     * `max - min` and any two numbers make a bar.
+     *
+     * It also has a shape now. A flat band proves a waveform is drawn; it
+     * cannot show whether the right PART of the file was drawn, which is the
+     * only hard question a clip waveform asks.
+     */
+    peaks: async (path: string, buckets = 400) => {
+      const values: number[] = []
+      for (let i = 0; i < buckets; i++) {
+        const t = i / buckets
+        // A four-bar loop with a kick on the beat, so a trimmed clip's
+        // waveform can be checked against where it was trimmed from.
+        const beat = Math.pow(Math.max(0, Math.sin(t * Math.PI * 64)), 6)
+        const swell = 0.25 + 0.55 * Math.sin(t * Math.PI)
+        const amp = Math.min(1, swell * (0.35 + beat) + 0.04)
+        values.push(-amp * 0.9, amp)
+      }
+      return { values, buckets, durationMs: fakeDurationMs(path) }
+    },
 
     bakeParallax: unsupported('Depth baking'),
     cancelParallax: async () => undefined,
