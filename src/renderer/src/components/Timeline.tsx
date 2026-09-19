@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
-import type { Clip } from '@shared/timeline'
+import type { Clip, Track } from '@shared/timeline'
 import { Eye, EyeOff, Plus, Trash2, Volume2, VolumeX } from 'lucide-react'
 import {
   clipEnd,
@@ -16,6 +16,8 @@ import { acceptsKind, isAssetDrag, readDragPayload, type DragPayload } from '../
 type DragMode = 'move' | 'trim-start' | 'trim-end'
 
 const TRACK_HEIGHT = 62
+/** The sticky ruler above the lanes, `h-7`. Lane 0 starts below it. */
+const RULER_HEIGHT = 28
 const HEADER_WIDTH = 128
 /** Snap threshold in screen pixels — converted to frames using the zoom. */
 const SNAP_PX = 7
@@ -64,6 +66,26 @@ export function Timeline(): ReactNode {
     startX: number
     origin: Clip
   } | null>(null)
+
+  /**
+   * Which lane the pointer is over, or null when it is off the stack.
+   *
+   * Dragging a clip only ever read `clientX`, so a clip could never leave the
+   * track it was born on. That is the whole of "no freedom to move between
+   * layers" — and it is why picture-in-picture felt pointless, since there was
+   * no way to get a second video above a first one to be in front OF.
+   */
+  const lanesRef = useRef<Track[]>([])
+
+  const laneAt = useCallback(
+    (clientY: number): Track | null => {
+      const box = laneRef.current?.getBoundingClientRect()
+      if (!box) return null
+      const index = Math.floor((clientY - box.top - RULER_HEIGHT) / TRACK_HEIGHT)
+      return lanesRef.current[index] ?? null
+    },
+    []
+  )
 
   /**
    * A transition attaches to a cut, everything else becomes a clip.
@@ -193,14 +215,26 @@ export function Timeline(): ReactNode {
       const ownEdges = [origin.start, clipEnd(origin)]
 
       if (state.mode === 'move') {
-        moveClip(state.clipId, snap(origin.start + deltaFrames, ownEdges))
+        /*
+         * Sideways in time, upwards in layers — one gesture, both axes.
+         *
+         * Only onto a lane of the same kind: a video has nothing to be on an
+         * audio track, and silently dropping it there would look like the drag
+         * failing. A locked lane is refused for the same reason. In either
+         * case the clip keeps the track it has and the horizontal move still
+         * happens, so the drag never feels stuck.
+         */
+        const over = laneAt(event.clientY)
+        const originKind = lanesRef.current.find((t) => t.id === origin.trackId)?.kind
+        const target = over && over.kind === originKind && !over.locked ? over.id : undefined
+        moveClip(state.clipId, snap(origin.start + deltaFrames, ownEdges), target)
       } else if (state.mode === 'trim-start') {
         trimClipStart(state.clipId, snap(origin.start + deltaFrames, ownEdges))
       } else {
         trimClipEnd(state.clipId, snap(clipEnd(origin) + deltaFrames, ownEdges))
       }
     },
-    [zoom, snap, moveClip, trimClipStart, trimClipEnd]
+    [zoom, snap, moveClip, trimClipStart, trimClipEnd, laneAt]
   )
 
   const endDrag = useCallback(() => {
@@ -217,6 +251,9 @@ export function Timeline(): ReactNode {
 
   // Highest video layer at the top, the way every NLE shows it. See laneOrder.
   const lanes = laneOrder(project.tracks)
+  // Read by the drag handler, which is created before `lanes` exists and must
+  // not be rebuilt on every track change.
+  lanesRef.current = lanes
 
   return (
     <div className="flex h-full flex-col border-t border-ink-800 bg-ink-900">
