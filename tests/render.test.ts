@@ -327,6 +327,44 @@ describe('audio track mixing', () => {
     expect(filters).not.toContain('amix')
   })
 
+  /*
+   * A drawn envelope outranks the flat level, including when the flat level is
+   * zero.
+   *
+   * Stickers land at `volume: 0` on purpose (store.ts — six of them at once is
+   * six people talking), and the design is that you turn them back up. Through
+   * the Sound row that works, because `setClipVolume` lifts the scalar off
+   * zero. Through the envelope it did not: the keyframes were written without
+   * touching `clip.volume`, so the mute guard threw the clip away before the
+   * expression it had just built was ever used. Drawn curve on screen, silence
+   * in the file.
+   */
+  it('keeps a clip muted flat but drawn back up by an envelope', () => {
+    const filters = argString(
+      buildRenderPlan({
+        project: withMusic({
+          volume: 0,
+          keyframes: { volume: [{ frame: 0, value: 0 }, { frame: 30, value: 1 }] }
+        }),
+        outputPath: '/o.mp4'
+      }).args
+    )
+    expect(filters).toContain('eval=frame')
+    expect(filters).toContain('amix=inputs=2:')
+  })
+
+  it('still drops a flat-muted clip that has no envelope at all', () => {
+    // The other side of the same rule: an empty track must not resurrect it.
+    const filters = argString(
+      buildRenderPlan({
+        project: withMusic({ volume: 0, keyframes: { volume: [] } }),
+        outputPath: '/o.mp4'
+      }).args
+    )
+    expect(filters).not.toContain('amix')
+    expect(filters).toContain('anull[aout]')
+  })
+
   it('still mixes a clip that is merely quiet', () => {
     // The boundary the guard must not overshoot: 0.0001 is audible work.
     const filters = argString(

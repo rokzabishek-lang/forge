@@ -1308,9 +1308,10 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
      * and needs no timeline offset.
      */
     const envelope = clip.keyframes?.volume
+    const hasEnvelope = envelope !== undefined && envelope.length > 0
     const volumeFilter =
-      envelope && envelope.length > 0
-        ? `volume=volume='${keyframeExpression(envelope, {
+      hasEnvelope
+        ? `volume=volume='${keyframeExpression(envelope!, {
             durationFrames: clip.duration,
             fps,
             startSeconds: 0,
@@ -1331,11 +1332,19 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
      * this was the normal case rather than an edge one.
      *
      * The guard lives here rather than at the two call sites so picture audio
-     * and audio-track clips cannot drift apart. `volume` is a plain scalar and
-     * is not keyframable, so there is no "starts at zero and rises" case this
-     * would wrongly drop.
+     * and audio-track clips cannot drift apart.
+     *
+     * It must test the FLAT level AND the absence of an envelope, not the flat
+     * level alone. When this was written `volume` was a plain scalar and the
+     * reasoning was that nothing could raise it mid-clip; the envelope made
+     * that false the same day. A sticker lands at `volume: 0` by design and is
+     * meant to be turned back up: through the Sound row that lifts the scalar
+     * and is fine, but through the envelope the keyframes are written WITHOUT
+     * touching `clip.volume`, so a flat-only guard discarded the clip before
+     * the expression above was ever used. Drawn curve on screen, silence in
+     * the file: the shape this project keeps meeting.
      */
-    if (volume === 0) return
+    if (volume === 0 && !hasEnvelope) return
     const delayMs = Math.round(framesToSeconds(clip.start, fps) * 1000)
     const chain = [
       'aformat=sample_fmts=fltp:channel_layouts=stereo',
