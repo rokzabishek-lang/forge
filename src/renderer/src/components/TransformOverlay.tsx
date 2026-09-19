@@ -69,19 +69,42 @@ export function TransformOverlay({
     })
   }
 
-  const startScale = (e: ReactPointerEvent): void => {
-    const base = clip.transform?.scale ?? 1
-    // Distance from the centre, so any corner grows the box the same way and
-    // dragging past the centre does not flip it inside out.
-    const from = Math.max(8, distance(e.clientX, e.clientY, centre.x, centre.y))
-    gesture(e, (ev) => {
-      const now = distance(ev.clientX, ev.clientY, centre.x, centre.y)
-      const next = clamp(base * (now / from), MIN_SCALE, MAX_SCALE)
-      // scaleY follows scale unless it was set independently; keeping them
-      // linked here is what makes a corner drag feel like a corner drag.
-      setTransform(clip.id, { scale: next, scaleY: next })
-    })
-  }
+  /**
+   * Resize, free-form.
+   *
+   * Width and height move independently, because a corner that only ever
+   * scales both together cannot crop a photo to a shape or squeeze a card into
+   * a band — and `scaleY` has existed on the transform all along for exactly
+   * that. **Shift keeps the proportions**, the convention every design tool
+   * uses, so the old behaviour is still one key away rather than gone.
+   *
+   * `axis` is what an EDGE handle passes: dragging the side of a box should
+   * change its width and leave its height alone, which a corner's arithmetic
+   * cannot express on its own.
+   *
+   * Measured from the centre in each axis separately. Distance rather than
+   * signed offset, so dragging a handle past the centre grows the box back out
+   * instead of flipping it inside out.
+   */
+  const startScale =
+    (axis: 'both' | 'x' | 'y' = 'both') =>
+    (e: ReactPointerEvent): void => {
+      const baseX = clip.transform?.scale ?? 1
+      const baseY = clip.transform?.scaleY ?? baseX
+      const fromX = Math.max(8, Math.abs(e.clientX - centre.x))
+      const fromY = Math.max(8, Math.abs(e.clientY - centre.y))
+
+      gesture(e, (ev) => {
+        const ratioX = Math.max(8, Math.abs(ev.clientX - centre.x)) / fromX
+        const ratioY = Math.max(8, Math.abs(ev.clientY - centre.y)) / fromY
+
+        // Shift on a corner: one ratio drives both, so the shape is kept.
+        const shared = axis === 'both' && ev.shiftKey ? Math.max(ratioX, ratioY) : null
+        const nextX = axis === 'y' ? baseX : clamp(baseX * (shared ?? ratioX), MIN_SCALE, MAX_SCALE)
+        const nextY = axis === 'x' ? baseY : clamp(baseY * (shared ?? ratioY), MIN_SCALE, MAX_SCALE)
+        setTransform(clip.id, { scale: nextX, scaleY: nextY })
+      })
+    }
 
   const startRotate = (e: ReactPointerEvent): void => {
     const base = clip.transform?.rotation ?? 0
@@ -130,11 +153,29 @@ export function TransformOverlay({
         }}
       />
 
-      {/* Corners scale. */}
-      <span onPointerDown={startScale} style={handle('nwse-resize', { left: -5, top: -5 })} />
-      <span onPointerDown={startScale} style={handle('nesw-resize', { right: -5, top: -5 })} />
-      <span onPointerDown={startScale} style={handle('nesw-resize', { left: -5, bottom: -5 })} />
-      <span onPointerDown={startScale} style={handle('nwse-resize', { right: -5, bottom: -5 })} />
+      {/* Corners resize both axes — hold shift to keep the proportions. */}
+      <span onPointerDown={startScale('both')} style={handle('nwse-resize', { left: -5, top: -5 })} />
+      <span onPointerDown={startScale('both')} style={handle('nesw-resize', { right: -5, top: -5 })} />
+      <span onPointerDown={startScale('both')} style={handle('nesw-resize', { left: -5, bottom: -5 })} />
+      <span onPointerDown={startScale('both')} style={handle('nwse-resize', { right: -5, bottom: -5 })} />
+
+      {/* Edges resize one axis, which is the other half of free-form. */}
+      <span
+        onPointerDown={startScale('x')}
+        style={handle('ew-resize', { left: -5, top: '50%', marginTop: -5 })}
+      />
+      <span
+        onPointerDown={startScale('x')}
+        style={handle('ew-resize', { right: -5, top: '50%', marginTop: -5 })}
+      />
+      <span
+        onPointerDown={startScale('y')}
+        style={handle('ns-resize', { top: -5, left: '50%', marginLeft: -5 })}
+      />
+      <span
+        onPointerDown={startScale('y')}
+        style={handle('ns-resize', { bottom: -5, left: '50%', marginLeft: -5 })}
+      />
 
       {/* And a stalk above the box turns it, as every editor puts it. */}
       <span
@@ -169,10 +210,6 @@ function clampOffset(value: number): number {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
-}
-
-function distance(ax: number, ay: number, bx: number, by: number): number {
-  return Math.hypot(ax - bx, ay - by)
 }
 
 /** Degrees, clockwise from the centre. */
