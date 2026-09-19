@@ -454,5 +454,13 @@ paid service.
 rotation, random-every-N, opacity. The looks are finished; how captions decide
 things for themselves is not.
 
-**Small finishing.** Audio fades and loudness.
-The inert font tiles. Transcript-to-text-card conversion.
+**Small finishing.** The inert font tiles. Transcript-to-text-card conversion.
+Copy/paste/duplicate and multi-select on the timeline. *(Audio fades and
+loudness were here and are done — fades, crossfades and LUFS normalisation all
+land in EFFECTS.md §26–28.)*
+
+**Content without a pipeline.** `prop` is an `AssetKind`, the keyword rule that
+fires props is built and tested — and **no prop pack ships**. Sheet ④'s "3D
+Props" is therefore a hole in the ASSETS, not in the code, which is a very
+different size of job from how it reads. The sticker pipeline
+(`scripts/build-stickers.mjs`) is the shape the answer would take.
