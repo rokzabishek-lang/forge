@@ -34,8 +34,24 @@ function clip(over: Partial<Clip> = {}): Clip {
   }
 }
 
+/**
+ * A project with loudness normalisation OFF.
+ *
+ * New projects have it on, which is the right default — but it appends two
+ * filters to the finished mix and renames the mix's own output from `[aout]`
+ * to `[amixed]`. Every assertion below is about the MIXER: whether two streams
+ * reach it, whether a muted clip is dropped before it, whether a single source
+ * skips it. Leaving normalisation on would make each of those read the label
+ * of a filter it is not testing, and the next change to the tail of the chain
+ * would break all of them again for no reason.
+ *
+ * Normalisation has its own tests, including that the mix feeds it and that a
+ * single audio source still reaches it. Pass `{ settings: … }` to put it back.
+ */
 function project(over: Partial<Project> = {}): Project {
-  return { ...emptyProject(), assets: [asset()], clips: [clip()], ...over }
+  const empty = emptyProject()
+  const { loudness: _off, ...settings } = empty.settings
+  return { ...empty, settings, assets: [asset()], clips: [clip()], ...over }
 }
 
 const argString = (args: string[]): string => args.join(' ')

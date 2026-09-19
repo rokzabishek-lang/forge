@@ -20,6 +20,7 @@ import { DEFAULT_COLOR, DEFAULT_TEXT, clipCoversFrame } from '@shared/timeline'
 import type { Mask, MaskShape } from '@shared/render/mask'
 import { clipSpeed, maxDurationAtSpeed, withClipSpeed } from '@shared/render/speed'
 import { defaultFadeFrames } from '@shared/render/audioFade'
+import { isLoudnessTarget } from '@shared/render/loudness'
 import { normalisePath, pathAt } from '@shared/render/path'
 import { normaliseKeys, type Ease, type Keyframe, type KeyedProperty } from '@shared/render/keyframes'
 import { transitionById } from '@shared/transitions/registry'
@@ -471,6 +472,8 @@ interface EditorState {
    * Zero frames undoes it. Everything later on the track closes up behind.
    */
   crossfadeWithPrevious: (clipId: string, frames?: number) => void
+  /** Integrated loudness target for the export, in LUFS. Undefined turns it off. */
+  setLoudness: (lufs: number | undefined) => void
   /**
    * Slow motion and fast motion.
    *
@@ -2790,6 +2793,22 @@ export const useEditor = create<EditorState>((set, get) => ({
         return { ...c, [key]: value }
       })
     }))
+  },
+
+  setLoudness: (lufs) => {
+    get().update((p) => {
+      if (lufs === undefined) {
+        const { loudness: _off, ...settings } = p.settings
+        return { ...p, settings }
+      }
+      /*
+       * Rejected rather than clamped. A target outside the sane band is not a
+       * loudness the user meant and quietly moving it to the nearest one that
+       * is would leave the panel showing a number the export does not use.
+       */
+      if (!isLoudnessTarget(lufs)) return p
+      return { ...p, settings: { ...p.settings, loudness: lufs } }
+    })
   },
 
   crossfadeWithPrevious: (clipId, frames) => {

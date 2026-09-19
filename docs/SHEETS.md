@@ -190,8 +190,15 @@ point and would cross-fade into silence on any clip trimmed to the end of its
 file. EFFECTS.md §27 has the measurements, including why `acrossfade` is not
 used.
 
-**Still missing:** no loudness normalisation, so two exports can land at
-different levels.
+**Loudness normalisation is built**, so that is closed too: every export
+measured to a target in LUFS, `-14` by default on a new project and off on
+anything saved before it existed. EFFECTS.md §28 has the measurements,
+including the two things `loudnorm` does behind your back — it emits 192 kHz
+whatever went in, and a bare `aresample` after it kills the render.
+
+Sheet ⑤ is now fully built. What is left on this sheet is refinement rather
+than absence: two-pass loudness if drawn-envelope material ever sounds
+squashed, and crossfades at a cut you can drag rather than press.
 
 ---
 

@@ -24,6 +24,7 @@ import { PATH_PRESETS } from '@shared/render/path'
 import { TEXT_PRESETS, matchingPreset } from '@shared/render/textPresets'
 import { SANDWICH_RULE } from '@shared/automation/sandwich'
 import { maxTransitionFrames, transitionBase } from '@shared/timeline'
+import { LOUDNESS_TARGETS } from '@shared/render/loudness'
 import { LayoutPanel } from './LayoutPanel'
 import { MaskPanel } from './MaskPanel'
 import { SpeedPanel } from './SpeedPanel'
@@ -54,6 +55,7 @@ export function Inspector(): ReactNode {
   const setColor = useEditor((s) => s.setColor)
   const setClipVolume = useEditor((s) => s.setClipVolume)
   const crossfadeWithPrevious = useEditor((s) => s.crossfadeWithPrevious)
+  const setLoudness = useEditor((s) => s.setLoudness)
   const chooseLut = useEditor((s) => s.chooseLut)
   const setPath = useEditor((s) => s.setPath)
   const addWaypoint = useEditor((s) => s.addWaypoint)
@@ -288,6 +290,56 @@ export function Inspector(): ReactNode {
           <div className="mt-1.5 text-[10.5px] leading-snug text-ink-600">
             Changing this re-solves every clip&apos;s reframe. Drag the rectangle in the
             preview to correct it.
+          </div>
+        </div>
+
+        {/*
+          Loudness sits with the other things that describe the FILE, not with
+          the clip's own Sound row. It is a property of the export: every clip,
+          every track and the music all measured together after the mix.
+        */}
+        <div>
+          <div className="mb-1.5 text-[11px] text-ink-400">Loudness</div>
+          {/*
+            Two columns, not four. The panel is narrow enough at its default
+            width that four turned "Broadcast" into "Broad" — and a row of
+            clipped words is worse than a row half as wide, because the one
+            thing a preset button has to do is say what it is.
+          */}
+          <div className="grid grid-cols-2 gap-1">
+            {([['Off', undefined] as const] as readonly (readonly [string, number | undefined])[])
+              .concat(LOUDNESS_TARGETS.map((t) => [t.label, t.lufs] as const))
+              .map(([label, lufs]) => {
+                const active = (project.settings.loudness ?? undefined) === lufs
+                return (
+                  <button
+                    key={label}
+                    onClick={() => setLoudness(lufs)}
+                    title={
+                      lufs === undefined
+                        ? 'Export at whatever level the sources happen to be'
+                        : `${lufs} LUFS — ${LOUDNESS_TARGETS.find((t) => t.lufs === lufs)?.hint}`
+                    }
+                    className={`flex items-baseline justify-center gap-1 rounded px-2 py-1.5 text-[11px] transition-colors ${
+                      active
+                        ? 'bg-flame-500 text-ink-950'
+                        : 'bg-ink-800 text-ink-400 hover:bg-ink-700 hover:text-ink-200'
+                    }`}
+                  >
+                    {label}
+                    {lufs !== undefined && (
+                      <span className={`text-[9px] tabular-nums ${active ? 'text-ink-950/70' : 'text-ink-600'}`}>
+                        {lufs}
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+          </div>
+          <div className="mt-1.5 text-[10.5px] leading-snug text-ink-600">
+            {project.settings.loudness === undefined
+              ? 'Two exports can land at noticeably different levels.'
+              : `Every export measured to ${project.settings.loudness} LUFS, so one is as loud as the next.`}
           </div>
         </div>
 

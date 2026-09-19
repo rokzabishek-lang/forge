@@ -2050,3 +2050,86 @@ is a real answer and the falsy one.
 Neighbours are read **per track**. Two tracks overlapping is the whole point
 of having two; treating that as an edit point would duck the music every time
 a sound effect landed on it.
+
+---
+
+## 28. Loudness — `loudnorm`, and the two things it does behind your back
+
+Without normalisation, how loud an export comes out is whatever the source
+happened to be. Every platform measures the same way now — integrated LUFS,
+ITU BS.1770 — so the fix is to hit a number instead of eyeballing a meter.
+
+`loudnorm` merged in **3.1 (June 2016)**, comfortably inside the 2018-12-17
+floor (§25). It is on the Windows build and the integration test runs there.
+
+**Single pass is enough here.** Measured on this build, three sources spanning
+twenty-six decibels, normalised in one pass and re-measured:
+
+| source | before | after |
+|---|---|---|
+| quiet sine | −41.75 LUFS | **−14.04** |
+| loud sine | −15.75 LUFS | **−14.04** |
+| pink noise | −20.72 LUFS | **−14.01** |
+
+Within 0.04 LU of target. The two-pass form — measure, then apply one static
+gain with `linear=true` — is more transparent on dynamic material, but it
+needs an analysis run over the whole timeline before the render can start, and
+0.04 LU is far inside both what anyone can hear and what the platforms
+re-normalise away. Two-pass is the refinement to reach for if drawn-envelope
+material ever sounds squashed, not before.
+
+Pink noise also came back at a true peak of **exactly −1.00 dBFS**, the `TP`
+target, so the ceiling is honoured rather than approximated.
+
+### The two traps
+
+**It emits 192 kHz.** Every time, whatever went in. Nothing about the sound
+reveals it — the file is simply four times the samples, disagreeing with
+`settings.sampleRate` everywhere else in the app that reads it, and four times
+the work for the AAC encoder. The rate has to be pinned back explicitly.
+
+**A bare `aresample` after it fails.** Not a warning — the render dies:
+
+```
+[Parsed_aresample_1] Cannot select channel layout for the link between
+                     filters Parsed_aresample_1 and format_out_0_0
+Error reinitializing filters!
+```
+
+Nothing downstream can work out what came out of `loudnorm`, so the layout has
+to be stated in the same breath. The fix is one filter:
+
+```
+loudnorm=I=-14:TP=-1:LRA=11,
+aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo
+```
+
+*(A related failure cost ten minutes and is worth recording so nobody repeats
+it: `loudnorm` on a MONO input, with or without a resample, fails with
+"Failed to inject frame into filter network: Invalid argument". It looked at
+first like short clips failing — a 0.8s file died — but a 0.8s STEREO file is
+fine and an 8s mono one is not. Length was never the variable. Every clip is
+forced to stereo before the mix here, so it cannot arise in this graph, and
+the explicit `channel_layouts=stereo` makes sure of it.)*
+
+### Where it goes, and where it must not
+
+Last, on the finished mix. Normalising a clip before the music joins it would
+target a number that stops being true the moment anything else is added.
+
+**Never on the silence branch.** A project with no audio takes the `anullsrc`
+path, and `loudnorm` measures silence at **−inf LUFS** — asking it for a
+finite target is a request to amplify nothing by an unbounded amount.
+
+### On by default, for new projects only
+
+`DEFAULT_SETTINGS` carries −14 and a missing `loudness` means off. That
+asymmetry is deliberate: two exports landing at different levels is the thing
+being fixed, so the default has to be on — but switching it on for a project
+someone has already finished would change how it sounds with nothing on screen
+to say why.
+
+The change broke six existing tests in `render.test.ts`, all of which assert
+the MIXER's output label. They now build their fixture with normalisation off,
+because each is about whether two streams reach the mixer or a muted clip is
+dropped before it — not about what is appended afterwards.

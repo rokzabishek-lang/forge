@@ -18,6 +18,7 @@ import { isFullFrameMask, maskExpression } from './mask'
 import { safeCrop, type Size } from './crop'
 import { atempoChain, clipSpeed, sourceFramesFor, speedVideoFilter } from './speed'
 import { audioFadeFilters, fadesWithNeighbours } from './audioFade'
+import { loudnessFilters } from './loudness'
 import {
   DEFAULT_SHAKE_DECAY,
   DEFAULT_SHAKE_HZ,
@@ -1478,7 +1479,24 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
       `anullsrc=channel_layout=stereo:sample_rate=${project.settings.sampleRate}[aout]`
     )
   } else {
-    filters.push(...mixFilters(audioLabels, '[aout]', seconds(totalFrames, fps)))
+    /*
+     * Loudness goes last, on the finished mix, or it is not loudness.
+     *
+     * The measurement is of everything together — normalising a clip before
+     * the music joins it would target a number that stops being true the
+     * moment anything else is added.
+     *
+     * The silence branch above is deliberately left alone. `loudnorm` on
+     * silence measures `-inf` LUFS, and asking for a finite target from that
+     * is a request to amplify nothing by an unbounded amount.
+     */
+    const loudness = loudnessFilters(project.settings.loudness, project.settings.sampleRate)
+    if (loudness.length === 0) {
+      filters.push(...mixFilters(audioLabels, '[aout]', seconds(totalFrames, fps)))
+    } else {
+      filters.push(...mixFilters(audioLabels, '[amixed]', seconds(totalFrames, fps)))
+      filters.push(`[amixed]${loudness.join(',')}[aout]`)
+    }
   }
 
   args.push(

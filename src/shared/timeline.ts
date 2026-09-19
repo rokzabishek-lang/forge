@@ -1,6 +1,7 @@
 import type { MediaKind } from './types'
 import type { KeyframeTracks } from './render/keyframes'
 import { isNeutralCurves, type Curves } from './render/colourCurve'
+import { DEFAULT_LOUDNESS } from './render/loudness'
 import type { Mask } from './render/mask'
 import type { Transcript } from './transcript'
 
@@ -16,6 +17,15 @@ export interface ProjectSettings {
   height: number
   fps: number
   sampleRate: number
+  /**
+   * Integrated loudness target for the export, in LUFS. Absent means off.
+   *
+   * Absent rather than a number so a project saved before this existed keeps
+   * sounding exactly as it did. New projects get `DEFAULT_LOUDNESS`; see
+   * render/loudness.ts for why one pass is enough and why `aformat` after it
+   * is not optional.
+   */
+  loudness?: number
 }
 
 export interface CaptionSettings {
@@ -615,7 +625,16 @@ export const DEFAULT_SETTINGS: ProjectSettings = {
   width: 1920,
   height: 1080,
   fps: 30,
-  sampleRate: 48000
+  sampleRate: 48000,
+  /*
+   * New projects normalise; saved ones are left as they were.
+   *
+   * That asymmetry is the point. Two exports landing at different levels is
+   * the thing being fixed, so the default has to be on — but turning it on
+   * for a project someone has already finished would change how it sounds
+   * with nothing to show why.
+   */
+  loudness: DEFAULT_LOUDNESS
 }
 
 export function framesToSeconds(frames: Frames, fps: number): number {

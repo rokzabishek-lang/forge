@@ -261,6 +261,13 @@ mean redrawing a curve you already shaped. `audioFade.ts` has the `qsin`
 measurement and EFFECTS.md §26 has the chain-order reasoning, which is the
 whole correctness of it.
 
+**Loudness is in the Output panel, not the Sound row**, because it is a
+property of the export rather than of a clip: every track and the music
+measured together after the mix. Off / Social −14 / Podcast −16 / Broadcast
+−23, on by default at −14 for new projects and off for anything saved before
+it existed. EFFECTS.md §28 has the two things `loudnorm` does behind your
+back, both of which are load-bearing.
+
 **Overlap on a track means crossfade**, and that is derived rather than
 stored — so it is true of a dropped video transition as much as of a
 deliberate crossfade. Until this existed, every dissolve played both
