@@ -1,14 +1,58 @@
 name: CI
 
-# Both platforms, every push. The point of this file is that Windows gets
-# tested when nobody is sitting at a Windows machine — most of what breaks
-# there breaks in paths, process handling and line endings, and all three are
-# invisible from a Mac until someone runs the app.
+# Windows on every push; everything else on request.
+#
+# The point of this file is that Windows gets tested when nobody is sitting at
+# a Windows machine — most of what breaks there breaks in paths, process
+# handling and line endings, and all three are invisible from a Mac until
+# someone runs the app. That job earns its keep on every commit.
+#
+# The macOS jobs did not, and they were 69% of the bill. GitHub charges macOS
+# runners at TEN times and rounds every job up to a whole minute, so a job that
+# really took 1.4 minutes billed as 20 — while the Windows job, at 4.3 real
+# minutes, billed 10. Measured on a real run:
+#
+#     windows-latest              4.3 min  x2  =  10
+#     macos-latest                1.4 min  x10 =  20
+#     installer (windows-latest)  3.6 min  x2  =   8
+#     installer (macos-latest)    1.3 min  x10 =  20
+#                                                 --
+#                                                 58 billed minutes per push
+#
+# 2000 minutes a month is 34 pushes at that rate, and a working day can easily
+# be five. So: Windows on every push (10), and the macOS suite and both
+# installers when someone asks for them or tags a release.
+#
+# Nothing is lost by moving macOS off the hot path. The full suite is run
+# locally on macOS before every push; that job was mostly confirming what the
+# developer had already seen. Windows is the only one that ever says something
+# new, because of the 2018 ffmpeg (docs/EFFECTS.md §25).
+#
+# If this ever stops mattering — the repo going public makes Actions free —
+# put `macos-latest` back in the matrix and delete the `if` on `package`.
 on:
   push:
     branches: [main]
+    # A `v*` tag is the other way to ask for the full matrix and the
+    # installers; see the `if` on `package`.
+    tags: ['v*']
+    # Documentation is a large part of this repo and none of the tests read it.
+    # A prose-only commit does not need a runner.
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - 'LICENSE'
   pull_request:
   workflow_dispatch:
+
+# Pushing three times in twenty minutes used to run three full matrices to
+# completion. Only the newest answer is worth anything, so the older ones are
+# cancelled. The cost of this is that an intermediate commit on main can end up
+# with no verdict of its own — acceptable when the alternative is paying for
+# answers nobody reads.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -19,7 +63,9 @@ jobs:
       # useful question is "on which platform", and that needs both answers.
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest]
+        # Both platforms only when asked for or when tagging; Windows alone on
+        # an ordinary push.
+        os: ${{ (github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')) && fromJSON('["macos-latest","windows-latest"]') || fromJSON('["windows-latest"]') }}
 
     steps:
       - uses: actions/checkout@v4
@@ -53,9 +99,17 @@ jobs:
 
   package:
     name: installer (${{ matrix.os }})
-    # Only once the suite is green on BOTH platforms. An installer built from a
-    # red commit is a thing someone will install.
+    # Only once the suite is green. An installer built from a red commit is a
+    # thing someone will install.
     needs: test
+    # Not on every push. An installer is wanted when somebody intends to
+    # install something — before a session on the Surface, or at a release —
+    # and building one on every commit spent 28 billed minutes a time producing
+    # artefacts that expired unused after fourteen days.
+    #
+    # Run the CI workflow by hand (Actions → CI → Run workflow) to get both, or
+    # push a `v*` tag.
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
