@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import type React from 'react'
+import { X } from 'lucide-react'
 import type { Clip, CropRect, MediaAsset, Project } from '@shared/timeline'
 import {
   clipCoversFrame,
@@ -27,6 +28,8 @@ import { clipSpeed } from '@shared/render/speed'
 import { activeCaptionStyle, captionAt, drawCaptions } from '../captionPreview'
 import { captionSourceClip } from '@shared/captions/timeline'
 import { useCatalog } from '../catalog'
+import { isAssetDrag, readDragPayload, type DragPayload } from '../dragPayload'
+import { DROP_CHOICES, type DropIntent } from '@shared/render/dropIntent'
 
 export interface ViewTransform {
   scale: number
@@ -255,6 +258,11 @@ export function Preview(): ReactNode {
   const setSplitRatio = useEditor((s) => s.setSplitRatio)
   const selectedClipId = useEditor((s) => s.selectedClipId)
   const setPlayhead = useEditor((s) => s.setPlayhead)
+  const notify = useEditor((s) => s.notify)
+  const placePoolAsset = useEditor((s) => s.placePoolAsset)
+  const placeTitle = useEditor((s) => s.placeTitle)
+  const placeLibraryAsset = useEditor((s) => s.placeLibraryAsset)
+  const applyDropIntent = useEditor((s) => s.applyDropIntent)
   const setPlaying = useEditor((s) => s.setPlaying)
   const loop = useEditor((s) => s.loop)
   const showThirds = useEditor((s) => s.showThirds)
@@ -279,6 +287,17 @@ export function Preview(): ReactNode {
    * advance — see `needsReanchor`.
    */
   const clockRef = useRef<{ anchor: ClockAnchor; wrote: number } | null>(null)
+
+  /**
+   * The chip offered after something is dropped on the picture.
+   *
+   * Dropping a photo has no single right answer — it might be the shot, a
+   * corner inset over the shot, or a soft backdrop behind it — and picking one
+   * silently is wrong two times in three. So the commonest is applied at once
+   * and the others are offered, the way pasting into a slide asks what kind of
+   * paste it was.
+   */
+  const [dropChip, setDropChip] = useState<{ clipId: string; intent: DropIntent } | null>(null)
   /** Report a blocked play() once, not sixty times a second. */
   const audioWarned = useRef(false)
 
@@ -722,6 +741,58 @@ export function Preview(): ReactNode {
     if (!playing) syncMedia(playhead, false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing])
+
+  /**
+   * Something dropped on the picture.
+   *
+   * It lands on the top video track at the playhead — "here, over this" is what
+   * the gesture means — filling the frame, because a clip has to look like
+   * something the instant it arrives. The chip then offers the other two.
+   *
+   * Audio is refused rather than quietly placed: a sound has no appearance, so
+   * there is nothing for the canvas to say about it and nothing for the chip to
+   * offer. The timeline is where a sound goes.
+   */
+  const onCanvasDrop = useCallback(
+    async (payload: DragPayload | null): Promise<void> => {
+      if (!payload) return
+      if (payload.mediaKind === 'audio' || payload.kind === 'sfx') {
+        notify('Sounds go on an audio track, not on the picture', 'info')
+        return
+      }
+      if (payload.kind === 'transition') {
+        notify('A transition goes on a cut in the timeline', 'info')
+        return
+      }
+
+      const tracks = useEditor.getState().project.tracks.filter((t) => t.kind === 'video' && !t.locked)
+      const top = tracks[tracks.length - 1]
+      if (!top) return
+      const before = new Set(useEditor.getState().project.clips.map((c) => c.id))
+
+      if (payload.kind === 'media' && payload.assetId) {
+        placePoolAsset(payload.assetId, top.id, playhead)
+      } else if (payload.kind === 'title') {
+        await placeTitle(payload.file, payload.name, top.id, playhead)
+      } else {
+        await placeLibraryAsset(payload.file, payload.name, top.id, playhead)
+      }
+
+      // Whichever clip is new is the one the chip belongs to. Asked after the
+      // fact rather than threaded back, because each of those three places a
+      // clip its own way and only one of them returns an id.
+      const made = useEditor.getState().project.clips.find((c) => !before.has(c.id))
+      if (!made) return
+      applyDropIntent(made.id, 'fill')
+      setDropChip({ clipId: made.id, intent: 'fill' })
+    },
+    [notify, placePoolAsset, placeTitle, placeLibraryAsset, applyDropIntent, playhead]
+  )
+
+  // A chip for a clip that has since been deleted has nothing to act on.
+  useEffect(() => {
+    if (dropChip && !project.clips.some((c) => c.id === dropChip.clipId)) setDropChip(null)
+  }, [project.clips, dropChip])
 
   /* ------------------------------------------------------------- layers */
 
@@ -1360,7 +1431,20 @@ export function Preview(): ReactNode {
 
   return (
     <div className="flex h-full flex-col bg-ink-950">
-      <div ref={boxRef} className="relative flex-1 overflow-hidden">
+      <div
+        ref={boxRef}
+        className="relative flex-1 overflow-hidden"
+        onDragOver={(e) => {
+          if (!isAssetDrag(e)) return
+          e.preventDefault()
+          e.dataTransfer.dropEffect = 'copy'
+        }}
+        onDrop={(e) => {
+          if (!isAssetDrag(e)) return
+          e.preventDefault()
+          void onCanvasDrop(readDragPayload(e))
+        }}
+      >
         {/* Tagged so the style gallery can show a look over the real frame
             rather than over an invented background. */}
         <canvas ref={canvasRef} data-forge-preview="1" className="absolute inset-0" />
@@ -1400,6 +1484,44 @@ export function Preview(): ReactNode {
             frame={outputRect}
             canvas={ASPECTS[aspect]}
           />
+        )}
+
+        {/*
+          What the thing you just dropped should BE.
+
+          Sits at the top rather than under the pointer: it would otherwise
+          cover the very change it is describing, and every option here is a
+          visible one you want to see happen. It goes away on the first choice,
+          because a chooser that lingers stops being an answer and becomes
+          furniture.
+        */}
+        {dropChip && (
+          <div className="absolute left-1/2 top-3 z-30 flex -translate-x-1/2 items-center gap-1 rounded-full border border-ink-700 bg-ink-900/95 p-1 shadow-lg backdrop-blur">
+            {DROP_CHOICES.map((choice) => (
+              <button
+                key={choice.id}
+                title={choice.hint}
+                onClick={() => {
+                  applyDropIntent(dropChip.clipId, choice.id)
+                  setDropChip({ ...dropChip, intent: choice.id })
+                }}
+                className={`rounded-full px-2.5 py-1 text-[10.5px] transition-colors ${
+                  dropChip.intent === choice.id
+                    ? 'bg-flame-500 font-medium text-ink-950'
+                    : 'text-ink-300 hover:bg-ink-800 hover:text-ink-100'
+                }`}
+              >
+                {choice.label}
+              </button>
+            ))}
+            <button
+              onClick={() => setDropChip(null)}
+              title="Keep it as it is"
+              className="rounded-full px-1.5 py-1 text-ink-500 hover:bg-ink-800 hover:text-ink-200"
+            >
+              <X size={11} />
+            </button>
+          </div>
         )}
 
         {offScreenClip && (

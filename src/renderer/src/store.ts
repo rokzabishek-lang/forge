@@ -25,6 +25,7 @@ import { transitionById } from '@shared/transitions/registry'
 import { entriesOfKind } from '@shared/assets/catalog'
 import { DEFAULT_TRIGGER_OPTIONS, tagsForProp } from '@shared/automation/keywords'
 import { safeCrop } from '@shared/render/crop'
+import { dropPatch, type DropIntent } from '@shared/render/dropIntent'
 import { ASPECTS, aspectOf, type AspectKey } from '@shared/render/aspect'
 import {
   PROP_RULE,
@@ -87,6 +88,7 @@ import {
   emptyProject,
   findFreeSlot,
   overlapsOn,
+  MAX_TRACKS,
   stackedSlot,
   trackLimitReached,
   transitionBase,
@@ -405,6 +407,19 @@ interface EditorState {
    * WHICH track and WHEN, so neither is guessed here.
    */
   placePoolAsset: (assetId: string, trackId: string, startFrame: number) => void
+  /**
+   * Put a clip underneath everything else.
+   *
+   * Index 0 is the bottom layer, so this is the lowest video track that is free
+   * where the clip sits — and a new one below all of them when none is. Only a
+   * backdrop wants it, and a backdrop drawn on top hides the very thing it was
+   * meant to set off.
+   */
+  sendToBack: (clipId: string) => void
+  /** The mirror of `sendToBack`: onto the topmost video track, or a new one. */
+  bringToFront: (clipId: string) => void
+  /** Turn a freshly dropped clip into what the chip says it should be. */
+  applyDropIntent: (clipId: string, intent: DropIntent) => void
 
   /** Trim in SOURCE frames — what the waveform trimmer manipulates. */
   setSourceRange: (clipId: string, inPoint: number, outPoint: number) => void
@@ -2005,6 +2020,73 @@ export const useEditor = create<EditorState>((set, get) => ({
       }
     })
     get().revealClip(clipId)
+  },
+
+  sendToBack: (clipId) => {
+    get().update((p) => {
+      const clip = p.clips.find((c) => c.id === clipId)
+      if (!clip) return p
+      const video = p.tracks.filter((t) => t.kind === 'video')
+      const bottom = video[0]
+      if (!bottom) return p
+
+      // Already there, or the floor is free at this moment: nothing to build.
+      if (bottom.id === clip.trackId) return p
+      const free = overlapsOn(p, bottom.id, clip.start, clip.duration, clipId).length === 0
+      if (free && !bottom.locked) {
+        return { ...p, clips: p.clips.map((c) => (c.id === clipId ? { ...c, trackId: bottom.id } : c)) }
+      }
+
+      /*
+       * The floor is taken, so build a new one under it.
+       *
+       * At the track ceiling there is nowhere to go, and shoving the clip onto
+       * an occupied bottom track would hide whatever is already there — the
+       * exact failure this is avoiding. Leaving it where it is at least keeps
+       * both visible.
+       */
+      if (p.tracks.length >= MAX_TRACKS) return p
+      const grown = addTrackTo(p, 'video', 'bottom')
+      const floor = grown.tracks.filter((t) => t.kind === 'video')[0]
+      if (!floor) return p
+      return { ...grown, clips: grown.clips.map((c) => (c.id === clipId ? { ...c, trackId: floor.id } : c)) }
+    })
+  },
+
+  bringToFront: (clipId) => {
+    get().update((p) => {
+      const clip = p.clips.find((c) => c.id === clipId)
+      if (!clip) return p
+      const video = p.tracks.filter((t) => t.kind === 'video')
+      const top = video[video.length - 1]
+      if (!top || top.id === clip.trackId) return p
+
+      const free = overlapsOn(p, top.id, clip.start, clip.duration, clipId).length === 0
+      if (free && !top.locked) {
+        return { ...p, clips: p.clips.map((c) => (c.id === clipId ? { ...c, trackId: top.id } : c)) }
+      }
+      if (p.tracks.length >= MAX_TRACKS) return p
+      const grown = addTrackTo(p, 'video', 'top')
+      const lanes = grown.tracks.filter((t) => t.kind === 'video')
+      const ceiling = lanes[lanes.length - 1]
+      if (!ceiling) return p
+      return { ...grown, clips: grown.clips.map((c) => (c.id === clipId ? { ...c, trackId: ceiling.id } : c)) }
+    })
+  },
+
+  applyDropIntent: (clipId, intent) => {
+    const canvas = ASPECTS[get().aspect]
+    const patch = dropPatch(intent, canvas)
+    get().update((p) => ({
+      ...p,
+      clips: p.clips.map((c) =>
+        c.id === clipId
+          ? { ...c, transform: patch.transform, mask: patch.mask ?? undefined }
+          : c
+      )
+    }))
+    if (patch.layer === 'back') get().sendToBack(clipId)
+    else get().bringToFront(clipId)
   },
 
   setKeyframe: (clipId, property, frame, value, ease) => {

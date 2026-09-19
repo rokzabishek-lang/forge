@@ -54,13 +54,18 @@ export interface DropPatch {
    */
   mask: Mask | null
   /**
-   * Put it underneath everything rather than on top.
+   * Where it belongs in the stack.
    *
-   * Only a backdrop wants this, and it is the whole point of a backdrop: a
+   * A backdrop goes `back`, and that is the whole point of a backdrop: a
    * blurred copy composited ABOVE the shot hides the shot, which is the
    * failure that makes the feature look broken rather than subtle.
+   *
+   * The other two say `front` rather than "leave it alone", so the chip can be
+   * changed its mind about. Choosing Fill after Background otherwise leaves
+   * the clip on the floor filling the frame BEHIND everything — invisible, and
+   * indistinguishable from the button doing nothing.
    */
-  sendToBack: boolean
+  layer: 'front' | 'back'
 }
 
 export function dropPatch(
@@ -71,7 +76,7 @@ export function dropPatch(
     return {
       transform: pipTransform({ ...DEFAULT_PIP, canvas }),
       mask: null,
-      sendToBack: false
+      layer: 'front'
     }
   }
 
@@ -94,9 +99,9 @@ export function dropPatch(
           invert: false
         }
       },
-      sendToBack: true
+      layer: 'back'
     }
   }
 
-  return { transform: cover, mask: null, sendToBack: false }
+  return { transform: cover, mask: null, layer: 'front' }
 }

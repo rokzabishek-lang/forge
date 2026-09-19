@@ -855,7 +855,19 @@ export function nextTrackName(tracks: Track[], kind: Track['kind']): string {
  * Insert a track, keeping video tracks above audio in the array.
  * Render order depends on this ordering, so it is not cosmetic.
  */
-export function addTrack(project: Project, kind: Track['kind']): Project {
+/**
+ * `where` decides which END of the stack it joins.
+ *
+ * Index 0 is the BOTTOM layer, so appending makes a track that composites over
+ * everything. That is right for an overlay and exactly wrong for a backdrop,
+ * which has to sit under the shot it is behind — a blurred copy drawn on top
+ * hides the very thing it was meant to set off.
+ */
+export function addTrack(
+  project: Project,
+  kind: Track['kind'],
+  where: 'top' | 'bottom' = 'top'
+): Project {
   if (project.tracks.length >= MAX_TRACKS) return project
 
   const track: Track = {
@@ -882,7 +894,14 @@ export function addTrack(project: Project, kind: Track['kind']): Project {
   const audio = project.tracks.filter((t) => t.kind === 'audio')
   return {
     ...project,
-    tracks: kind === 'video' ? [...video, track, ...audio] : [...video, ...audio, track]
+    tracks:
+      kind === 'video'
+        ? where === 'bottom'
+          ? [track, ...video, ...audio]
+          : [...video, track, ...audio]
+        : where === 'bottom'
+          ? [...video, track, ...audio]
+          : [...video, ...audio, track]
   }
 }
 
