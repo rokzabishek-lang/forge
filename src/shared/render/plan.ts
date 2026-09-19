@@ -1295,6 +1295,31 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
   const addAudio = (index: number, clip: Clip, label: string, into: string[]): void => {
     const volume = clip.volume ?? 1
     /*
+     * A drawn envelope beats the flat level.
+     *
+     * `volume` takes an expression with `eval=frame`, and — unlike `scale`,
+     * which accepts `eval=frame` and then silently ignores what it is given
+     * (EFFECTS.md §1) — it genuinely follows it. Measured on a 4s tone with
+     * `if(lt(t,2),1,0.25)`: the second half came back 12.0 dB down, which is
+     * 0.25x to within rounding.
+     *
+     * `t` here is time since the clip's own first frame, because `adelay`
+     * comes AFTER this in the chain — so the envelope is authored in clip time
+     * and needs no timeline offset.
+     */
+    const envelope = clip.keyframes?.volume
+    const volumeFilter =
+      envelope && envelope.length > 0
+        ? `volume=volume='${keyframeExpression(envelope, {
+            durationFrames: clip.duration,
+            fps,
+            startSeconds: 0,
+            fallback: volume
+          })}':eval=frame`
+        : volume === 1
+          ? null
+          : `volume=${volume}`
+    /*
      * A muted clip is not a quiet input, it is not an input.
      *
      * Mixing it changes nothing in the output — padding plus `volume=N` cancels
@@ -1321,7 +1346,7 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
        * offset too and slide every slowed clip out of sync.
        */
       ...atempoChain(clipSpeed(clip)),
-      volume === 1 ? null : `volume=${volume}`,
+      volumeFilter,
       /*
        * One delay per channel, repeated — not `:all=1`.
        *

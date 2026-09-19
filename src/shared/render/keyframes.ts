@@ -22,7 +22,15 @@
  * Two mechanisms for one property would be two things to disagree.
  */
 
-export type KeyedProperty = 'zoom' | 'rotation' | 'opacity'
+/**
+ * `volume` is the only one of these that is not a picture.
+ *
+ * It rides here rather than in a scheme of its own because an envelope IS a
+ * keyframe track — points in time with values and easing between them — and
+ * `keyframeExpression` already compiles exactly that. A second mechanism for
+ * the same shape would be two things to keep in step.
+ */
+export type KeyedProperty = 'zoom' | 'rotation' | 'opacity' | 'volume'
 
 /** How the value LEAVES this key, which is the convention every NLE uses. */
 export type Ease = 'linear' | 'hold' | 'smooth'
@@ -36,7 +44,7 @@ export interface Keyframe {
 
 export type KeyframeTracks = Partial<Record<KeyedProperty, Keyframe[]>>
 
-export const KEYED_PROPERTIES: KeyedProperty[] = ['zoom', 'rotation', 'opacity']
+export const KEYED_PROPERTIES: KeyedProperty[] = ['zoom', 'rotation', 'opacity', 'volume']
 
 /** Label, neutral value and range, so the UI does not hold a second copy. */
 export const PROPERTY_INFO: Record<
@@ -45,7 +53,13 @@ export const PROPERTY_INFO: Record<
 > = {
   zoom: { label: 'Zoom', neutral: 1, min: 1, max: 4, step: 0.01, suffix: '×' },
   rotation: { label: 'Rotate', neutral: 0, min: -180, max: 180, step: 1, suffix: '°' },
-  opacity: { label: 'Opacity', neutral: 1, min: 0, max: 1, step: 0.01, suffix: '' }
+  opacity: { label: 'Opacity', neutral: 1, min: 0, max: 1, step: 0.01, suffix: '' },
+  volume: { label: 'Volume', neutral: 1, min: 0, max: 1, step: 0.01, suffix: '' }
+}
+
+/** Which of these describe sound rather than picture. */
+export function isAudioProperty(property: KeyedProperty): boolean {
+  return property === 'volume'
 }
 
 /** Sorted, de-duplicated, clamped into the clip. */

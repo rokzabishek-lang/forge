@@ -5,6 +5,7 @@ import {
   PROPERTY_INFO,
   normaliseKeys,
   valueAt,
+  isAudioProperty,
   type Ease,
   type KeyedProperty
 } from '@shared/render/keyframes'
@@ -20,6 +21,9 @@ import { useEditor } from '../store'
  */
 export function Keyframes({ clip }: { clip: Clip }): ReactNode {
   const playhead = useEditor((s) => s.playhead)
+  const hasAudio = useEditor(
+    (s) => s.project.assets.find((a) => a.id === clip.assetId)?.hasAudio ?? false
+  )
   const setKeyframe = useEditor((s) => s.setKeyframe)
   const removeKeyframe = useEditor((s) => s.removeKeyframe)
   const clearKeyframes = useEditor((s) => s.clearKeyframes)
@@ -39,7 +43,15 @@ export function Keyframes({ clip }: { clip: Clip }): ReactNode {
         )}
       </div>
 
-      {KEYED_PROPERTIES.map((property) => {
+      {/*
+        Volume is only offered where there is sound to shape.
+        
+        `KEYED_PROPERTIES` gained it so the envelope could reuse the keyframe
+        machinery rather than growing a second one — but a photograph and a
+        text card have no audio, and a curve editor over silence is a control
+        that cannot do anything.
+      */}
+      {KEYED_PROPERTIES.filter((p) => !isAudioProperty(p) || hasAudio).map((property) => {
         const info = PROPERTY_INFO[property]
         const keys = normaliseKeys(clip.keyframes?.[property] ?? [], clip.duration)
         const onKey = keys.find((k) => k.frame === into) ?? null
