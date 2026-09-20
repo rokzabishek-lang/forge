@@ -3,6 +3,7 @@ import type { KeyframeTracks } from './render/keyframes'
 import { isNeutralCurves, type Curves } from './render/colourCurve'
 import { DEFAULT_LOUDNESS } from './render/loudness'
 import type { PaperSpec } from './render/paper'
+import type { CarouselClipSpec } from './render/carousel'
 import type { Mask } from './render/mask'
 import type { Transcript } from './transcript'
 
@@ -295,6 +296,15 @@ export interface Clip {
    * the other three on the reference site.
    */
   paper?: PaperSpec
+  /**
+   * Photographs on a ring, in 3D.
+   *
+   * Like `text` and `paper`, a clip that DRAWS itself: the ring is rendered
+   * with three.js and baked to a numbered PNG sequence with alpha, so nothing
+   * in the export knows three.js exists. See render/carousel.ts for the
+   * geometry, which imports none of it.
+   */
+  carousel?: CarouselClipSpec
   /**
    * Set when an automation rule created this clip.
    *

@@ -4,7 +4,7 @@ import {
   carouselCards,
   carouselSettings,
   carouselTilt,
-  type CarouselSpec
+  type CarouselClipSpec
 } from '@shared/render/carousel'
 import { beginBake, endBake, isSuperseded } from '@shared/bakeGuard'
 
@@ -21,10 +21,7 @@ import { beginBake, endBake, isSuperseded } from '@shared/bakeGuard'
  * knows three.js exists.
  */
 
-/** What the clip stores: the ring's settings plus which photographs are on it. */
-export interface CarouselClipSpec extends CarouselSpec {
-  assetIds: string[]
-}
+export type { CarouselClipSpec }
 
 /**
  * three.js is loaded the first time a ring is drawn, and never otherwise.

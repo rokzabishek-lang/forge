@@ -108,6 +108,12 @@ import {
 import { useCatalog } from './catalog'
 import { bakeText, bakeTextSequence } from './textCanvas'
 import { bakePaperSequence, paperDuration } from './paperCanvas'
+import { bakeCarouselSequence } from './carouselCanvas'
+import {
+  DEFAULT_CAROUSEL,
+  carouselTurnSeconds,
+  type CarouselClipSpec
+} from '@shared/render/carousel'
 import { isBaking } from '@shared/bakeGuard'
 import { DEFAULT_PAPER, type PaperSpec } from '@shared/render/paper'
 import {
@@ -400,6 +406,10 @@ interface EditorState {
   setPaper: (clipId: string, patch: Partial<PaperSpec>) => void
   /** Write the run's frames to disk. Nothing waits on it; the preview is live. */
   rebakePaper: (clipId: string) => Promise<void>
+  /** Photographs on a ring, in 3D. Needs at least one image in the project. */
+  addCarouselClip: (trackId: string, startFrame: number) => Promise<string | null>
+  setCarousel: (clipId: string, patch: Partial<CarouselClipSpec>) => void
+  rebakeCarousel: (clipId: string) => Promise<void>
   /** A grade over everything on the tracks below, for as long as it runs. */
   addAdjustmentLayer: (trackId: string, startFrame: number) => Promise<string | null>
   setSolid: (clipId: string, patch: Partial<Omit<SolidSpec, 'version'>>) => Promise<void>
@@ -621,6 +631,19 @@ let noticeId = 0
  */
 const collecting = new Set<string>()
 const reported = new Set<string>()
+
+/**
+ * Asset ids to file paths, keeping the ring's order and dropping what is gone.
+ *
+ * An asset deleted from the pool must not leave a hole in the ring — the cards
+ * repeat what is left, which is what already happens with fewer photographs
+ * than cards.
+ */
+function assetPathsFor(project: Project, ids: string[]): string[] {
+  return ids
+    .map((id) => project.assets.find((a) => a.id === id)?.path)
+    .filter((path): path is string => typeof path === 'string' && path.length > 0)
+}
 
 export const useEditor = create<EditorState>((set, get) => ({
   project: emptyProject(),
@@ -942,7 +965,7 @@ export const useEditor = create<EditorState>((set, get) => ({
         // off it: a page drawn at 1920x1080 then cropped to a 9:16
         // sub-rectangle shows one corner of itself. The comment above
         // described the bug two years before the effect existed to have it.
-        if (c.text || c.solid || c.title || c.paper) return { ...c, crop: undefined }
+        if (c.text || c.solid || c.title || c.paper || c.carousel) return { ...c, crop: undefined }
         return { ...c, crop: solveCrop(asset, aspect) }
       })
     }))
@@ -965,7 +988,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   rebakeGenerated: async () => {
     const { project } = get()
     const { width, height, fps } = project.settings
-    const targets = project.clips.filter((c) => c.text || c.solid || c.title || c.paper)
+    const targets = project.clips.filter((c) => c.text || c.solid || c.title || c.paper || c.carousel)
     if (targets.length === 0) return
 
     for (const clip of targets) {
@@ -987,6 +1010,30 @@ export const useEditor = create<EditorState>((set, get) => ({
           ),
           clips: p.clips
         })
+
+        if (clip.carousel) {
+          const sequence = await bakeCarouselSequence(
+            clip.carousel, clip.id, assetPathsFor(get().project, clip.carousel.assetIds),
+            width, height, clip.duration, fps
+          )
+          if (sequence) {
+            get().update((p) => ({
+              ...p,
+              assets: p.assets.map((a) =>
+                a.id === clip.assetId
+                  ? {
+                      ...a,
+                      path: sequence.pattern.replace('%05d', '00000'),
+                      width,
+                      height,
+                      frames: { pattern: sequence.pattern, count: sequence.frames }
+                    }
+                  : a
+              )
+            }))
+          }
+          continue
+        }
 
         if (clip.paper) {
           /*
@@ -1849,6 +1896,100 @@ export const useEditor = create<EditorState>((set, get) => ({
             ? { ...a, path: baked.pattern.replace('%05d', '00000'),
                 width,
                 height,
+                frames: { pattern: baked.pattern, count: baked.frames } }
+            : a
+        )
+      }))
+    } catch (err) {
+      notify(err instanceof Error ? err.message : String(err))
+    }
+  },
+
+  addCarouselClip: async (trackId, startFrame) => {
+    const { project, notify } = get()
+    const track = project.tracks.find((t) => t.id === trackId)
+    if (!track || track.locked || track.kind !== 'video') {
+      notify('A card ring goes on a video track', 'info')
+      return null
+    }
+    /*
+     * The ring is made OF the project's photographs, so there has to be one.
+     * Refusing by name beats creating an empty ring that renders nothing and
+     * reads as the feature being broken.
+     */
+    const images = project.assets.filter((a) => a.kind === 'image' && a.path)
+    if (images.length === 0) {
+      notify('Import a photograph first — a card ring is made of your pictures', 'info')
+      return null
+    }
+
+    const clipId = `ring-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
+    const { width, height, fps } = project.settings
+    const spec: CarouselClipSpec = {
+      ...DEFAULT_CAROUSEL,
+      assetIds: images.slice(0, 12).map((a) => a.id),
+      cards: Math.max(3, Math.min(12, images.length))
+    }
+    // Long enough for one full turn, so what lands is the whole move.
+    const turn = carouselTurnSeconds(spec)
+    const duration = Math.max(Math.round(fps * 2), Math.round((turn || 4) * fps))
+    const assetId = `ring-asset-${clipId}`
+
+    get().update((p) => {
+      const slot = stackOverlay(p, trackId, startFrame, duration)
+      return {
+        ...slot.project,
+        assets: [
+          ...slot.project.assets,
+          {
+            id: assetId, path: '', name: 'card ring', kind: 'image' as const,
+            durationFrames: Math.max(duration, Math.round(fps * 10)),
+            width, height, fps: null, hasVideo: true, hasAudio: false, size: 0
+          }
+        ],
+        clips: [
+          ...slot.project.clips,
+          {
+            id: clipId, assetId, trackId: slot.trackId, start: slot.start, duration,
+            inPoint: 0, volume: 1,
+            transform: { x: 0, y: 0, scale: 1, rotation: 0, opacity: 1 },
+            color: { brightness: 0, contrast: 1, saturation: 1 },
+            carousel: spec
+          }
+        ]
+      }
+    })
+    get().revealClip(clipId)
+    void get().rebakeCarousel(clipId)
+    return clipId
+  },
+
+  setCarousel: (clipId, patch) => {
+    get().update((p) => ({
+      ...p,
+      clips: p.clips.map((c) =>
+        c.id === clipId && c.carousel ? { ...c, carousel: { ...c.carousel, ...patch } } : c
+      )
+    }))
+    void get().rebakeCarousel(clipId)
+  },
+
+  rebakeCarousel: async (clipId) => {
+    const { project, notify } = get()
+    const clip = project.clips.find((c) => c.id === clipId)
+    if (!clip?.carousel) return
+    const { width, height, fps } = project.settings
+    try {
+      const baked = await bakeCarouselSequence(
+        clip.carousel, clipId, assetPathsFor(project, clip.carousel.assetIds),
+        width, height, clip.duration, fps
+      )
+      if (!baked) return
+      get().update((p) => ({
+        ...p,
+        assets: p.assets.map((a) =>
+          a.id === clip.assetId
+            ? { ...a, path: baked.pattern.replace('%05d', '00000'), width, height,
                 frames: { pattern: baked.pattern, count: baked.frames } }
             : a
         )

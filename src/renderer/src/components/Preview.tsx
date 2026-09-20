@@ -25,6 +25,7 @@ import { forgetMatte, lumaMattedSource, mattedSource } from '../matte'
 import { forgetMask, maskedSource } from '../maskPreview'
 import { forgetTextPreview, textPreviewCanvas } from '../textCanvas'
 import { paperPreviewCanvas } from '../paperCanvas'
+import { carouselPreviewCanvas } from '../carouselCanvas'
 import { clipSpeed } from '@shared/render/speed'
 import { activeCaptionStyle, captionAt, drawCaptions } from '../captionPreview'
 import { captionSourceClip } from '@shared/captions/timeline'
@@ -908,7 +909,7 @@ export function Preview(): ReactNode {
      * exactly what clippings did until this said `paper` as well as `text`.
      */
     const drawsItself = (layer: Layer): boolean =>
-      Boolean(layer.clip.text ?? layer.clip.paper)
+      Boolean(layer.clip.text ?? layer.clip.paper ?? layer.clip.carousel)
 
     const ready = (layer: Layer): boolean =>
       drawsItself(layer) ? true : elementReady(layer.element)
@@ -938,6 +939,26 @@ export function Preview(): ReactNode {
        * the run played in the export. The preview draws the same pages the
        * bake does, from the same spec.
        */
+      if (layer.clip.carousel) {
+        /*
+         * Drawn live like the others, and it must be: the ring's whole point
+         * is that it TURNS, so a frozen baked frame would show one angle
+         * while the export played the move.
+         */
+        const live = carouselPreviewCanvas(
+          layer.clip.id,
+          layer.clip.carousel,
+          layer.clip.carousel.assetIds
+            .map((id) => project.assets.find((a) => a.id === id)?.path)
+            .filter((path): path is string => Boolean(path)),
+          ASPECTS[aspect].width,
+          ASPECTS[aspect].height,
+          { frame: playhead - layer.clip.start, fps },
+          repaint
+        )
+        if (live) return live
+      }
+
       if (layer.clip.paper) {
         const live = paperPreviewCanvas(
           layer.clip.id,

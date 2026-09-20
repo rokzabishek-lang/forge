@@ -72,6 +72,12 @@ export interface CarouselSpec {
   facingCamera: boolean
 }
 
+/** What a clip stores: the ring's settings plus which photographs are on it. */
+export interface CarouselClipSpec extends CarouselSpec {
+  /** Asset ids, in ring order. Fewer than `cards` and they repeat. */
+  assetIds: string[]
+}
+
 export const DEFAULT_CAROUSEL: CarouselSpec = {
   cards: 8,
   radius: 3.2,

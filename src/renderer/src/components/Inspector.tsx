@@ -27,6 +27,7 @@ import { maxTransitionFrames, transitionBase } from '@shared/timeline'
 import { LOUDNESS_TARGETS } from '@shared/render/loudness'
 import { LayoutPanel } from './LayoutPanel'
 import { MaskPanel } from './MaskPanel'
+import { CarouselPanel } from './CarouselPanel'
 import { PaperPanel } from './PaperPanel'
 import { SpeedPanel } from './SpeedPanel'
 import { TextStylePicker } from './TextStylePicker'
@@ -735,6 +736,9 @@ export function Inspector(): ReactNode {
 
               {/* A run of clippings, for the clips that are one. */}
               {clip.paper && <PaperPanel clip={clip} />}
+
+              {/* A ring of photographs, for the clips that are one. */}
+              {clip.carousel && <CarouselPanel clip={clip} />}
 
               {/*
                 Sound, for anything that has some.

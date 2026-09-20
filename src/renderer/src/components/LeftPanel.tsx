@@ -34,6 +34,7 @@ export function LeftPanel(): ReactNode {
   const [tab, setTab] = useState<Tab>('media')
   const addTextClip = useEditor((s) => s.addTextClip)
   const addPaperClip = useEditor((s) => s.addPaperClip)
+  const addCarouselClip = useEditor((s) => s.addCarouselClip)
   const addSolidClip = useEditor((s) => s.addSolidClip)
   const addAdjustmentLayer = useEditor((s) => s.addAdjustmentLayer)
   const playhead = useEditor((s) => s.playhead)
@@ -103,6 +104,13 @@ export function LeftPanel(): ReactNode {
                 className="flex-1 rounded bg-ink-800 px-2 py-1 text-[10.5px] text-ink-300 hover:bg-ink-700 hover:text-ink-100"
               >
                 + Newspaper clippings
+              </button>
+              <button
+                onClick={() => void addCarouselClip(topVideoTrack, playhead)}
+                title="Your photographs on a rotating ring, in 3D"
+                className="flex-1 rounded bg-ink-800 px-2 py-1 text-[10.5px] text-ink-300 hover:bg-ink-700 hover:text-ink-100"
+              >
+                + Card ring
               </button>
             </div>
             <div className="min-h-0 flex-1">
