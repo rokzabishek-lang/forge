@@ -206,12 +206,31 @@ export function carouselTilt(spec: Partial<CarouselSpec>): Vec3 {
  * Derived rather than set, because a radius slider that silently pushed the
  * ring out of frame would read as the ring vanishing. `fov` in degrees.
  */
-export function carouselCameraZ(spec: Partial<CarouselSpec>, fov = 45): number {
+export function carouselCameraZ(spec: Partial<CarouselSpec>, fov = 45, aspect = 16 / 9): number {
   const s = carouselSettings(spec)
   const half = (fov / 2) * (Math.PI / 180)
-  // The widest thing to fit is the ring plus a card either side of it.
-  const extent = s.radius + s.cardWidth
-  return s.radius + extent / Math.tan(half)
+  const tan = Math.tan(half)
+
+  /*
+   * `fov` is VERTICAL, and the ring is a WIDE thing.
+   *
+   * `tan(fov/2) * distance` is half the frame's HEIGHT at that distance, not
+   * half its width — the width is that times the aspect. Fitting a horizontal
+   * extent against the vertical half backs the camera off by roughly the
+   * aspect ratio too far, which on 16:9 is nearly double. The ring came out
+   * occupying about a seventh of the frame and looked like a bug in the
+   * radius rather than in the camera.
+   *
+   * The first version of the test made the same mistake, so it passed.
+   */
+  const halfWide = s.radius + s.cardWidth / 2
+  const halfTall = (s.cardWidth * s.aspect) / 2
+  const forWidth = halfWide / (tan * Math.max(0.01, aspect))
+  const forHeight = halfTall / tan
+
+  // A little air, so the ring is framed rather than touching the edges. The
+  // near side of the ring is one radius closer than its centre.
+  return s.radius + Math.max(forWidth, forHeight) * 1.08
 }
 
 /** How long one full turn takes, for choosing a clip length. */

@@ -152,18 +152,48 @@ describe('the camera', () => {
      * too close — the failure would show up somewhere other than the control
      * that caused it.
      */
-    for (const radius of [1, 3, 8, 20]) {
-      const z = carouselCameraZ({ radius, cardWidth: 1.6 }, 45)
-      const cards = carouselCards({ radius, cardWidth: 1.6, cards: 8 }, 0)
-      const widest = Math.max(...cards.map((c) => Math.abs(c.position.x))) + 1.6 / 2
-      // Half the frustum width at the ring's own depth must cover it.
-      const halfWidth = Math.tan((45 / 2) * (Math.PI / 180)) * (z - radius)
-      expect(halfWidth).toBeGreaterThanOrEqual(widest - 1e-6)
+    /*
+     * `fov` is VERTICAL. Half the frame's WIDTH at a distance is
+     * `tan(fov/2) * distance * aspect` — the first version of this test left
+     * the aspect out, which is the same mistake the code had, so it passed
+     * while the ring rendered at a seventh of its proper size. A test that
+     * shares the code's misconception is not a test.
+     */
+    const FOV = 45
+    for (const aspect of [16 / 9, 9 / 16, 1]) {
+      for (const radius of [1, 3, 8, 20]) {
+        const z = carouselCameraZ({ radius, cardWidth: 1.6, aspect: 1.4 }, FOV, aspect)
+        const cards = carouselCards({ radius, cardWidth: 1.6, aspect: 1.4, cards: 8 }, 0)
+        const widest = Math.max(...cards.map((c) => Math.abs(c.position.x))) + 1.6 / 2
+        const tallest = (1.6 * 1.4) / 2
+        const dist = z - radius
+        const halfHeight = Math.tan((FOV / 2) * (Math.PI / 180)) * dist
+        const halfWidth = halfHeight * aspect
+        expect(halfWidth).toBeGreaterThanOrEqual(widest)
+        expect(halfHeight).toBeGreaterThanOrEqual(tallest)
+      }
     }
   })
 
   it('moves back as the ring grows', () => {
     expect(carouselCameraZ({ radius: 8 })).toBeGreaterThan(carouselCameraZ({ radius: 2 }))
+  })
+
+  it('needs more room on a tall frame than a wide one', () => {
+    // The same ring in 9:16 has far less width to play with, so the camera
+    // must be further back. If aspect were ignored these would be equal.
+    expect(carouselCameraZ({ radius: 3 }, 45, 9 / 16))
+      .toBeGreaterThan(carouselCameraZ({ radius: 3 }, 45, 16 / 9))
+  })
+
+  it('frames the ring rather than cropping it or losing it', () => {
+    // Fills a decent share of the frame: the bug was a ring at a seventh of
+    // its proper size, which no "does it fit" assertion would ever catch.
+    const z = carouselCameraZ({ radius: 3.2, cardWidth: 1.6, aspect: 1.4 }, 45, 16 / 9)
+    const dist = z - 3.2
+    const halfWidth = Math.tan((45 / 2) * (Math.PI / 180)) * dist * (16 / 9)
+    const widest = 3.2 + 1.6 / 2
+    expect(widest / halfWidth).toBeGreaterThan(0.75)
   })
 })
 
