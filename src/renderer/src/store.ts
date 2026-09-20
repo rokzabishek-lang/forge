@@ -108,6 +108,7 @@ import {
 import { useCatalog } from './catalog'
 import { bakeText, bakeTextSequence } from './textCanvas'
 import { bakePaperSequence, paperDuration } from './paperCanvas'
+import { isBaking } from '@shared/bakeGuard'
 import { DEFAULT_PAPER, type PaperSpec } from '@shared/render/paper'
 import {
   DEFAULT_PIP,
@@ -1043,7 +1044,18 @@ export const useEditor = create<EditorState>((set, get) => ({
             fps,
             clip.duration
           ).catch(() => null)
-          if (!sequence) await window.forge.clearTitleFrames(clip.id).catch(() => undefined)
+          /*
+           * Only when the bake actually failed.
+           *
+           * A superseded bake also reports nothing, and clearing on that would
+           * throw away the frames of the bake that replaced it — turning a
+           * harmless overlap into an empty sequence. `isBaking` is the
+           * difference between "there is no animation" and "someone else is
+           * drawing it right now".
+           */
+          if (!sequence && !isBaking(clip.id)) {
+            await window.forge.clearTitleFrames(clip.id).catch(() => undefined)
+          }
 
           get().update((p) => ({
             ...p,
@@ -1830,7 +1842,13 @@ export const useEditor = create<EditorState>((set, get) => ({
         ...p,
         assets: p.assets.map((a) =>
           a.id === clip.assetId
+            // The new SIZE as well as the new frames, exactly as
+            // `rebakeGenerated` does. Leaving it out is what made a clipping
+            // right when it was made and small ever after an aspect change —
+            // see the note there, and the test that now checks both paths.
             ? { ...a, path: baked.pattern.replace('%05d', '00000'),
+                width,
+                height,
                 frames: { pattern: baked.pattern, count: baked.frames } }
             : a
         )

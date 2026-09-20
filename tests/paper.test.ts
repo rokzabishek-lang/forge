@@ -749,4 +749,31 @@ describe('a clip that is DRAWN at the canvas size', () => {
       /path: sequence\.pattern\.replace\([^)]*\),\s*\n\s*width,\s*\n\s*height,\s*\n\s*frames: \{ pattern:/
     )
   })
+
+  it('repoints the asset size on EVERY rebake path, not just the first', () => {
+    /*
+     * There are two of them, and only one was checked.
+     *
+     * The assertion above takes `indexOf`, which finds `rebakeGenerated` and
+     * stops. `rebakePaper` — the one behind every control in the Paper panel —
+     * updated the path and the frames and left the dimensions alone, so after
+     * an aspect change the pages were redrawn at the new canvas while the
+     * asset still claimed the old one. Reported from the app: a clipping that
+     * was right when it was made and small ever after.
+     *
+     * An aspect change fires `rebakeGenerated` as `void`, so the two can land
+     * in either order. Requiring both to leave the same asset is what makes
+     * the order stop mattering.
+     */
+    const sites = [...store.matchAll(/bakePaperSequence\(/g)].map((m) => m.index ?? 0)
+    expect(sites.length).toBeGreaterThanOrEqual(2)
+
+    for (const at of sites) {
+      const block = store.slice(at, at + 900)
+      expect(
+        /\bwidth,\s*\n\s*height,\s*\n\s*frames: \{ pattern:/.test(block),
+        `the rebake at index ${at} writes frames without repointing width/height`
+      ).toBe(true)
+    }
+  })
 })

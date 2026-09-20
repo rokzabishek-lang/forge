@@ -1,6 +1,7 @@
 import { clippingCount, paperFrames, type PaperSpec } from '@shared/render/paper'
 import { canvasMeasure, drawPaperOnto } from '@shared/render/paperPaint'
 import { useCatalog } from './catalog'
+import { beginBake, endBake, isSuperseded } from '@shared/bakeGuard'
 
 /**
  * Newspaper clippings, drawn in the renderer.
@@ -111,15 +112,29 @@ export async function bakePaperSequence(
   let pattern = ''
   // One at a time: twenty full-canvas PNGs held in memory at once is a worse
   // problem than twenty sequential writes.
-  await window.forge.clearTitleFrames(clipId)
-  for (let frame = 0; frame < frames; frame++) {
-    ctx.clearRect(0, 0, width, height)
-    drawPaperOnto(ctx, spec, width, height, { frame }, measure)
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
-    if (!blob) throw new Error('Could not encode a clipping')
-    pattern = await window.forge.writeTitleFrame(clipId, frame, await blob.arrayBuffer())
+  //
+  // Each of those writes is a trip to the main process, and a second bake of
+  // the same clip starting in any one of those gaps used to carry on writing
+  // into the directory it had just cleared. `bakeGuard` makes the newest bake
+  // the owner; this one checks before every write and gives up if it is no
+  // longer it.
+  const token = beginBake(clipId)
+  try {
+    await window.forge.clearTitleFrames(clipId)
+    if (isSuperseded(clipId, token)) return null
+    for (let frame = 0; frame < frames; frame++) {
+      ctx.clearRect(0, 0, width, height)
+      drawPaperOnto(ctx, spec, width, height, { frame }, measure)
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
+      if (!blob) throw new Error('Could not encode a clipping')
+      const buffer = await blob.arrayBuffer()
+      if (isSuperseded(clipId, token)) return null
+      pattern = await window.forge.writeTitleFrame(clipId, frame, buffer)
+    }
+    return { pattern, frames }
+  } finally {
+    endBake(clipId)
   }
-  return { pattern, frames }
 }
 
 /** A sensible clip length for a run: exactly as long as the ripple lasts. */

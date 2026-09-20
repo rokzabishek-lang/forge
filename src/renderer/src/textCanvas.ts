@@ -7,6 +7,7 @@ import {
 } from '@shared/render/textAnimation'
 import { drawTextOnto } from '@shared/render/textPaint'
 import { useCatalog } from './catalog'
+import { beginBake, endBake, isSuperseded } from '@shared/bakeGuard'
 
 export { drawTextOnto }
 
@@ -185,13 +186,26 @@ export async function bakeTextSequence(
   let pattern = ''
   // Written one at a time on purpose: a hundred full-canvas PNGs held in memory
   // at once is a far worse problem than a hundred sequential writes.
-  await window.forge.clearTitleFrames(clipId)
-  for (let frame = 0; frame < frames; frame++) {
-    ctx.clearRect(0, 0, width, height)
-    drawTextOnto(ctx, spec, width, height, { frame, fps })
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
-    if (!blob) throw new Error('Could not encode a text frame')
-    pattern = await window.forge.writeTitleFrame(clipId, frame, await blob.arrayBuffer())
+  //
+  // A hundred trips to the main process is also a hundred chances for a second
+  // bake of this clip to start and clear the directory underneath this one.
+  // `bakeGuard` gives the newest bake ownership; this one yields the moment it
+  // stops being the newest. See the note there.
+  const token = beginBake(clipId)
+  try {
+    await window.forge.clearTitleFrames(clipId)
+    if (isSuperseded(clipId, token)) return null
+    for (let frame = 0; frame < frames; frame++) {
+      ctx.clearRect(0, 0, width, height)
+      drawTextOnto(ctx, spec, width, height, { frame, fps })
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
+      if (!blob) throw new Error('Could not encode a text frame')
+      const buffer = await blob.arrayBuffer()
+      if (isSuperseded(clipId, token)) return null
+      pattern = await window.forge.writeTitleFrame(clipId, frame, buffer)
+    }
+    return { pattern, frames }
+  } finally {
+    endBake(clipId)
   }
-  return { pattern, frames }
 }
