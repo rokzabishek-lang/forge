@@ -39,6 +39,21 @@ this project were found asserting the broken behaviour they were meant to
 guard.** A test that passes against the reintroduced bug is worse than no test,
 because it certifies the bug.
 
+**And check what your anchor matched.** Three separate times, a mutation or an
+assertion landed on the wrong occurrence of a string that appears more than
+once — and every one of them *looked* like it had worked:
+
+| anchor | found | meant |
+|---|---|---|
+| `const shift = frames - already` | `addTransition` | `crossfadeAt` |
+| `toContain('width,')` | the function's arguments | the asset repoint below them |
+| `store.indexOf('bakePaperSequence(')` | the first of **two** call sites | both of them |
+
+The last one shipped a test that passed with the bug reintroduced. So: before
+trusting a string anchor, count the matches. Use `matchAll` and assert over
+every site, or anchor on text that is unique, and prefer a whole ordered shape
+to three loose substrings.
+
 **The user's settled decisions.** Licensing and sourcing questions for the
 models and tools this project uses have been decided. Do not reopen them, and do
 not flag `yt-dlp` — it is an accepted dependency here.
