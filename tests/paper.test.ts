@@ -5,6 +5,8 @@ import {
   DEFAULT_PAPER,
   PAPER_LOOKS,
   layoutClipping,
+  layoutRansom,
+  typedChars,
   paperFrameAt,
   paperFrames,
   paperLookById,
@@ -231,8 +233,15 @@ describe('layoutClipping', () => {
   })
 
   it('survives a frame too small to hold a page', () => {
+    /*
+     * The invariant is "nothing degenerate", not a particular size. A tiny
+     * frame legitimately gets tiny type; what it must never get is a zero or
+     * a NaN, which is what renders as an invisible page nobody can debug.
+     */
     const clip = layoutClipping(spec(), 0, 120, 90, measure)
-    expect(clip.headline.fontPx).toBeGreaterThanOrEqual(10)
+    expect(clip.headline.fontPx).toBeGreaterThan(0)
+    expect(Number.isFinite(clip.headline.fontPx)).toBe(true)
+    expect(clip.bodyPx).toBeGreaterThan(0)
     for (const column of clip.columns) expect(Array.isArray(column.lines)).toBe(true)
   })
 })
@@ -500,5 +509,174 @@ describe('a clip that draws itself', () => {
     const text = preview.indexOf('if (layer.clip.text)')
     expect(paper).toBeGreaterThan(-1)
     expect(text).toBeGreaterThan(-1)
+  })
+})
+
+describe('the shape of the paper', () => {
+  /*
+   * The bug this exists for: the box was "80% of the frame's width by 50% of
+   * its height", so the paper's SHAPE was a side effect of the project's
+   * aspect ratio. A 16:9 timeline got a 3:1 strip and there was no way to ask
+   * for anything else; the same spec on 9:16 came out nearly square. A sheet
+   * of paper has a shape. It does not change because you filmed in landscape.
+   */
+  const LANDSCAPE = { w: 1920, h: 1080 }
+  const PORTRAIT = { w: 1080, h: 1920 }
+
+  it('keeps its own shape whatever the frame is', () => {
+    for (const shape of ['clip', 'page', 'column']) {
+      const wide = layoutClipping(spec({ shape }), 0, LANDSCAPE.w, LANDSCAPE.h, measure)
+      const tall = layoutClipping(spec({ shape }), 0, PORTRAIT.w, PORTRAIT.h, measure)
+      const wideRatio = wide.box.w / wide.box.h
+      const tallRatio = tall.box.w / tall.box.h
+      expect(Math.abs(wideRatio - tallRatio)).toBeLessThan(0.15)
+    }
+  })
+
+  it('gives a portrait page on a landscape timeline', () => {
+    // The actual request: a document, not a strip, even at 16:9.
+    const page = layoutClipping(spec({ shape: 'page' }), 0, LANDSCAPE.w, LANDSCAPE.h, measure)
+    expect(page.box.h).toBeGreaterThan(page.box.w)
+  })
+
+  it('still gives a wide strip for a clipping', () => {
+    const clip = layoutClipping(spec({ shape: 'clip' }), 0, PORTRAIT.w, PORTRAIT.h, measure)
+    expect(clip.box.w).toBeGreaterThan(clip.box.h)
+  })
+
+  it('sets a column in one column and a page in two', () => {
+    expect(layoutClipping(spec({ shape: 'column' }), 0, PORTRAIT.w, PORTRAIT.h, measure).columns)
+      .toHaveLength(1)
+    expect(layoutClipping(spec({ shape: 'page' }), 0, PORTRAIT.w, PORTRAIT.h, measure).columns)
+      .toHaveLength(2)
+  })
+
+  it('never lets any shape leave the frame', () => {
+    for (const shape of ['clip', 'page', 'column']) {
+      for (const frame of [LANDSCAPE, PORTRAIT, { w: 1080, h: 1080 }]) {
+        const clip = layoutClipping(spec({ shape, scale: 1.6 }), 0, frame.w, frame.h, measure)
+        expect(clip.box.w).toBeLessThanOrEqual(frame.w)
+        expect(clip.box.h).toBeLessThanOrEqual(frame.h)
+      }
+    }
+  })
+
+  it('leaves room for the story in every shape, on either orientation', () => {
+    /*
+     * The zero-rows failure wearing a different hat. A short wide shape with a
+     * three-line headline filled the page exactly as a long headline once did,
+     * and the columns came back with one row. The headline now has to fit the
+     * height it was given, not just a line count.
+     */
+    for (const shape of ['clip', 'page', 'column']) {
+      for (const frame of [LANDSCAPE, PORTRAIT]) {
+        for (let i = 0; i < 4; i++) {
+          const clip = layoutClipping(
+            spec({ shape, keyword: 'EXTRAORDINARY' }), i, frame.w, frame.h, measure
+          )
+          const rows = clip.columns.map((c) => c.lines.length)
+          expect(Math.min(...rows)).toBeGreaterThan(2)
+        }
+      }
+    }
+  })
+
+  it('falls back to a clipping for an unknown shape', () => {
+    const odd = layoutClipping(spec({ shape: 'nope' }), 0, PORTRAIT.w, PORTRAIT.h, measure)
+    const clip = layoutClipping(spec({ shape: 'clip' }), 0, PORTRAIT.w, PORTRAIT.h, measure)
+    expect(odd.box).toEqual(clip.box)
+  })
+})
+
+describe('cut-out letters', () => {
+  const ransom = (over: Partial<PaperSpec> = {}): ReturnType<typeof layoutRansom> =>
+    layoutRansom(spec({ mode: 'letters', ...over }), 0, W, H, measure)
+
+  it('makes one scrap per letter, in order', () => {
+    const clip = ransom({ keyword: 'FORGE' })
+    expect(clip.letters).toHaveLength(5)
+    expect(clip.letters!.map((l) => l.char).join('')).toBe('FORGE')
+    for (let i = 1; i < clip.letters!.length; i++) {
+      expect(clip.letters![i].box.x).toBeGreaterThan(clip.letters![i - 1].box.x)
+      expect(clip.letters![i].at).toBeGreaterThan(clip.letters![i - 1].at)
+    }
+  })
+
+  it('never puts dark ink on dark paper', () => {
+    /*
+     * The bug this is named after, and it was visible the moment anyone
+     * looked: `paper` and `ink` were rolled INDEPENDENTLY, each flipping to
+     * the other colour 30% of the time. Dark-on-dark came up 21% and
+     * light-on-light another 21%, so **42% of letters were invisible** — two
+     * missing letters in every five-letter word. It read as a font failing to
+     * load, not as a contrast bug.
+     *
+     * One roll now decides whether a scrap is inverted, and both colours
+     * follow from it. Checked over many seeds because the old bug was
+     * probabilistic and a single sample would have passed.
+     */
+    for (let seed = 1; seed < 40; seed++) {
+      const clip = layoutRansom(
+        spec({ mode: 'letters', keyword: 'ABCDEFGH', seed }), 0, W, H, measure
+      )
+      for (const letter of clip.letters!) {
+        expect(letter.paper).not.toBe(letter.ink)
+      }
+    }
+  })
+
+  it('uses only faces the look nominates', () => {
+    const allowed = new Set(paperLookById('newsprint').headlineFaces)
+    for (const letter of ransom({ keyword: 'ADVERTISING' }).letters!) {
+      expect(allowed.has(letter.face)).toBe(true)
+    }
+  })
+
+  it('draws no page at all', () => {
+    // Letters INSTEAD of a clipping, not as well as one — or the word lands
+    // on top of a newspaper nobody asked for.
+    const clip = ransom()
+    expect(clip.columns).toHaveLength(0)
+    expect(clip.headline.lines).toHaveLength(0)
+    expect(clip.masthead.text).toBe('')
+  })
+
+  it('survives a keyword of spaces or nothing', () => {
+    expect(ransom({ keyword: '' }).letters).toHaveLength(0)
+    expect(ransom({ keyword: '   ' }).letters).toHaveLength(0)
+    expect(ransom({ keyword: 'A B' }).letters).toHaveLength(2)
+  })
+
+  it('keeps a long word inside the frame', () => {
+    const clip = ransom({ keyword: 'EXTRAORDINARILY' })
+    const last = clip.letters!.at(-1)!
+    expect(clip.letters![0].box.x).toBeGreaterThanOrEqual(0)
+    expect(last.box.x + last.box.w).toBeLessThanOrEqual(W)
+  })
+})
+
+describe('typedChars', () => {
+  it('types nothing at the start and everything by the settle point', () => {
+    expect(typedChars(20, 0)).toBe(0)
+    expect(typedChars(20, 0.33)).toBeGreaterThan(0)
+    expect(typedChars(20, 0.33)).toBeLessThan(20)
+    expect(typedChars(20, 0.66)).toBe(20)
+  })
+
+  it('leaves the finished line readable before the cut', () => {
+    /*
+     * Typing right up to the cut means the last character is never seen
+     * before the page changes, which reads as the effect being broken rather
+     * than as being too fast. Everything after `settle` holds.
+     */
+    expect(typedChars(20, 0.7)).toBe(20)
+    expect(typedChars(20, 1)).toBe(20)
+  })
+
+  it('never overruns or goes negative', () => {
+    expect(typedChars(20, 99)).toBe(20)
+    expect(typedChars(20, -1)).toBe(0)
+    expect(typedChars(0, 0.5)).toBe(0)
+    expect(typedChars(20, Number.NaN)).toBe(0)
   })
 })

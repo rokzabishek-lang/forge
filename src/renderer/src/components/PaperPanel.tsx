@@ -1,6 +1,12 @@
 import { useState, type ReactNode } from 'react'
 import type { Clip } from '@shared/timeline'
-import { MAX_CLIPPINGS, PAPER_LOOKS, paperFrames } from '@shared/render/paper'
+import {
+  MAX_CLIPPINGS,
+  PAPER_LOOKS,
+  PAPER_SHAPES,
+  clippingCount,
+  paperFrames
+} from '@shared/render/paper'
 import { useEditor } from '../store'
 import { Slider } from './Slider'
 
@@ -47,6 +53,72 @@ export function PaperPanel({ clip }: { clip: Clip }): ReactNode {
         />
       </label>
 
+      {/*
+        Mode first: a page and a scattering of cut-out letters are different
+        effects, and half the controls below only apply to one of them.
+      */}
+      <div className="grid grid-cols-2 gap-1">
+        {([
+          ['page', 'Clipping'],
+          ['letters', 'Cut-out letters']
+        ] as const).map(([id, label]) => (
+          <button
+            key={id}
+            onClick={() => setPaper(clip.id, { mode: id })}
+            className={`rounded px-2 py-1.5 text-[10.5px] transition-colors ${
+              (paper.mode ?? 'page') === id
+                ? 'bg-flame-500 text-ink-950'
+                : 'bg-ink-800 text-ink-400 hover:bg-ink-700 hover:text-ink-200'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/*
+        Shape before look, because it is the bigger decision: a full page and
+        a torn strip are different objects, and the look is paint on top.
+        Meaningless for cut-out letters, which have no page to shape.
+      */}
+      {(paper.mode ?? 'page') === 'page' && (
+      <div className="grid grid-cols-3 gap-1">
+        {PAPER_SHAPES.map((s) => (
+          <button
+            key={s.id}
+            onClick={() => setPaper(clip.id, { shape: s.id })}
+            className={`rounded px-1 py-1.5 text-[10px] transition-colors ${
+              (paper.shape ?? 'clip') === s.id
+                ? 'bg-flame-500 text-ink-950'
+                : 'bg-ink-800 text-ink-400 hover:bg-ink-700 hover:text-ink-200'
+            }`}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
+      )}
+
+      {/*
+        Typing only means something on a page — cut-out letters already
+        arrive one at a time, which is their whole animation.
+      */}
+      {(paper.mode ?? 'page') === 'page' && (
+        <button
+          onClick={() =>
+            setPaper(clip.id, { reveal: paper.reveal === 'type' ? 'none' : 'type' })
+          }
+          title="Reveal the headline a character at a time, with a caret — the marker waits until the word is actually there"
+          className={`w-full rounded px-2 py-1.5 text-[10.5px] transition-colors ${
+            paper.reveal === 'type'
+              ? 'bg-flame-500 text-ink-950'
+              : 'bg-ink-800 text-ink-400 hover:bg-ink-700 hover:text-ink-200'
+          }`}
+        >
+          Typewriter {paper.reveal === 'type' ? 'on' : 'off'}
+        </button>
+      )}
+
       <div className="grid grid-cols-2 gap-1">
         {PAPER_LOOKS.map((look) => (
           <button
@@ -75,16 +147,22 @@ export function PaperPanel({ clip }: { clip: Clip }): ReactNode {
         suffix=""
         onChange={(v) => retime({ clippings: Math.round(v) })}
       />
+      {/*
+        Each page's own time on screen, in seconds as well as frames.
+        Frames are what the timeline works in; seconds are what anyone
+        deciding "how long should each one hold" actually thinks in.
+      */}
       <Slider
-        label="Frames each"
+        label="Each page"
         value={paper.holdFrames}
-        min={2}
-        max={20}
-        suffix=""
+        min={1}
+        max={30}
+        suffix={` fr · ${(paper.holdFrames / fps).toFixed(2)}s`}
         onChange={(v) => retime({ holdFrames: Math.round(v) })}
       />
       <div className="text-[10px] text-ink-600">
-        {paperFrames(paper)} frames · {(paperFrames(paper) / fps).toFixed(1)}s
+        {clippingCount(paper)} pages · {paperFrames(paper)} frames ·{' '}
+        {(paperFrames(paper) / fps).toFixed(1)}s total
       </div>
 
       <button

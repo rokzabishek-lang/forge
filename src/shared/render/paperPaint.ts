@@ -1,7 +1,9 @@
 import {
   layoutClipping,
+  layoutRansom,
   paperFrameAt,
   seeded,
+  typedChars,
   type Clipping,
   type Measure,
   type PaperSpec
@@ -77,12 +79,70 @@ function face(family: string, px: number, bold: boolean): string {
   return `${bold ? '700 ' : '400 '}${px}px "${family}", Georgia, serif`
 }
 
+/**
+ * The ransom-note variant: only the word, letter by letter.
+ *
+ * Each scrap is drawn whole — shadow, torn edge, paper, letter — before the
+ * next, so a letter overlapping its neighbour layers like pasted paper rather
+ * than showing a seam. They land in order as `sweep` advances, which is what
+ * makes the word assemble rather than appear.
+ */
+function paintLetters(ctx: CanvasRenderingContext2D, clip: Clipping, sweep: number): void {
+  for (const letter of clip.letters ?? []) {
+    if (sweep < letter.at) continue
+    const { box } = letter
+    const cx = box.x + box.w / 2
+    const cy = box.y + box.h / 2
+
+    /*
+     * A letter pops in slightly oversized and settles. Twelve percent over
+     * roughly a fifth of its own reveal — enough to read as landing, small
+     * enough not to read as a bounce.
+     */
+    const since = Math.max(0, Math.min(1, (sweep - letter.at) * 6))
+    const pop = 1 + 0.12 * (1 - since)
+
+    ctx.save()
+    ctx.translate(cx, cy)
+    ctx.rotate(letter.rotation)
+    ctx.scale(pop, pop)
+    ctx.translate(-cx, -cy)
+
+    ctx.save()
+    ctx.shadowColor = 'rgba(0,0,0,0.45)'
+    ctx.shadowBlur = box.h * 0.08
+    ctx.shadowOffsetY = box.h * 0.03
+    ctx.beginPath()
+    letter.tear.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)))
+    ctx.closePath()
+    ctx.fillStyle = letter.paper
+    ctx.fill()
+    ctx.restore()
+
+    ctx.fillStyle = letter.ink
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.font = face(letter.face, letter.fontPx, true)
+    ctx.fillText(letter.char, cx, cy)
+    ctx.restore()
+  }
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+}
+
 /** Draw one clipping, with the marker swept to `sweep` (0..1). */
 export function paintClipping(
   ctx: CanvasRenderingContext2D,
   clip: Clipping,
-  sweep: number
+  sweep: number,
+  /** Typing state, when the headline is revealed a character at a time. */
+  typing?: { through: number; blink: boolean }
 ): void {
+  if (clip.letters) {
+    paintLetters(ctx, clip, sweep)
+    return
+  }
+
   const { box, look } = clip
   ctx.save()
   ctx.translate(box.x + box.w / 2, box.y + box.h / 2)
@@ -164,7 +224,19 @@ export function paintClipping(
    * Swept from the left with a slightly ragged right end, because a marker
    * drawn as a clean rectangle reads as a UI selection.
    */
-  if (clip.highlight && sweep > 0) {
+  /*
+   * With typing on, the marker waits until the word is actually there.
+   * A highlighter sweeping across characters that have not been typed yet is
+   * the one detail that gives the whole effect away.
+   */
+  const typedEnough =
+    !typing ||
+    typedChars(
+      clip.headline.lines.reduce((n, l) => n + l.text.length, 0),
+      typing.through
+    ) >=
+      clip.headline.lines.reduce((n, l) => n + l.text.length, 0)
+  if (clip.highlight && sweep > 0 && typedEnough) {
     const h = clip.highlight
     ctx.save()
     ctx.globalAlpha = 0.85
@@ -184,7 +256,36 @@ export function paintClipping(
   ctx.fillStyle = look.ink
   ctx.font = face(look.headline, clip.headline.fontPx, true)
   const innerX = box.x + box.w * 0.055
-  for (const line of clip.headline.lines) ctx.fillText(line.text, innerX, line.y)
+
+  if (!typing) {
+    for (const line of clip.headline.lines) ctx.fillText(line.text, innerX, line.y)
+  } else {
+    /*
+     * Typed, with a caret.
+     *
+     * The count runs across the WHOLE headline rather than per line, so the
+     * caret walks off the end of one line and onto the start of the next the
+     * way a typewriter does — counting per line would have every line start
+     * at the same moment and finish at different ones.
+     */
+    const total = clip.headline.lines.reduce((n, l) => n + l.text.length, 0)
+    let shown = typedChars(total, typing.through)
+    let caret: { x: number; y: number } | null = null
+    for (const line of clip.headline.lines) {
+      if (shown <= 0) break
+      const take = Math.min(shown, line.text.length)
+      const text = line.text.slice(0, take)
+      ctx.fillText(text, innerX, line.y)
+      caret = { x: innerX + ctx.measureText(text).width, y: line.y }
+      shown -= take
+    }
+    // A caret only while there is still something to type. Left blinking on a
+    // finished line it reads as a text field nobody filled in.
+    if (caret && typing.blink && typedChars(total, typing.through) < total) {
+      const h = clip.headline.fontPx
+      ctx.fillRect(caret.x + h * 0.06, caret.y - h * 0.72, h * 0.07, h * 0.78)
+    }
+  }
 
   /* ---- body */
   ctx.font = face(look.body, clip.bodyPx, false)
@@ -212,8 +313,23 @@ export function drawPaperOnto(
   measure: Measure
 ): void {
   const state = paperFrameAt(spec, at.frame)
-  const clip = layoutClipping(spec, state.index, width, height, measure)
-  paintClipping(ctx, clip, state.sweep)
+  const clip =
+    spec.mode === 'letters'
+      ? layoutRansom(spec, state.index, width, height, measure)
+      : layoutClipping(spec, state.index, width, height, measure)
+  /*
+   * Letters assemble across the WHOLE hold, not over the marker's shorter
+   * sweep — the word arriving one scrap at a time is the effect, and rushing
+   * it into the first half of each hold reads as a stutter.
+   */
+  paintClipping(
+    ctx,
+    clip,
+    spec.mode === 'letters' ? state.through : state.sweep,
+    spec.reveal === 'type'
+      ? { through: state.through, blink: Math.floor(at.frame / 4) % 2 === 0 }
+      : undefined
+  )
 }
 
 /** The measurer the layout needs, backed by a real canvas. */

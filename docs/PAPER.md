@@ -64,6 +64,63 @@ overlapping mush. The size is now carried on the `Clipping`. A painter that
 recomputes a layout number is a second source of truth for it — the same thing
 `textLayout.ts` exists to prevent.
 
+## Shapes, and why they are ratios
+
+The box used to be "80% of the frame's width by 50% of its height", which made
+**the paper's shape a side effect of the project's aspect ratio**: a 16:9
+timeline could only ever produce a 3:1 strip, and the same spec on 9:16 came
+out nearly square. A sheet of paper has a shape. It does not change because
+you filmed in landscape.
+
+`SHAPES` holds fixed width÷height ratios, fitted inside the frame and then
+scaled — `clip` (a torn strip), `page` (a portrait document) and `column` (a
+narrow cutting, one column, good over a vertical reel).
+
+Two consequences fell out of it, both the *same* bug in new clothes:
+
+**Type is sized off the WIDTH, capped by the height.** Derived from the page
+height, a tall page got enormous type and a wide strip got tiny type — because
+height is not what a line of text has to fit into.
+
+**The headline has to fit its allotted height, not just a line count.** Three
+lines at a width-derived size filled a short wide page completely and the body
+columns came back with one row. That is the zero-rows failure from §"Three
+bugs" for the third time, which is why `fitHeadline` now shrinks on *both*
+conditions.
+
+## Two modes
+
+**`page`** — a clipping, as described above.
+
+**`letters`** — the keyword as ransom-note cut-outs and nothing else: every
+letter its own scrap, its own typeface, its own tear and tilt, landing one
+after another. The clipping run stripped to its point, which is what makes it
+work over busy footage where a page of body text is only noise.
+
+**The contrast bug is worth keeping.** `paper` and `ink` were rolled
+*independently*, each flipping to the other colour 30% of the time — so
+dark-on-dark came up 21% and light-on-light another 21%, and **42% of letters
+were invisible.** Two missing letters in every five-letter word, reading as a
+font that failed to load. One roll now decides whether a scrap is inverted and
+both colours follow. The test sweeps forty seeds, because the old bug was
+probabilistic and one sample would have passed.
+
+## Typewriter
+
+`reveal: 'type'` reveals the headline a character at a time with a caret,
+counted across the *whole* headline rather than per line, so the caret walks
+off the end of one line onto the start of the next the way a typewriter does.
+
+Two details that matter more than they look:
+
+- **The marker waits until the word is fully typed.** A highlighter sweeping
+  across characters that are not there yet gives the whole effect away.
+- **Typing finishes at 66% of the hold**, not at the cut. Typing right to the
+  cut means the finished line is never actually seen, which reads as the
+  effect being broken rather than as being fast.
+
+Pairs naturally with the `press` look, which is Courier.
+
 ## The custom half
 
 Optional, and absent means the preset. A spec that sets none of them is

@@ -189,6 +189,15 @@ export interface PaperSpec {
    * somebody has to keep in step.
    */
 
+  /**
+   * `page` draws a clipping; `letters` draws the keyword as ransom-note
+   * cut-outs and nothing else. Absent is a page.
+   */
+  mode?: 'page' | 'letters'
+  /** `type` reveals the headline a character at a time, with a caret. */
+  reveal?: 'none' | 'type'
+  /** `clip`, `page` or `column`. See SHAPES — absent is a torn clipping. */
+  shape?: string
   /** How much of the frame the page fills. 1 is the preset size. */
   scale?: number
   /** Multiplier on the tilt and the tear. 0 is a clean rectangle, square on. */
@@ -253,6 +262,20 @@ export interface Box {
   h: number
 }
 
+/** One cut-out letter, on its own scrap of paper. */
+export interface RansomLetter {
+  char: string
+  box: Box
+  rotation: number
+  fontPx: number
+  face: string
+  paper: string
+  ink: string
+  tear: { x: number; y: number }[]
+  /** 0..1 — how far through the hold this one lands. */
+  at: number
+}
+
 export interface Clipping {
   /** The page rectangle, before rotation, in canvas pixels. */
   box: Box
@@ -275,6 +298,15 @@ export interface Clipping {
   /** Fibre and crease strength, for the painter. 1 is the preset amount. */
   texture: number
   /**
+   * Ransom-note letters, when the mode is `letters` rather than a page.
+   *
+   * Present INSTEAD of a page rather than as well as one: when this is set
+   * the masthead, headline and columns are empty and the painter draws only
+   * these. Kept on the same type rather than as a separate union so every
+   * caller that already handles a `Clipping` keeps working.
+   */
+  letters?: RansomLetter[]
+  /**
    * Where the marker goes. Null when the keyword did not make it onto the
    * headline at all — which must be possible to detect rather than guessed at,
    * because a highlight drawn over the wrong words is the one failure that
@@ -285,6 +317,31 @@ export interface Clipping {
   /** Torn edge, as points around the box. Painter closes the path. */
   tear: { x: number; y: number }[]
 }
+
+/**
+ * The shape of the paper itself, as width ÷ height.
+ *
+ * Fixed ratios rather than fractions of the frame, because the frame is not
+ * the paper. Sizing the box as "80% of width by 50% of height" made the
+ * clipping's shape a side effect of the project's aspect: a 16:9 timeline got
+ * a 3:1 strip and there was no way to ask for anything else, while the same
+ * spec on a 9:16 timeline came out nearly square. A sheet of paper has a
+ * shape; it does not change because you filmed in landscape.
+ */
+const SHAPES: Record<string, { ratio: number; fill: number; columns: number }> = {
+  /** A torn strip out of a page — the original, and still the default. */
+  clip: { ratio: 1.85, fill: 0.88, columns: 2 },
+  /** A whole page, portrait, the way a document or a front page actually is. */
+  page: { ratio: 0.72, fill: 0.72, columns: 2 },
+  /** A narrow cutting — one column, tall. Good over a vertical reel. */
+  column: { ratio: 0.46, fill: 0.5, columns: 1 }
+}
+
+export const PAPER_SHAPES = [
+  { id: 'clip', label: 'Clipping' },
+  { id: 'page', label: 'Full page' },
+  { id: 'column', label: 'Column' }
+] as const
 
 const PADDING = 0.055
 const GUTTER = 0.035
@@ -303,6 +360,100 @@ const CHARS_PER_LINE = 13
  * `index` picks the masthead and headline, so a run of clippings differs
  * without being random each bake.
  */
+/**
+ * The keyword as cut-out letters, each on its own scrap.
+ *
+ * The magazine-ransom look: every letter a different typeface, a different
+ * paper tone, its own tear and its own tilt, landing one after another. It is
+ * the same effect as the clipping run stripped to its point — the word, with
+ * nothing to read around it — which is what makes it work over busy footage
+ * where a whole page of body text is just noise.
+ *
+ * No masthead, no columns. A `Clipping` with `letters` set and everything
+ * else empty, so the painter branches once and nothing else has to know.
+ */
+export function layoutRansom(
+  spec: PaperSpec,
+  index: number,
+  width: number,
+  height: number,
+  measure: Measure
+): Clipping {
+  const preset = paperLookById(spec.lookId)
+  const distortion = amount(spec.distortion, 1, 0, 3)
+  const scale = amount(spec.scale, 1, 0.4, 1.6)
+  const rand = seeded(spec.seed * 31337 + index * 7919)
+  const look: PaperLook = {
+    ...preset,
+    highlight: spec.highlight ?? preset.highlight,
+    paper: spec.paper ?? preset.paper,
+    ink: spec.ink ?? preset.ink,
+    tear: preset.tear * distortion
+  }
+
+  const chars = [...(spec.keyword || '').toUpperCase()].filter((c) => c.trim().length > 0)
+  const letters: RansomLetter[] = []
+
+  if (chars.length > 0) {
+    // Sized so the whole word spans most of the frame however long it is.
+    const cell = Math.min((width * 0.86 * scale) / chars.length, height * 0.34 * scale)
+    const fontPx = cell * 0.62
+    const totalW = cell * chars.length
+    let x = (width - totalW) / 2
+    const midY = height / 2
+
+    for (const [i, char] of chars.entries()) {
+      const inverted = rand() < 0.28
+      const w = cell * (0.82 + rand() * 0.2)
+      const h = cell * (0.86 + rand() * 0.24)
+      const box: Box = {
+        x,
+        // Each scrap sits a little off the line, as a pasted letter does.
+        y: midY - h / 2 + (rand() - 0.5) * cell * 0.22 * distortion,
+        w,
+        h
+      }
+      letters.push({
+        char,
+        box,
+        rotation: (rand() - 0.5) * 0.34 * distortion,
+        fontPx,
+        face: preset.headlineFaces[Math.floor(rand() * preset.headlineFaces.length)] ?? preset.headline,
+        /*
+         * ONE roll decides whether this scrap is inverted, and both colours
+         * follow from it.
+         *
+         * Rolling them independently looked like the same idea and was not:
+         * dark paper with dark ink, and light with light, each came up 21% of
+         * the time, so **42% of letters were invisible**. On a five-letter
+         * word that is two missing letters, every time, and it reads as the
+         * font failing to load rather than as a contrast bug.
+         */
+        paper: inverted ? look.ink : look.paper,
+        ink: inverted ? look.paper : look.ink,
+        tear: tornEdge(box, look.tear * Math.min(width, height) * 1.6, rand),
+        at: chars.length === 1 ? 0 : i / chars.length
+      })
+      x += cell
+    }
+  }
+
+  return {
+    box: { x: 0, y: 0, w: width, h: height },
+    rotation: 0,
+    look,
+    masthead: { text: '', fontPx: 0, y: 0 },
+    rules: [],
+    headline: { lines: [], fontPx: 0 },
+    bodyPx: 0,
+    texture: amount(spec.texture, 1, 0, 3),
+    highlight: null,
+    columns: [],
+    tear: [],
+    letters
+  }
+}
+
 export function layoutClipping(
   spec: PaperSpec,
   index: number,
@@ -328,8 +479,23 @@ export function layoutClipping(
   // A clipping fills most of the frame but never all of it: the torn edge and
   // the tilt both need somewhere to go, or they get cropped and stop reading
   // as paper.
-  const boxW = Math.min(width * 0.98, width * (0.78 + rand() * 0.1) * scale)
-  const boxH = Math.min(height * 0.96, height * (0.42 + rand() * 0.16) * scale)
+  /*
+   * Fit the paper's own shape inside the frame, then scale.
+   *
+   * Width first, then height, then shrink both if the height overflows — so a
+   * portrait page on a landscape timeline comes out portrait and smaller
+   * rather than squashed.
+   */
+  const shape = SHAPES[spec.shape ?? 'clip'] ?? SHAPES.clip
+  const jitter = 0.94 + rand() * 0.12
+  let boxW = width * shape.fill * scale * jitter
+  let boxH = boxW / shape.ratio
+  if (boxH > height * 0.94) {
+    boxH = height * 0.94
+    boxW = boxH * shape.ratio
+  }
+  boxW = Math.min(boxW, width * 0.98)
+  boxH = Math.min(boxH, height * 0.94)
   const box: Box = {
     x: (width - boxW) / 2 + (rand() - 0.5) * width * 0.04,
     y: (height - boxH) / 2 + (rand() - 0.5) * height * 0.05,
@@ -343,7 +509,14 @@ export function layoutClipping(
   const innerW = boxW - pad * 2
 
   /* ---- masthead */
-  const mastheadPx = Math.max(8, boxH * 0.055)
+  /*
+   * Type is sized off the WIDTH, capped by the height.
+   *
+   * The same mistake as the body size before it: derived from the page height,
+   * a tall page got enormous type and a wide strip got tiny type, because
+   * height is not what a line of text has to fit into. Width is.
+   */
+  const mastheadPx = Math.max(8, Math.min(boxW * 0.045, boxH * 0.14))
   const mastheadText =
     spec.masthead?.trim() || MASTHEADS[pick(index, spec.seed, 1, MASTHEADS.length)]
   let y = box.y + pad + mastheadPx
@@ -381,7 +554,10 @@ export function layoutClipping(
    * Three lines is the budget. Past that a clipping stops being a clipping and
    * becomes a poster.
    */
-  const fitted = fitHeadline(headlineText, innerW, boxH, look.headline, measure)
+  // Half of what is left below the masthead. The other half is the story,
+  // and a clipping with no story under the headline is not a clipping.
+  const headlineRoom = (box.y + boxH - boxW * PADDING - y) * 0.52
+  const fitted = fitHeadline(headlineText, innerW, headlineRoom, look.headline, measure)
   const headlinePx = fitted.fontPx
   const wrapped = fitted.lines
   const headlineLineHeight = headlinePx * 1.06
@@ -417,7 +593,7 @@ export function layoutClipping(
 
   /* ---- two justified columns of body text */
   const gutter = boxW * GUTTER
-  const colW = (innerW - gutter) / 2
+  const colW = (innerW - gutter * (shape.columns - 1)) / shape.columns
   /*
    * The body size comes from the COLUMN, not from the page.
    *
@@ -436,7 +612,7 @@ export function layoutClipping(
 
   const columns: Column[] = []
   let cursor = Math.floor(rand() * FILLER.length)
-  for (const side of [0, 1]) {
+  for (let side = 0; side < shape.columns; side++) {
     const colX = innerX + side * (colW + gutter)
     const lines: Line[] = []
     for (let row = 0; row < rows; row++) {
@@ -522,15 +698,25 @@ const MAX_HEADLINE_LINES = 3
 function fitHeadline(
   text: string,
   innerW: number,
-  boxH: number,
+  availableH: number,
   family: string,
   measure: Measure
 ): { fontPx: number; lines: string[] } {
-  const start = Math.max(10, boxH * 0.13)
-  const floor = Math.max(9, boxH * 0.05)
+  const start = Math.max(10, innerW * 0.135)
+  const floor = Math.max(9, innerW * 0.04)
   let fontPx = start
   let lines = wrap(text, innerW, fontPx, family, true, measure)
-  while (lines.length > MAX_HEADLINE_LINES && fontPx > floor) {
+  /*
+   * Two conditions, and the second is the one that generalises.
+   *
+   * A line COUNT alone was enough while every clipping was the same shape.
+   * The moment a shape could be short and wide, three lines at a width-derived
+   * size filled the whole page and the body columns came out with one row —
+   * the same zero-rows failure as before, wearing a different hat. So the
+   * headline also has to fit the height it was allotted, whatever that is.
+   */
+  const tooTall = (): boolean => lines.length * fontPx * 1.06 > availableH
+  while ((lines.length > MAX_HEADLINE_LINES || tooTall()) && fontPx > floor) {
     fontPx = Math.max(floor, fontPx * 0.88)
     lines = wrap(text, innerW, fontPx, family, true, measure)
   }
@@ -600,6 +786,21 @@ function tornEdge(box: Box, amount: number, rand: () => number): { x: number; y:
   for (let i = steps; i > 0; i--) push(box.x + (box.w * i) / steps, box.y + box.h)
   for (let i = steps; i > 0; i--) push(box.x, box.y + (box.h * i) / steps)
   return points
+}
+
+/**
+ * How many characters have been typed at `through` (0..1 of a hold).
+ *
+ * `settle` is the fraction of the hold spent typing; the rest is the finished
+ * line sitting there readable. Typing right up to the cut means the last
+ * character is never seen before the page changes, which reads as the effect
+ * being broken rather than as being too fast.
+ */
+export function typedChars(total: number, through: number, settle = 0.66): number {
+  if (!(total > 0)) return 0
+  if (!Number.isFinite(through) || through <= 0) return 0
+  if (settle <= 0) return total
+  return Math.max(0, Math.min(total, Math.round((through / settle) * total)))
 }
 
 /* -------------------------------------------------------------- animation */
