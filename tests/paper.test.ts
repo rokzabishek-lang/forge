@@ -495,7 +495,12 @@ describe('a clip that draws itself', () => {
 
   it('lets both kinds past the readiness gate', () => {
     expect(preview).toMatch(/const drawsItself = \(layer: Layer\): boolean =>/)
-    expect(preview).toMatch(/Boolean\(layer\.clip\.text \?\? layer\.clip\.paper\)/)
+    /*
+     * Membership, not the whole list. Pinning the exact expression made these
+     * fail the moment a FOURTH self-drawing kind was added correctly — the
+     * assertion is that paper is on the list, not that nothing else ever is.
+     */
+    expect(preview).toMatch(/drawsItself[\s\S]{0,160}layer\.clip\.paper/)
     expect(preview).toMatch(/drawsItself\(layer\) \? true : elementReady\(layer\.element\)/)
     // The old one-sided form must not come back.
     expect(preview).not.toMatch(/layer\.clip\.text \? true : elementReady/)
@@ -709,13 +714,13 @@ describe('a clip that is DRAWN at the canvas size', () => {
      * was written before clippings existed to suffer it.
      */
     expect(store).toMatch(
-      /if \(c\.text \|\| c\.solid \|\| c\.title \|\| c\.paper\) return \{ \.\.\.c, crop: undefined \}/
+      /if \(c\.text(?: \|\| c\.\w+)*? \|\| c\.paper(?: \|\| c\.\w+)*\) return \{ \.\.\.c, crop: undefined \}/
     )
   })
 
   it('is redrawn at the new canvas size', () => {
     expect(store).toMatch(
-      /filter\(\(c\) => c\.text \|\| c\.solid \|\| c\.title \|\| c\.paper\)/
+      /filter\(\(c\) => c\.text(?: \|\| c\.\w+)*? \|\| c\.paper(?: \|\| c\.\w+)*\)/
     )
     // …and the rebake has to actually bake it, not just select it.
     expect(store).toContain('bakePaperSequence(')
