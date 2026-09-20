@@ -54,6 +54,22 @@ trusting a string anchor, count the matches. Use `matchAll` and assert over
 every site, or anchor on text that is unique, and prefer a whole ordered shape
 to three loose substrings.
 
+**Never pipe a test run into a filter and then act on the result.**
+
+    npm test | grep -E "Tests |FAIL" && git commit ...   # WRONG
+
+That commits over a red suite, every time. The exit code belongs to `grep`,
+which matched, so the chain continues however many tests failed — and it did:
+a commit went out with three failures and was pushed. Write the output to a
+file, check `$?`, then read the file.
+
+**And an assertion that breaks when the guarded thing is done RIGHT is not a
+guard.** Three tests pinned the exact contents of a list — `c.text || c.solid
+|| c.title || c.paper` — and failed the moment a fourth self-drawing kind was
+correctly added to it. Assert MEMBERSHIP of the thing under test, not the whole
+snapshot, and mutation-check that the relaxed version still catches its
+original bug.
+
 **The user's settled decisions.** Licensing and sourcing questions for the
 models and tools this project uses have been decided. Do not reopen them, and do
 not flag `yt-dlp` — it is an accepted dependency here.

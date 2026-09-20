@@ -261,6 +261,14 @@ mean redrawing a curve you already shaped. `audioFade.ts` has the `qsin`
 measurement and EFFECTS.md §26 has the chain-order reasoning, which is the
 whole correctness of it.
 
+**Two clips that draw themselves in 3D or on paper** are made from the Media
+tab: `+ Newspaper clippings` and `+ Card ring`. Both bake to numbered PNG
+sequences with alpha and land as ordinary clips, so nothing in the export
+knows about either. See `docs/PAPER.md` and `docs/CAROUSEL.md` — and note the
+rule both of them cost bugs to learn: **a clip drawn at the canvas size
+belongs on three lists** (the preview's readiness gate, `setAspect`'s
+no-auto-reframe skip, and `rebakeGenerated`).
+
 **Loudness is in the Output panel, not the Sound row**, because it is a
 property of the export rather than of a clip: every track and the music
 measured together after the mix. Off / Social −14 / Podcast −16 / Broadcast
