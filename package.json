@@ -1,7 +1,7 @@
 {
   "name": "forge",
   "version": "1.0.0",
-  "description": "Forge \u2014 desktop media toolbox for video, audio and images",
+  "description": "Forge — desktop media toolbox for video, audio and images",
   "main": "./out/main/index.js",
   "author": "spyker",
   "license": "MIT",
@@ -23,6 +23,7 @@
     "lucide-react": "^1.45.0",
     "react-resizable-panels": "^4.12.4",
     "sharp": "0.35.4",
+    "three": "^0.186.0",
     "tinykeys": "^4.0.0"
   },
   "devDependencies": {
@@ -30,6 +31,7 @@
     "@types/node": "^24.0.0",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "@types/three": "^0.186.0",
     "@vitejs/plugin-react": "5.2.0",
     "electron": "44.3.0",
     "electron-builder": "26.15.3",
