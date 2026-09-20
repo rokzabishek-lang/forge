@@ -79,8 +79,36 @@ because it looks like the same control and is not.
 `perspective` is present in the bundled ffmpeg, does a real quad warp, and
 animates per frame on `on` — the same variable `zoompan` uses and the keyframe
 compiler already targets. Measured: five sampled frames, five distinct hashes.
-So a 3D tilt is expressible in the single-pass graph. The card ring needs a
-camera model on top of that, and is the furthest away of anything discussed.
+So a 3D tilt is expressible in the single-pass graph.
+
+**"The furthest away of anything discussed" is out of date, and the paper
+animation is why.** That verdict assumed the effect had to be an ffmpeg
+filtergraph — twenty cards meant twenty animated `perspective` filters, a
+camera model projecting each card's four corners, and a back-to-front sort
+every frame. A small 3D engine driving ffmpeg. True, and still true, of that
+route.
+
+It is not the only route any more. `docs/PAPER.md` established the other one
+end to end: **compute it in JS, draw it, bake numbered PNGs with alpha, drop
+the sequence on the timeline as an ordinary clip.** On that path the camera
+model is arithmetic rather than a filtergraph, and `perspective` is never
+reached for.
+
+And it need not be written from scratch. Three.js is MIT, and so are several
+ring carousels built on it — `jantepya/Carousel3D` uses `CSS3DRenderer` to
+place real DOM elements in 3D, `foo123/Carousel3` uses Three.js directly.
+What you borrow is **the mechanism, not an asset**: the cards still have to
+carry the user's own photographs, which is exactly what a finished animation
+file cannot do.
+
+One architectural note if this is picked up: `WebGLRenderer` draws to a
+canvas, so its frames bake through the same path text and paper already use.
+`CSS3DRenderer` draws DOM, which a canvas cannot read — that one would need
+the offscreen graphics window and `capturePage()`. Prefer the former.
+
+Revised estimate: **moderate, days rather than weeks.** The cost is a new
+dependency of real size, so load it in the graphics window rather than the
+main bundle.
 
 ---
 
