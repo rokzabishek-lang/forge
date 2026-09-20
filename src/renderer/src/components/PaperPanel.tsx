@@ -8,6 +8,7 @@ import {
   paperFrames
 } from '@shared/render/paper'
 import { useEditor } from '../store'
+import { paperDuration } from '../paperCanvas'
 import { Slider } from './Slider'
 
 /**
@@ -35,8 +36,10 @@ export function PaperPanel({ clip }: { clip: Clip }): ReactNode {
    */
   const retime = (patch: Parameters<typeof setPaper>[1]): void => {
     setPaper(clip.id, patch)
-    const next = { ...paper, ...patch }
-    setClipDuration(clip.id, paperFrames(next) + Math.round(fps * 0.4))
+    // `paperDuration`, not a second copy of the arithmetic. The creator and
+    // this panel disagreeing by a few frames is a clip whose last page is
+    // clipped or held, depending on which one ran last.
+    setClipDuration(clip.id, paperDuration({ ...paper, ...patch }, fps))
   }
 
   return (

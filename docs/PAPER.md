@@ -202,6 +202,40 @@ asserts the branch against the source — jsdom has no canvas, no image loading
 and no `readyState`, so a mounted test would report ready for everything and
 certify the bug.
 
+## A clip that is DRAWN at the canvas size belongs on three lists
+
+Four bugs, one cause. Text, colour cards and titles are all authored *at* the
+canvas size, so each appears in three places. Clippings were added to none of
+them, and the failures looked entirely unrelated:
+
+| list | what it does | what its absence caused |
+|---|---|---|
+| `Preview.tsx` readiness gate | a self-drawing clip is always ready | the preview was permanently **black** |
+| `setAspect`'s crop skip | never auto-reframe generated artwork | 16:9 → 9:16 showed **one cropped corner** of the old page |
+| `rebakeGenerated` | redraw at the current canvas size | each page's timing **drifted** between preview and file, and the export died with **"no such file or directory"** |
+
+The comment above the crop skip already described the failure —
+
+> a crop solved against the new one took a sub-rectangle of it. The words
+> ended up cut off and shoved out of frame
+
+— and it was written before this effect existed to suffer it.
+
+Two details in the rebake that are not optional:
+
+- **Bounded by `clip.duration`**, not a fixed ceiling. The preview draws
+  `playhead - clip.start` directly, so a sequence of any other length drifts
+  against it. That is the page-timing bug.
+- **It repoints the asset's `width`/`height`, not only its path.** Everything
+  that measures against an asset's dimensions — the crop solver, the camera
+  move's pre-scale — reads the stored number, so a rebake that changes the
+  file and not the record is worse than no rebake.
+
+`tests/integration/paperRender.int.test.ts` puts a real numbered PNG sequence
+in front of the real binary, which nothing had ever done: the harness returns
+`harness://` and writes nothing, so every check until then proved the preview
+and nothing about the file.
+
 ## Not done yet
 
 **Real paper photographs**, in two forms worth keeping apart:

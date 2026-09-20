@@ -680,3 +680,73 @@ describe('typedChars', () => {
     expect(typedChars(20, Number.NaN)).toBe(0)
   })
 })
+
+describe('a clip that is DRAWN at the canvas size', () => {
+  /*
+   * Four bugs, one cause: `paper` missing from a list of generated kinds.
+   *
+   * Text, colour cards and titles are all authored AT the canvas size, so each
+   * one appears in three lists — the preview's readiness gate, the aspect
+   * change's "do not auto-reframe this" skip, and the rebake. Clippings were
+   * added to none of them, and it produced four failures that looked entirely
+   * unrelated:
+   *
+   *   - the preview was permanently black
+   *   - changing 16:9 to 9:16 showed one cropped corner of the old page
+   *   - each page's timing drifted between the preview and the file
+   *   - the export failed with "no such file or directory"
+   *
+   * Asserted against the source because all three are decisions inside
+   * functions with no return value worth checking, and because the cost of
+   * getting it wrong is four bugs in four different places.
+   */
+  const store = readFileSync(resolve(__dirname, '../src/renderer/src/store.ts'), 'utf8')
+
+  it('is not auto-reframed when the aspect changes', () => {
+    /*
+     * The comment above this line in `setAspect` describes the exact failure —
+     * "a crop solved against the new one took a sub-rectangle of it" — and it
+     * was written before clippings existed to suffer it.
+     */
+    expect(store).toMatch(
+      /if \(c\.text \|\| c\.solid \|\| c\.title \|\| c\.paper\) return \{ \.\.\.c, crop: undefined \}/
+    )
+  })
+
+  it('is redrawn at the new canvas size', () => {
+    expect(store).toMatch(
+      /filter\(\(c\) => c\.text \|\| c\.solid \|\| c\.title \|\| c\.paper\)/
+    )
+    // …and the rebake has to actually bake it, not just select it.
+    expect(store).toContain('bakePaperSequence(')
+  })
+
+  it('bakes bounded by the clip, so the preview and the file agree', () => {
+    /*
+     * The preview draws `playhead - clip.start` directly. A sequence of any
+     * other length drifts against that, which is what made each page's timing
+     * differ between the screen and the export.
+     */
+    const at = store.indexOf('bakePaperSequence(')
+    expect(at).toBeGreaterThan(-1)
+    expect(store.slice(at, at + 200)).toContain('clip.duration')
+  })
+
+  it('repoints the asset size, not only the path', () => {
+    // Everything that measures against an asset's dimensions — the crop
+    // solver, the camera move's pre-scale — works from the stored number, so
+    // a rebake that changes the file and not the record is worse than none.
+    const at = store.indexOf('bakePaperSequence(')
+    const block = store.slice(at, at + 700)
+    /*
+     * Matched as one ordered shape, not as three separate substrings.
+     * `width,` also appears in the `bakePaperSequence(...)` arguments a few
+     * lines above, so a loose `toContain` passed happily with the repoint
+     * deleted — the assertion was reading the call, not the thing it claims
+     * to check.
+     */
+    expect(block).toMatch(
+      /path: sequence\.pattern\.replace\([^)]*\),\s*\n\s*width,\s*\n\s*height,\s*\n\s*frames: \{ pattern:/
+    )
+  })
+})

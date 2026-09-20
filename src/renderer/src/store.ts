@@ -937,7 +937,11 @@ export const useEditor = create<EditorState>((set, get) => ({
          * one took a sub-rectangle of it. The words ended up cut off and shoved
          * out of frame. They get redrawn at the new size instead, below.
          */
-        if (c.text || c.solid || c.title) return { ...c, crop: undefined }
+        // Clippings belong on this list for the same reason, and were left
+        // off it: a page drawn at 1920x1080 then cropped to a 9:16
+        // sub-rectangle shows one corner of itself. The comment above
+        // described the bug two years before the effect existed to have it.
+        if (c.text || c.solid || c.title || c.paper) return { ...c, crop: undefined }
         return { ...c, crop: solveCrop(asset, aspect) }
       })
     }))
@@ -945,15 +949,22 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
 
   /**
-   * Redraw text, colour cards and titles at the current canvas size.
+   * Redraw text, colour cards, titles and clippings at the current canvas size.
    *
    * Their PNGs are canvas-sized by construction, so a change of aspect leaves
    * every one of them the wrong shape until it is drawn again.
+   *
+   * Clippings were missing from this list, and it cost three separate bugs
+   * that looked unrelated: switching 16:9 to 9:16 showed a cropped corner of
+   * the old page, each page's timing drifted between the preview and the
+   * file, and the export failed outright with "no such file or directory"
+   * whenever the cached frames were stale or gone. All one cause — a drawn
+   * clip that is never redrawn.
    */
   rebakeGenerated: async () => {
     const { project } = get()
     const { width, height, fps } = project.settings
-    const targets = project.clips.filter((c) => c.text || c.solid || c.title)
+    const targets = project.clips.filter((c) => c.text || c.solid || c.title || c.paper)
     if (targets.length === 0) return
 
     for (const clip of targets) {
@@ -975,6 +986,41 @@ export const useEditor = create<EditorState>((set, get) => ({
           ),
           clips: p.clips
         })
+
+        if (clip.paper) {
+          /*
+           * Bounded by the clip, not by a fixed ceiling.
+           *
+           * The run cannot need more frames than the clip is long, and baking
+           * to `clip.duration` is what makes the preview and the file agree
+           * about when each page cuts — the preview draws `playhead - start`
+           * directly, so a sequence of any other length drifts against it.
+           */
+          const sequence = await bakePaperSequence(
+            clip.paper,
+            clip.id,
+            width,
+            height,
+            clip.duration
+          )
+          if (sequence) {
+            get().update((p) => ({
+              ...p,
+              assets: p.assets.map((a) =>
+                a.id === clip.assetId
+                  ? {
+                      ...a,
+                      path: sequence.pattern.replace('%05d', '00000'),
+                      width,
+                      height,
+                      frames: { pattern: sequence.pattern, count: sequence.frames }
+                    }
+                  : a
+              )
+            }))
+          }
+          continue
+        }
 
         if (clip.text) {
           const drawn = { ...clip.text, version: clip.text.version + 1 }
