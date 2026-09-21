@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { app } from 'electron'
 import type { Settings } from '@shared/types'
+import { DEFAULT_DIRECTOR } from '@shared/director/provider'
 import { defaultConcurrency } from './queue'
 
 /**
@@ -21,7 +22,12 @@ function defaults(): Settings {
     overwrite: false,
     lastPresetId: null,
     voiceProvider: 'auto',
-    voiceHosted: { baseUrl: '', model: 'tts-1', voice: 'alloy', apiKey: '' }
+    voiceHosted: { baseUrl: '', model: 'tts-1', voice: 'alloy', apiKey: '' },
+    director: {
+      provider: DEFAULT_DIRECTOR.provider,
+      ollama: { ...DEFAULT_DIRECTOR.ollama },
+      gemini: { ...DEFAULT_DIRECTOR.gemini }
+    }
   }
 }
 
@@ -41,7 +47,36 @@ function sanitize(raw: unknown): Settings {
       input.voiceProvider === 'kokoro' || input.voiceProvider === 'hosted'
         ? input.voiceProvider
         : 'auto',
-    voiceHosted: voiceHosted(input.voiceHosted, base.voiceHosted!)
+    voiceHosted: voiceHosted(input.voiceHosted, base.voiceHosted!),
+    director: director(input.director, base.director!)
+  }
+}
+
+/**
+ * Same discipline as the voice config: strings only, an enum for the choice,
+ * and never a partial object. A settings file written before the director
+ * existed has no `director` key at all and must load as the defaults.
+ */
+function director(raw: unknown, base: NonNullable<Settings['director']>): NonNullable<Settings['director']> {
+  if (typeof raw !== 'object' || raw === null) return base
+  const input = raw as Record<string, unknown>
+  const str = (value: unknown, fallback: string): string =>
+    typeof value === 'string' ? value : fallback
+  const ollama = typeof input.ollama === 'object' && input.ollama !== null ? (input.ollama as Record<string, unknown>) : {}
+  const gemini = typeof input.gemini === 'object' && input.gemini !== null ? (input.gemini as Record<string, unknown>) : {}
+  return {
+    provider:
+      input.provider === 'ollama' || input.provider === 'gemini' || input.provider === 'auto'
+        ? input.provider
+        : base.provider,
+    ollama: {
+      baseUrl: str(ollama.baseUrl, base.ollama.baseUrl),
+      model: str(ollama.model, base.ollama.model)
+    },
+    gemini: {
+      apiKey: str(gemini.apiKey, base.gemini.apiKey),
+      model: str(gemini.model, base.gemini.model)
+    }
   }
 }
 

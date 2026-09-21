@@ -283,6 +283,13 @@ function fakeBeats(durationMs: number): Record<string, unknown> {
   }
 }
 
+/** The director's provider settings, kept in memory so the panel round-trips. */
+const harnessDirector = {
+  provider: 'auto' as 'auto' | 'ollama' | 'gemini',
+  ollama: { baseUrl: 'http://127.0.0.1:11434', model: '' },
+  gemini: { model: 'gemini-2.5-flash', hasKey: false }
+}
+
 /** How many frames each clip has baked, for the harness to read back. */
 const titleFrames = new Map<string, number>()
 /** Byte sizes of the caption pictures baked, and the concat list naming them. */
@@ -504,6 +511,34 @@ export function installHarnessBridge(): void {
     ],
     voiceOptions: async () => [],
     speak: unsupported('Speech'),
+
+    /*
+     * The director, without a model.
+     *
+     * Status is honest — no server here — and settings round-trip in memory
+     * so the panel's picker and key field can be exercised. `directorComplete`
+     * is the one call that genuinely needs a model; the store falls back to
+     * the deterministic baseline plan when it fails, which is the path worth
+     * being able to click through in a browser.
+     */
+    directorStatus: async () => [
+      { id: 'ollama' as const, label: 'Ollama (on this machine)', kind: 'local' as const, ready: false, reason: 'harness: no model server', models: [] },
+      { id: 'gemini' as const, label: 'Gemini API', kind: 'hosted' as const, ready: false, reason: 'harness: no network' }
+    ],
+    directorModels: async () => [],
+    directorSettings: async () => ({ ...harnessDirector, gemini: { ...harnessDirector.gemini } }),
+    setDirectorSettings: async (patch: {
+      provider?: 'auto' | 'ollama' | 'gemini'
+      ollama?: Partial<{ baseUrl: string; model: string }>
+      gemini?: Partial<{ apiKey: string; model: string }>
+    }) => {
+      if (patch.provider) harnessDirector.provider = patch.provider
+      Object.assign(harnessDirector.ollama, patch.ollama ?? {})
+      if (patch.gemini?.model !== undefined) harnessDirector.gemini.model = patch.gemini.model
+      if (patch.gemini?.apiKey !== undefined) harnessDirector.gemini.hasKey = patch.gemini.apiKey.length > 0
+      return { ...harnessDirector, gemini: { ...harnessDirector.gemini } }
+    },
+    directorComplete: unsupported('Directing with a model'),
 
     transcribe: unsupported('Transcription'),
     cancelTranscribe: async () => undefined,

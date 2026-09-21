@@ -82,6 +82,8 @@ export interface Job {
   finishedAt: number | null
 }
 
+import type { DirectorConfig } from './director/provider'
+
 export interface Settings {
   outputDir: string | null
   concurrency: number
@@ -101,6 +103,14 @@ export interface Settings {
     voice: string
     apiKey: string
   }
+  /**
+   * Which language model directs, and how to reach it.
+   *
+   * Same rules as the voice key: the Gemini key is held here, sent only to
+   * Google, never logged, and never returned to the renderer. See
+   * shared/director/provider.ts.
+   */
+  director?: DirectorConfig
 }
 
 export interface JobRequest {

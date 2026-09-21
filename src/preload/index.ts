@@ -9,6 +9,15 @@ import type { PackListing } from '@shared/assets/pack'
 import type { TransitionDef } from '@shared/transitions/registry'
 import type { MusicAnalysis } from '@shared/automation/cutPlan'
 import type { IngestRequest } from '@shared/ingest/args'
+import type {
+  CompletionRequest,
+  CompletionResult,
+  GeminiConfig,
+  LlmProviderChoice,
+  LlmStatus,
+  OllamaConfig,
+  PublicDirectorConfig
+} from '@shared/director/provider'
 
 export interface ProbeResult {
   assets: MediaAsset[]
@@ -271,6 +280,25 @@ const api = {
     voice: string
     cached: boolean
   }> => ipcRenderer.invoke('voice:speak', request),
+
+  /** Which language models are usable, and why not when they are not. */
+  directorStatus: (): Promise<LlmStatus[]> => ipcRenderer.invoke('director:status'),
+  /** The models the local server has pulled. Rejects when it is not running. */
+  directorModels: (): Promise<string[]> => ipcRenderer.invoke('director:models'),
+  /** The provider config, with the key replaced by whether there is one. */
+  directorSettings: (): Promise<PublicDirectorConfig> => ipcRenderer.invoke('director:settings'),
+  /** Change part of it. A field that is absent keeps what is there. */
+  setDirectorSettings: (patch: {
+    provider?: LlmProviderChoice
+    ollama?: Partial<OllamaConfig>
+    gemini?: Partial<GeminiConfig>
+  }): Promise<PublicDirectorConfig> => ipcRenderer.invoke('director:setSettings', patch),
+  /**
+   * One structured completion: prompts and a schema in, the model's text out.
+   * Parse and validate it in the renderer — this only carries it.
+   */
+  directorComplete: (request: CompletionRequest): Promise<CompletionResult> =>
+    ipcRenderer.invoke('director:complete', request),
 
   transcribe: (request: {
     assetId: string

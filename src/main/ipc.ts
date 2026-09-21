@@ -27,6 +27,13 @@ import { FFMPEG_PATH, FFPROBE_PATH } from './ffmpeg/paths'
 import { ensureLooks } from './looks'
 import { separateStems } from './separate'
 import { speak, voiceOptions, voiceStatus } from './voice'
+import {
+  complete as directorComplete,
+  directorSettings,
+  directorStatus,
+  ollamaModels,
+  setDirectorSettings
+} from './director'
 import { loadCatalog, resolveAssetFile, assetsRootExists, assetsRoot } from './assets/scan'
 import { installPack, listPacks, refreshPacksInstalled, removePack } from './assets/packs'
 import { preparePlaceableFile, placeableName } from './assets/place'
@@ -683,6 +690,64 @@ export function registerIpc(getWindow: () => BrowserWindow | null): JobQueue {
       ...(provider === 'kokoro' || provider === 'hosted' || provider === 'auto'
         ? { provider }
         : {})
+    })
+  })
+
+  /* ------------------------------------------------------------- director */
+
+  /*
+   * A language model, from whichever engine the user has.
+   *
+   * The renderer sends a system prompt, a user prompt and a schema, and gets
+   * text back — it never learns which provider answered beyond the stamp on
+   * the result. The Gemini key goes IN through `director:setSettings` and
+   * never comes back out: `director:settings` reports `hasKey`, not the key.
+   * See shared/director/provider.ts.
+   */
+  ipcMain.handle('director:status', () => directorStatus())
+  ipcMain.handle('director:models', () => ollamaModels())
+  ipcMain.handle('director:settings', () => directorSettings())
+
+  ipcMain.handle('director:setSettings', (_e, payload: unknown) => {
+    const { provider, ollama, gemini } = (payload ?? {}) as {
+      provider?: unknown
+      ollama?: unknown
+      gemini?: unknown
+    }
+    const strings = (raw: unknown, keys: string[]): Record<string, string> => {
+      if (typeof raw !== 'object' || raw === null) return {}
+      const input = raw as Record<string, unknown>
+      const out: Record<string, string> = {}
+      for (const key of keys) if (typeof input[key] === 'string') out[key] = input[key] as string
+      return out
+    }
+    return setDirectorSettings({
+      ...(provider === 'auto' || provider === 'ollama' || provider === 'gemini' ? { provider } : {}),
+      ollama: strings(ollama, ['baseUrl', 'model']),
+      gemini: strings(gemini, ['apiKey', 'model'])
+    })
+  })
+
+  ipcMain.handle('director:complete', async (_e, payload: unknown) => {
+    const { system, user, schema, images, maxTokens, provider } = (payload ?? {}) as {
+      system?: unknown
+      user?: unknown
+      schema?: unknown
+      images?: unknown
+      maxTokens?: unknown
+      provider?: unknown
+    }
+    if (typeof system !== 'string' || typeof user !== 'string') {
+      throw new Error('Directing needs a system prompt and a user prompt')
+    }
+    if (typeof schema !== 'object' || schema === null) throw new Error('Directing needs a schema')
+    return directorComplete({
+      system,
+      user,
+      schema,
+      ...(Array.isArray(images) ? { images: images.filter((i): i is string => typeof i === 'string') } : {}),
+      ...(typeof maxTokens === 'number' ? { maxTokens } : {}),
+      ...(provider === 'auto' || provider === 'ollama' || provider === 'gemini' ? { provider } : {})
     })
   })
 
