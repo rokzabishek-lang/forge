@@ -5,19 +5,23 @@ import {
   DEFAULT_MAX_TOKENS,
   STATUS_TIMEOUT_MS,
   chooseProvider,
-  geminiReady,
   hasModel,
+  isLoopback,
   ollamaChatUrl,
   ollamaTagsUrl,
+  openaiChatUrl,
+  openaiConfigured,
+  openaiModelsUrl,
   publicConfig,
+  redactKey,
   suggestModel,
   type CompletionRequest,
   type CompletionResult,
   type DirectorConfig,
-  type GeminiConfig,
   type LlmProviderChoice,
   type LlmStatus,
   type OllamaConfig,
+  type OpenAiConfig,
   type PublicDirectorConfig
 } from '@shared/director/provider'
 import { getSettings, setSettings } from './store'
@@ -26,10 +30,11 @@ import { getSettings, setSettings } from './store'
  * The model providers, behind one door.
  *
  * The contract and the decisions are in shared/director/provider.ts, where
- * they are pure and tested. This is the part that talks to things: the Ollama
- * server on this machine over HTTP, and — next — Google's API with the user's
- * key. Both return the same thing, the model's text, and everything upstream
- * parses and validates it without learning which one answered.
+ * they are pure and tested. This is the part that actually talks to things:
+ * Ollama's API, and any OpenAI-shaped server — LM Studio on this machine, or
+ * a hosted API with the user's key. Both return the same thing, the model's
+ * text, and everything upstream parses and validates it without learning
+ * which one answered.
  *
  * Nothing here knows what a plan IS. It sends a system prompt, a user prompt
  * and a schema, and hands the text back.
@@ -45,7 +50,7 @@ export function directorConfig(): DirectorConfig {
   return {
     provider: saved?.provider ?? DEFAULT_DIRECTOR.provider,
     ollama: { ...DEFAULT_DIRECTOR.ollama, ...(saved?.ollama ?? {}) },
-    gemini: { ...DEFAULT_DIRECTOR.gemini, ...(saved?.gemini ?? {}) }
+    openai: { ...DEFAULT_DIRECTOR.openai, ...(saved?.openai ?? {}) }
   }
 }
 
@@ -58,19 +63,19 @@ export function directorSettings(): PublicDirectorConfig {
  * Change part of the config.
  *
  * A patch carries only what changed, so the settings panel can save the model
- * without resending the key it never had. `gemini.apiKey: ''` is how the key
+ * without resending the key it never had. `openai.apiKey: ''` is how the key
  * is cleared — a field that is absent keeps what is there.
  */
 export function setDirectorSettings(patch: {
   provider?: LlmProviderChoice
   ollama?: Partial<OllamaConfig>
-  gemini?: Partial<GeminiConfig>
+  openai?: Partial<OpenAiConfig>
 }): PublicDirectorConfig {
   const current = directorConfig()
   const next: DirectorConfig = {
     provider: patch.provider ?? current.provider,
     ollama: { ...current.ollama, ...(patch.ollama ?? {}) },
-    gemini: { ...current.gemini, ...(patch.gemini ?? {}) }
+    openai: { ...current.openai, ...(patch.openai ?? {}) }
   }
   return publicConfig(setSettings({ director: next }).director ?? next)
 }
@@ -103,9 +108,22 @@ async function fetchWithTimeout(
   }
 }
 
+function authHeaders(apiKey: string): Record<string, string> {
+  return apiKey.trim() ? { authorization: `Bearer ${apiKey.trim()}` } : {}
+}
+
+/** A host name for a message — never the whole URL, which may carry a path with a key in it. */
+function hostOf(baseUrl: string): string {
+  try {
+    return new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(baseUrl.trim()) ? baseUrl.trim() : `http://${baseUrl.trim()}`).host
+  } catch {
+    return 'that address'
+  }
+}
+
 /* ----------------------------------------------------------------- status */
 
-/** What the local server has pulled. Throws when it is not there. */
+/** What the Ollama server has pulled. Throws when it is not there. */
 export async function ollamaModels(config: OllamaConfig = directorConfig().ollama): Promise<string[]> {
   const response = await fetchWithTimeout(
     ollamaTagsUrl(config.baseUrl),
@@ -120,28 +138,50 @@ export async function ollamaModels(config: OllamaConfig = directorConfig().ollam
     .filter((name): name is string => typeof name === 'string')
 }
 
+/** What an OpenAI-shaped server offers. Throws when it is not there. */
+export async function openaiModels(config: OpenAiConfig = directorConfig().openai): Promise<string[]> {
+  const response = await fetchWithTimeout(
+    openaiModelsUrl(config.baseUrl),
+    { headers: authHeaders(config.apiKey) },
+    STATUS_TIMEOUT_MS,
+    'The server did not answer'
+  )
+  if (!response.ok) {
+    const detail = await response.text().catch(() => '')
+    throw new Error(
+      `The server returned ${response.status} when asked for its models. ${redactKey(detail, config.apiKey)}`.trim()
+    )
+  }
+  const data = (await response.json()) as { data?: { id?: unknown }[] }
+  return (data.data ?? []).map((m) => m.id).filter((id): id is string => typeof id === 'string')
+}
+
 /**
  * What each provider can currently do, and why not when it cannot.
  *
- * The local one is asked, not assumed: the server may be down, may have no
- * models, or may not have the one that was chosen — and each of those has a
- * different fix, so each gets its own sentence. The list of models rides
- * along for the picker.
+ * Each server is asked, not assumed: it may be down, may have no models, or
+ * may not have the one that was chosen — and each of those has a different
+ * fix, so each gets its own sentence. The list of models rides along for the
+ * picker.
  */
 export async function directorStatus(): Promise<LlmStatus[]> {
   const config = directorConfig()
+  const [ollama, openai] = await Promise.all([ollamaStatus(config.ollama), openaiStatus(config.openai)])
+  return [ollama, openai]
+}
 
+async function ollamaStatus(config: OllamaConfig): Promise<LlmStatus> {
   let models: string[] | null = null
   let reason: string | null = null
   try {
-    models = await ollamaModels(config.ollama)
+    models = await ollamaModels(config)
   } catch {
     reason = 'Ollama is not running. Start it, or install it from ollama.com'
   }
 
   let ready = false
   if (models) {
-    const chosen = config.ollama.model.trim()
+    const chosen = config.model.trim()
     if (models.length === 0) {
       reason = 'Ollama has no models yet — pull one, for example `ollama pull gemma4:e2b`'
     } else if (!chosen) {
@@ -156,28 +196,62 @@ export async function directorStatus(): Promise<LlmStatus[]> {
     }
   }
 
-  return [
-    {
-      id: 'ollama',
-      label: 'Ollama (on this machine)',
-      kind: 'local',
-      ready,
-      reason: ready ? null : reason,
-      ...(models ? { models } : {})
-    },
-    {
-      id: 'gemini',
-      label: 'Gemini API',
-      kind: 'hosted',
-      // Not wired yet, and status must say so rather than let `auto` pick a
-      // provider that would then throw. Its REST shape is verified with a live
-      // call before it ships, not assumed from a doc.
+  return {
+    id: 'ollama',
+    label: 'Ollama (on this machine)',
+    kind: 'local',
+    ready,
+    reason: ready ? null : reason,
+    ...(models ? { models } : {})
+  }
+}
+
+async function openaiStatus(config: OpenAiConfig): Promise<LlmStatus> {
+  const local = isLoopback(config.baseUrl)
+  const label = local ? 'Local server (LM Studio, llama.cpp)' : 'Hosted API'
+  const kind = local ? 'local' : 'hosted'
+
+  if (!openaiConfigured(config)) {
+    return {
+      id: 'openai',
+      label,
+      kind,
       ready: false,
-      reason: geminiReady(config.gemini)
-        ? 'Gemini directing is the next step — local models work today'
-        : 'Add your Gemini key in the Director settings'
+      // Deliberately not "invalid key": nothing has been tried yet.
+      reason: local
+        ? 'Add the server address in the Director settings — LM Studio uses http://127.0.0.1:1234/v1'
+        : 'Add the endpoint and your key in the Director settings'
     }
-  ]
+  }
+
+  let models: string[] | null = null
+  let reason: string | null = null
+  try {
+    models = await openaiModels(config)
+  } catch (err) {
+    reason = local
+      ? `No server answering at ${hostOf(config.baseUrl)} — in LM Studio, start the server from the Developer tab`
+      : redactKey(err instanceof Error ? err.message : String(err), config.apiKey)
+  }
+
+  let ready = false
+  if (models) {
+    const chosen = config.model.trim()
+    if (models.length === 0) {
+      reason = local ? 'The server has no model — load one in LM Studio' : 'The endpoint lists no models'
+    } else if (!chosen) {
+      const suggestion = suggestModel(models)
+      reason = suggestion
+        ? `Choose a model in the Director settings — ${suggestion} is available`
+        : 'Choose a model in the Director settings'
+    } else if (!hasModel(models, chosen)) {
+      reason = `${chosen} is not on the server${local ? ' — load it in LM Studio' : ''}`
+    } else {
+      ready = true
+    }
+  }
+
+  return { id: 'openai', label, kind, ready, reason: ready ? null : reason, ...(models ? { models } : {}) }
 }
 
 /* --------------------------------------------------------------- complete */
@@ -187,8 +261,10 @@ export async function complete(request: CompletionRequest): Promise<CompletionRe
   const choice: LlmProviderChoice = request.provider ?? config.provider
   const picked = chooseProvider(choice, await directorStatus())
   if ('error' in picked) throw new Error(picked.error)
-  if (picked.id === 'gemini') throw new Error('Gemini directing is not wired yet')
-  return completeOllama(request, config.ollama)
+  const images = request.images && request.images.length > 0 ? await encodeImages(request.images) : []
+  return picked.id === 'ollama'
+    ? completeOllama(request, images, config.ollama)
+    : completeOpenAi(request, images, config.openai)
 }
 
 /**
@@ -217,25 +293,31 @@ export async function encodeImages(paths: string[]): Promise<string[]> {
   return out
 }
 
+const count = (value: unknown): number | null =>
+  typeof value === 'number' && Number.isFinite(value) ? value : null
+
 /**
  * One structured completion from Ollama.
  *
  * `format` is the schema itself — the server constrains decoding to it, which
  * is the whole reason a plan can be trusted to have a shape (docs/DIRECTOR.md
- * §4). `think: false` because a reasoning trace costs seconds on CPU and the
- * schema already has a `reasoning` field where thinking belongs. Sampling is
- * pinned (temperature 0, one candidate, fixed seed) for repeatability on the
- * same machine — knowing that it does not survive a change of machine or
- * quantisation, which is why the plan is saved in the project rather than
- * re-derived (§10.3).
+ * §4). Thinking is off unless the caller asks, because a trace costs seconds
+ * on CPU and the schema already has a `reasoning` field where thinking
+ * belongs. Sampling is pinned (temperature 0, one candidate, fixed seed) for
+ * repeatability on the same machine — knowing that it does not survive a
+ * change of machine or quantisation, which is why the plan is saved in the
+ * project rather than re-derived (§10.3).
  */
-async function completeOllama(request: CompletionRequest, config: OllamaConfig): Promise<CompletionResult> {
-  const images = request.images && request.images.length > 0 ? await encodeImages(request.images) : []
+async function completeOllama(
+  request: CompletionRequest,
+  images: string[],
+  config: OllamaConfig
+): Promise<CompletionResult> {
   const body = {
     model: config.model,
     stream: false,
     format: request.schema,
-    think: false,
+    think: request.think ?? false,
     // Kept loaded between passes; a cold load is most of the first call.
     keep_alive: '10m',
     options: {
@@ -263,17 +345,10 @@ async function completeOllama(request: CompletionRequest, config: OllamaConfig):
     /*
      * Ollama's error bodies are `{"error": "..."}` and the sentence inside is
      * the useful part — "model 'x' not found" is exactly what the user needs
-     * to read. Shown whole; there is no key to redact on the local path.
+     * to read. Shown whole; there is no key on this path.
      */
     const detail = await response.text().catch(() => '')
-    let message = detail.slice(0, 400)
-    try {
-      const parsed = JSON.parse(detail) as { error?: unknown }
-      if (typeof parsed.error === 'string') message = parsed.error
-    } catch {
-      // Not JSON; the raw text will do.
-    }
-    throw new Error(`Ollama returned ${response.status}. ${message}`.trim())
+    throw new Error(`Ollama returned ${response.status}. ${errorSentence(detail)}`.trim())
   }
 
   const data = (await response.json()) as {
@@ -285,9 +360,6 @@ async function completeOllama(request: CompletionRequest, config: OllamaConfig):
   const text = typeof data.message?.content === 'string' ? data.message.content : ''
   if (!text.trim()) throw new Error('The model returned an empty answer')
 
-  const count = (value: unknown): number | null =>
-    typeof value === 'number' && Number.isFinite(value) ? value : null
-
   return {
     text,
     provider: 'ollama',
@@ -297,4 +369,110 @@ async function completeOllama(request: CompletionRequest, config: OllamaConfig):
     durationMs: Date.now() - started,
     truncated: data.done_reason === 'length'
   }
+}
+
+/**
+ * One structured completion from an OpenAI-shaped server.
+ *
+ * `response_format: json_schema` with `strict` is the same idea as Ollama's
+ * `format`, and LM Studio, llama-server and the hosted APIs all take it.
+ * Images travel as data URLs inside the user message, which is the one shape
+ * every implementation agrees on. The key, when there is one, goes only to
+ * this endpoint and is stripped from anything that comes back as an error.
+ */
+async function completeOpenAi(
+  request: CompletionRequest,
+  images: string[],
+  config: OpenAiConfig
+): Promise<CompletionResult> {
+  const userContent =
+    images.length > 0
+      ? [
+          { type: 'text', text: request.user },
+          ...images.map((b64) => ({ type: 'image_url', image_url: { url: `data:image/jpeg;base64,${b64}` } }))
+        ]
+      : request.user
+  const body = {
+    model: config.model,
+    stream: false,
+    temperature: 0,
+    seed: 7,
+    max_tokens: request.maxTokens ?? DEFAULT_MAX_TOKENS,
+    response_format: {
+      type: 'json_schema',
+      json_schema: { name: 'plan', strict: true, schema: request.schema }
+    },
+    messages: [
+      { role: 'system', content: request.system },
+      { role: 'user', content: userContent }
+    ]
+  }
+
+  const started = Date.now()
+  try {
+    const response = await fetchWithTimeout(
+      openaiChatUrl(config.baseUrl),
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...authHeaders(config.apiKey) },
+        body: JSON.stringify(body)
+      },
+      COMPLETION_TIMEOUT_MS,
+      'The model did not answer in time'
+    )
+
+    if (!response.ok) {
+      /*
+       * The body often explains the problem — a bad model name, a quota —
+       * and it is worth showing. It is also the one place a key could be
+       * echoed back, so it is truncated and scanned before it reaches the
+       * user.
+       */
+      const detail = await response.text().catch(() => '')
+      throw new Error(
+        `The server returned ${response.status}. ${redactKey(errorSentence(detail), config.apiKey)}`.trim()
+      )
+    }
+
+    const data = (await response.json()) as {
+      choices?: { message?: { content?: unknown }; finish_reason?: unknown }[]
+      usage?: { prompt_tokens?: unknown; completion_tokens?: unknown }
+    }
+    const choice = data.choices?.[0]
+    const text = typeof choice?.message?.content === 'string' ? choice.message.content : ''
+    if (!text.trim()) throw new Error('The model returned an empty answer')
+
+    return {
+      text,
+      provider: 'openai',
+      model: config.model,
+      promptTokens: count(data.usage?.prompt_tokens),
+      outputTokens: count(data.usage?.completion_tokens),
+      durationMs: Date.now() - started,
+      truncated: choice?.finish_reason === 'length'
+    }
+  } catch (err) {
+    throw new Error(redactKey(err instanceof Error ? err.message : String(err), config.apiKey))
+  }
+}
+
+/**
+ * The sentence inside an API error body.
+ *
+ * Ollama says `{"error": "…"}`; the OpenAI shape says `{"error": {"message":
+ * "…"}}`. Either way the sentence is what the user needs and the envelope is
+ * not. Anything else is shown as it came, clipped.
+ */
+function errorSentence(detail: string): string {
+  try {
+    const parsed = JSON.parse(detail) as { error?: unknown }
+    if (typeof parsed.error === 'string') return parsed.error
+    if (typeof parsed.error === 'object' && parsed.error !== null) {
+      const message = (parsed.error as { message?: unknown }).message
+      if (typeof message === 'string') return message
+    }
+  } catch {
+    // Not JSON; the raw text will do.
+  }
+  return detail.slice(0, 400)
 }

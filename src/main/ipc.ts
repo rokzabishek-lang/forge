@@ -700,19 +700,19 @@ export function registerIpc(getWindow: () => BrowserWindow | null): JobQueue {
    *
    * The renderer sends a system prompt, a user prompt and a schema, and gets
    * text back — it never learns which provider answered beyond the stamp on
-   * the result. The Gemini key goes IN through `director:setSettings` and
-   * never comes back out: `director:settings` reports `hasKey`, not the key.
-   * See shared/director/provider.ts.
+   * the result. A hosted key goes IN through `director:setSettings` and never
+   * comes back out: `director:settings` reports `hasKey`, not the key. See
+   * shared/director/provider.ts.
    */
   ipcMain.handle('director:status', () => directorStatus())
   ipcMain.handle('director:models', () => ollamaModels())
   ipcMain.handle('director:settings', () => directorSettings())
 
   ipcMain.handle('director:setSettings', (_e, payload: unknown) => {
-    const { provider, ollama, gemini } = (payload ?? {}) as {
+    const { provider, ollama, openai } = (payload ?? {}) as {
       provider?: unknown
       ollama?: unknown
-      gemini?: unknown
+      openai?: unknown
     }
     const strings = (raw: unknown, keys: string[]): Record<string, string> => {
       if (typeof raw !== 'object' || raw === null) return {}
@@ -722,19 +722,20 @@ export function registerIpc(getWindow: () => BrowserWindow | null): JobQueue {
       return out
     }
     return setDirectorSettings({
-      ...(provider === 'auto' || provider === 'ollama' || provider === 'gemini' ? { provider } : {}),
+      ...(provider === 'auto' || provider === 'ollama' || provider === 'openai' ? { provider } : {}),
       ollama: strings(ollama, ['baseUrl', 'model']),
-      gemini: strings(gemini, ['apiKey', 'model'])
+      openai: strings(openai, ['baseUrl', 'model', 'apiKey'])
     })
   })
 
   ipcMain.handle('director:complete', async (_e, payload: unknown) => {
-    const { system, user, schema, images, maxTokens, provider } = (payload ?? {}) as {
+    const { system, user, schema, images, maxTokens, think, provider } = (payload ?? {}) as {
       system?: unknown
       user?: unknown
       schema?: unknown
       images?: unknown
       maxTokens?: unknown
+      think?: unknown
       provider?: unknown
     }
     if (typeof system !== 'string' || typeof user !== 'string') {
@@ -747,7 +748,8 @@ export function registerIpc(getWindow: () => BrowserWindow | null): JobQueue {
       schema,
       ...(Array.isArray(images) ? { images: images.filter((i): i is string => typeof i === 'string') } : {}),
       ...(typeof maxTokens === 'number' ? { maxTokens } : {}),
-      ...(provider === 'auto' || provider === 'ollama' || provider === 'gemini' ? { provider } : {})
+      ...(typeof think === 'boolean' ? { think } : {}),
+      ...(provider === 'auto' || provider === 'ollama' || provider === 'openai' ? { provider } : {})
     })
   })
 

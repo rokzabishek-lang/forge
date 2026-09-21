@@ -26,7 +26,7 @@ function defaults(): Settings {
     director: {
       provider: DEFAULT_DIRECTOR.provider,
       ollama: { ...DEFAULT_DIRECTOR.ollama },
-      gemini: { ...DEFAULT_DIRECTOR.gemini }
+      openai: { ...DEFAULT_DIRECTOR.openai }
     }
   }
 }
@@ -63,19 +63,20 @@ function director(raw: unknown, base: NonNullable<Settings['director']>): NonNul
   const str = (value: unknown, fallback: string): string =>
     typeof value === 'string' ? value : fallback
   const ollama = typeof input.ollama === 'object' && input.ollama !== null ? (input.ollama as Record<string, unknown>) : {}
-  const gemini = typeof input.gemini === 'object' && input.gemini !== null ? (input.gemini as Record<string, unknown>) : {}
+  const openai = typeof input.openai === 'object' && input.openai !== null ? (input.openai as Record<string, unknown>) : {}
   return {
     provider:
-      input.provider === 'ollama' || input.provider === 'gemini' || input.provider === 'auto'
+      input.provider === 'ollama' || input.provider === 'openai' || input.provider === 'auto'
         ? input.provider
         : base.provider,
     ollama: {
       baseUrl: str(ollama.baseUrl, base.ollama.baseUrl),
       model: str(ollama.model, base.ollama.model)
     },
-    gemini: {
-      apiKey: str(gemini.apiKey, base.gemini.apiKey),
-      model: str(gemini.model, base.gemini.model)
+    openai: {
+      baseUrl: str(openai.baseUrl, base.openai.baseUrl),
+      model: str(openai.model, base.openai.model),
+      apiKey: str(openai.apiKey, base.openai.apiKey)
     }
   }
 }

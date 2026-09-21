@@ -12,10 +12,10 @@ import type { IngestRequest } from '@shared/ingest/args'
 import type {
   CompletionRequest,
   CompletionResult,
-  GeminiConfig,
   LlmProviderChoice,
   LlmStatus,
   OllamaConfig,
+  OpenAiConfig,
   PublicDirectorConfig
 } from '@shared/director/provider'
 
@@ -283,7 +283,7 @@ const api = {
 
   /** Which language models are usable, and why not when they are not. */
   directorStatus: (): Promise<LlmStatus[]> => ipcRenderer.invoke('director:status'),
-  /** The models the local server has pulled. Rejects when it is not running. */
+  /** The models the Ollama server has pulled. Rejects when it is not running. */
   directorModels: (): Promise<string[]> => ipcRenderer.invoke('director:models'),
   /** The provider config, with the key replaced by whether there is one. */
   directorSettings: (): Promise<PublicDirectorConfig> => ipcRenderer.invoke('director:settings'),
@@ -291,7 +291,7 @@ const api = {
   setDirectorSettings: (patch: {
     provider?: LlmProviderChoice
     ollama?: Partial<OllamaConfig>
-    gemini?: Partial<GeminiConfig>
+    openai?: Partial<OpenAiConfig>
   }): Promise<PublicDirectorConfig> => ipcRenderer.invoke('director:setSettings', patch),
   /**
    * One structured completion: prompts and a schema in, the model's text out.

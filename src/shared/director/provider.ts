@@ -4,18 +4,25 @@
  * Same shape as speech (`src/shared/voice/provider.ts`), for the same reason:
  * the choice between a model on this machine and somebody's API is not ours to
  * make, and either side should be swappable without the rest of the app
- * noticing. Two ship:
+ * noticing. Two ship, and they are two API SHAPES rather than two vendors:
  *
- *   ollama    Whatever Ollama is serving on this machine — Gemma 4, Qwen 3.5,
- *             anything with a chat template. No key, no per-use cost, which is
- *             what "fully local" has always meant here. Ollama is an external
- *             install rather than a bundled binary: the user already has it,
- *             it runs on both platforms, and its `format` field constrains the
- *             output to our schema at the decoder — the primitive the whole
- *             plan architecture rests on (docs/LLM.md, docs/DIRECTOR.md §4).
+ *   ollama    Ollama's own API. Singled out because its `format` field takes
+ *             a JSON schema and constrains decoding to it at the server —
+ *             the primitive the whole plan architecture rests on
+ *             (docs/LLM.md, docs/DIRECTOR.md §4) — and because its
+ *             OpenAI-compatible endpoint does NOT honour a schema.
  *
- *   gemini    Google's API, with the user's own key. The hosted tier sees the
- *             frames themselves where the local tier gets text.
+ *   openai    Anything shaped like OpenAI's /v1/chat/completions, with the
+ *             base URL, model and (optional) key supplied by the user. That
+ *             shape is worth singling out because it is not only OpenAI's:
+ *             LM Studio serves it on this machine at :1234, llama.cpp's
+ *             `llama-server` serves it, and Gemini serves it behind a
+ *             compatibility URL. So "local or hosted" is not a fork in the
+ *             code — the same request reaches a model in LM Studio or a
+ *             frontier model with a key, and the setting is about where the
+ *             compute happens. Whether an endpoint is local is read off its
+ *             address (`isLoopback`), because `auto` prefers the one that
+ *             costs nothing per use.
  *
  * This module is the contract and the arithmetic around it — no network, no
  * filesystem — so the decisions are testable without either engine installed.
@@ -26,7 +33,7 @@ import { redactKey } from '../voice/provider'
 
 export { redactKey }
 
-export type LlmProviderId = 'ollama' | 'gemini'
+export type LlmProviderId = 'ollama' | 'openai'
 
 /** What the user picked. `auto` means "whichever is actually usable". */
 export type LlmProviderChoice = LlmProviderId | 'auto'
@@ -38,52 +45,55 @@ export interface OllamaConfig {
   model: string
 }
 
-export interface GeminiConfig {
+export interface OpenAiConfig {
+  /** Base URL including the version path, e.g. `http://127.0.0.1:1234/v1`. */
+  baseUrl: string
+  /** A model id the server lists, e.g. `google/gemma-4-e2b`. Empty means not chosen. */
+  model: string
   /**
-   * The user's key for the user's own account.
+   * The user's key for the user's own account, when the endpoint wants one.
    *
-   * Held in the app's settings file, sent only to Google's endpoint, never
-   * logged, never in an error message, and never returned to the renderer —
-   * `publicConfig` is what crosses the bridge.
+   * A local server needs none. Held in the app's settings file, sent only to
+   * the endpoint named here, never logged, never in an error message, and
+   * never returned to the renderer — `publicConfig` is what crosses the
+   * bridge.
    */
   apiKey: string
-  model: string
 }
 
 export interface DirectorConfig {
   provider: LlmProviderChoice
   ollama: OllamaConfig
-  gemini: GeminiConfig
+  openai: OpenAiConfig
 }
 
 export const DEFAULT_OLLAMA: OllamaConfig = { baseUrl: 'http://127.0.0.1:11434', model: '' }
 
-/*
- * The model name is a guess until a live call has confirmed it, and the
- * settings UI lets the user type over it. A wrong name fails loudly with the
- * endpoint's own "model not found", which is a better failure than a wrong
- * default that quietly works worse.
- */
-export const DEFAULT_GEMINI: GeminiConfig = { apiKey: '', model: 'gemini-2.5-flash' }
+/** LM Studio's default server address, which is where a local OpenAI shape most often lives. */
+export const DEFAULT_OPENAI: OpenAiConfig = { baseUrl: 'http://127.0.0.1:1234/v1', model: '', apiKey: '' }
 
 export const DEFAULT_DIRECTOR: DirectorConfig = {
   provider: 'auto',
   ollama: DEFAULT_OLLAMA,
-  gemini: DEFAULT_GEMINI
+  openai: DEFAULT_OPENAI
 }
 
 /** The config as the renderer may see it: the key replaced by whether there is one. */
 export interface PublicDirectorConfig {
   provider: LlmProviderChoice
   ollama: OllamaConfig
-  gemini: { model: string; hasKey: boolean }
+  openai: { baseUrl: string; model: string; hasKey: boolean }
 }
 
 export function publicConfig(config: DirectorConfig): PublicDirectorConfig {
   return {
     provider: config.provider,
     ollama: { ...config.ollama },
-    gemini: { model: config.gemini.model, hasKey: config.gemini.apiKey.trim().length > 0 }
+    openai: {
+      baseUrl: config.openai.baseUrl,
+      model: config.openai.model,
+      hasKey: config.openai.apiKey.trim().length > 0
+    }
   }
 }
 
@@ -95,7 +105,7 @@ export interface LlmStatus {
   ready: boolean
   /** Why not, when `ready` is false. Shown to the user, so no jargon. */
   reason: string | null
-  /** The models the local server has pulled, when it answered. */
+  /** The models the server offers, when it answered. */
   models?: string[]
 }
 
@@ -108,6 +118,15 @@ export interface CompletionRequest {
   /** Absolute paths of images to show the model, when it can see. */
   images?: string[]
   maxTokens?: number
+  /**
+   * Whether a thinking model may think before it answers.
+   *
+   * Off by default: a trace costs seconds on CPU and the schema has its own
+   * `reasoning` field. But Ollama has an open bug where `think: false` makes
+   * it drop `format` for Gemma 4 and Qwen 3.5, so the caller may turn this on
+   * for a second try when the first answer came back as prose.
+   */
+  think?: boolean
   /** Overrides the configured choice for one call. */
   provider?: LlmProviderChoice
 }
@@ -128,30 +147,34 @@ export interface CompletionResult {
   truncated: boolean
 }
 
-/**
- * Is a chosen model among the ones a server has pulled?
- *
- * Ollama names every model with a tag and fills in `:latest` when none is
- * given, so a user who typed `gemma4` and a server that lists `gemma4:latest`
- * are talking about the same thing — and an exact comparison would tell them
- * to pull a model they already have.
- */
-export function hasModel(models: string[], chosen: string): boolean {
-  const want = chosen.trim()
-  if (!want) return false
-  const tagged = want.includes(':') ? want : `${want}:latest`
-  return models.some((m) => m === want || m === tagged)
-}
-
 /** How long a plan may take. Prefill on a CPU-only laptop is seconds, not minutes; three minutes is generous. */
 export const COMPLETION_TIMEOUT_MS = 180_000
-/** How long to wait for the local server to say it exists. */
+/** How long to wait for a server to say it exists. */
 export const STATUS_TIMEOUT_MS = 1_500
-/** Longest answer a spine plan can need, with headroom. */
-export const DEFAULT_MAX_TOKENS = 450
+/**
+ * Longest answer a plan can need when the caller gives no better number.
+ *
+ * Twelve segments at ~90 tokens each plus the wrapper. A flat 450 — the first
+ * figure here — could not hold the schema's own `maxItems`, so long plans
+ * were cut off at segment five and fell to the baseline every time.
+ */
+export const DEFAULT_MAX_TOKENS = 1_350
 
-export function geminiReady(config: GeminiConfig | undefined): boolean {
-  return Boolean(config && config.apiKey.trim().length > 0)
+/* ------------------------------------------------------------------ urls */
+
+/** Does this address point at this machine? */
+export function isLoopback(baseUrl: string): boolean {
+  try {
+    const host = new URL(withScheme(baseUrl)).hostname.replace(/^\[|\]$/g, '')
+    return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '0.0.0.0'
+  } catch {
+    return false
+  }
+}
+
+function withScheme(url: string): string {
+  const trimmed = url.trim()
+  return /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`
 }
 
 /**
@@ -163,7 +186,7 @@ export function geminiReady(config: GeminiConfig | undefined): boolean {
  */
 function ollamaBase(baseUrl: string): string {
   const trimmed = (baseUrl.trim() || DEFAULT_OLLAMA.baseUrl).replace(/\/+$/, '')
-  return trimmed.replace(/\/api(\/(chat|tags|generate))?$/, '')
+  return withScheme(trimmed).replace(/\/api(\/(chat|tags|generate|show|version))?$/, '')
 }
 
 export function ollamaChatUrl(baseUrl: string): string {
@@ -175,13 +198,60 @@ export function ollamaTagsUrl(baseUrl: string): string {
 }
 
 /**
+ * An OpenAI-shaped base with its path normalised.
+ *
+ * The convention for these servers is that the base INCLUDES the version
+ * path — LM Studio shows `http://localhost:1234/v1`, Gemini's compatibility
+ * URL ends in `/v1beta/openai` — so the path is kept and only the endpoint
+ * name is appended. A bare host with no path gets `/v1`, since that is what
+ * every local server means by it; a pasted full endpoint has the endpoint
+ * taken back off.
+ */
+function openaiBase(baseUrl: string): string {
+  const trimmed = withScheme(baseUrl.trim() || DEFAULT_OPENAI.baseUrl).replace(/\/+$/, '')
+  const stripped = trimmed.replace(/\/(chat\/completions|models)$/, '')
+  try {
+    const url = new URL(stripped)
+    if (url.pathname === '' || url.pathname === '/') return `${stripped}/v1`
+  } catch {
+    // Not a URL at all; the caller will get a fetch error naming it.
+  }
+  return stripped
+}
+
+export function openaiChatUrl(baseUrl: string): string {
+  return `${openaiBase(baseUrl)}/chat/completions`
+}
+
+export function openaiModelsUrl(baseUrl: string): string {
+  return `${openaiBase(baseUrl)}/models`
+}
+
+/**
+ * Is an OpenAI-shaped endpoint configured enough to try?
+ *
+ * An address, and a key unless the address is this machine — LM Studio and
+ * llama-server want none, and demanding one would be inventing a requirement
+ * the server does not have. Whether it is actually RUNNING is main's question.
+ */
+export function openaiConfigured(config: OpenAiConfig | undefined): boolean {
+  if (!config) return false
+  if (config.baseUrl.trim().length === 0) return false
+  return isLoopback(config.baseUrl) || config.apiKey.trim().length > 0
+}
+
+/* --------------------------------------------------------------- choosing */
+
+/**
  * Which provider actually runs, given what the user asked for and what works.
  *
  * `auto` prefers the local one — not because it is better but because it is
  * the one that costs nothing per use, and a default that quietly starts
- * spending someone's credits is a bad default however good it sounds. An
- * explicit choice is honoured or fails; the only thing `auto` may do is fall
- * back. Same rule as speech, same reasoning.
+ * spending someone's credits is a bad default however good it sounds. Among
+ * the two shapes, Ollama first (its schema support is the most direct), then
+ * an OpenAI-shaped endpoint — local before hosted. An explicit choice is
+ * honoured or fails; the only thing `auto` may do is fall back. Same rule as
+ * speech, same reasoning.
  */
 export function chooseProvider(
   choice: LlmProviderChoice,
@@ -196,14 +266,15 @@ export function chooseProvider(
     return { id: picked.id }
   }
 
-  const local = byId('ollama')
-  if (local?.ready) return { id: 'ollama' }
-  const hosted = byId('gemini')
-  if (hosted?.ready) return { id: 'gemini' }
+  const ollama = byId('ollama')
+  const openai = byId('openai')
+  const local = [ollama, openai].filter((p): p is LlmStatus => Boolean(p && p.ready && p.kind === 'local'))
+  if (local.length > 0) return { id: local[0].id }
+  if (openai?.ready) return { id: 'openai' }
 
-  // Both unavailable: report both reasons, so someone who meant to use their
+  // Nothing works: report every reason, so someone who meant to use their
   // key is not sent off to install Ollama.
-  const reasons = [local, hosted]
+  const reasons = [ollama, openai]
     .filter((p): p is LlmStatus => Boolean(p))
     .map((p) => `${p.label}: ${p.reason ?? 'not ready'}`)
   return {
@@ -212,14 +283,15 @@ export function chooseProvider(
 }
 
 /**
- * The model to preselect from what a server has pulled.
+ * The model to preselect from what a server offers.
  *
  * Never an embedding model — `nomic-embed-text` cannot chat, and "the first
  * one in the list" picked it on the very machine this was written on. The
  * order is the order these were measured or designed for, newest first.
+ * Matches anywhere in the id, because LM Studio names models `google/gemma-4-e2b`.
  */
-const PREFERRED = [/^gemma4\b/, /^qwen3\.5\b/, /^gemma3n\b/, /^gemma3\b/, /^qwen3\b/, /^llama3\.2\b/]
-const NOT_A_CHAT_MODEL = /embed|rerank|whisper|clip/i
+const PREFERRED = [/gemma-?4\b/i, /qwen-?3\.5\b/i, /gemma-?3n\b/i, /gemma-?3\b/i, /qwen-?3\b/i, /llama-?3\.2\b/i]
+const NOT_A_CHAT_MODEL = /embed|rerank|whisper|clip|text-embedding/i
 
 export function suggestModel(models: string[]): string | null {
   const chat = models.filter((m) => !NOT_A_CHAT_MODEL.test(m))
@@ -231,17 +303,35 @@ export function suggestModel(models: string[]): string | null {
 }
 
 /**
+ * Is a chosen model among the ones a server offers?
+ *
+ * Ollama names every model with a tag and fills in `:latest` when none is
+ * given, so a user who typed `gemma4` and a server that lists `gemma4:latest`
+ * are talking about the same thing — and an exact comparison would tell them
+ * to pull a model they already have. Other servers use exact ids.
+ */
+export function hasModel(models: string[], chosen: string): boolean {
+  const want = chosen.trim()
+  if (!want) return false
+  const tagged = want.includes(':') ? want : `${want}:latest`
+  return models.some((m) => m === want || m === tagged)
+}
+
+/* ---------------------------------------------------------------- parsing */
+
+/**
  * The JSON object in a model's answer.
  *
- * With `format` set, Ollama returns bare JSON. Hosted models, and any local one
- * a user points at without grammar support, wrap it in a code fence or lead
- * with a sentence — so this takes the fence off and cuts from the first `{`
- * to the last `}` rather than trusting the answer to start with a brace. It
- * must never depend on the provider behaving, because the provider is the
- * user's choice.
+ * With a schema enforced, a server returns bare JSON. Models that think out
+ * loud put the thought in `<think>` tags first; hosted models wrap the answer
+ * in a code fence or lead with a sentence; and a local server a user points
+ * at may do any of these. So the thought is removed, the fence taken off, and
+ * the text cut from the first `{` to the last `}` rather than trusted to
+ * start with a brace. It must never depend on the provider behaving, because
+ * the provider is the user's choice.
  */
 export function parseModelJson(text: string): { value: unknown } | { error: string } {
-  let body = text.trim()
+  let body = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim()
   const fence = body.match(/^```[a-z]*\s*([\s\S]*?)\s*```/i)
   if (fence) body = fence[1].trim()
 

@@ -314,6 +314,17 @@ export interface Clip {
    */
   generatedBy?: { rule: string; reason: string }
   /**
+   * What this clip's length and fade were BEFORE the director shortened it.
+   *
+   * The director trims the music to the ad it built. That is an edit to a
+   * clip the user placed, not a clip the director made, so `clearGenerated`
+   * cannot undo it by removing clips — and without a record, Clear leaves the
+   * song cut short and every later run builds its menu from the shorter clip,
+   * so the ad can only ever shrink. Stamped once, on the first trim, and
+   * restored and removed by `clearDirector`. See shared/director/apply.ts.
+   */
+  directorTrim?: { duration: Frames; fadeOut?: Frames }
+  /**
    * Camera move across a still.
    *
    * Without it a photo reel is a slideshow: a static image held for two seconds

@@ -285,9 +285,9 @@ function fakeBeats(durationMs: number): Record<string, unknown> {
 
 /** The director's provider settings, kept in memory so the panel round-trips. */
 const harnessDirector = {
-  provider: 'auto' as 'auto' | 'ollama' | 'gemini',
+  provider: 'auto' as 'auto' | 'ollama' | 'openai',
   ollama: { baseUrl: 'http://127.0.0.1:11434', model: '' },
-  gemini: { model: 'gemini-2.5-flash', hasKey: false }
+  openai: { baseUrl: 'http://127.0.0.1:1234/v1', model: '', hasKey: false }
 }
 
 /** How many frames each clip has baked, for the harness to read back. */
@@ -523,20 +523,21 @@ export function installHarnessBridge(): void {
      */
     directorStatus: async () => [
       { id: 'ollama' as const, label: 'Ollama (on this machine)', kind: 'local' as const, ready: false, reason: 'harness: no model server', models: [] },
-      { id: 'gemini' as const, label: 'Gemini API', kind: 'hosted' as const, ready: false, reason: 'harness: no network' }
+      { id: 'openai' as const, label: 'Local server (LM Studio, llama.cpp)', kind: 'local' as const, ready: false, reason: 'harness: no model server' }
     ],
     directorModels: async () => [],
-    directorSettings: async () => ({ ...harnessDirector, gemini: { ...harnessDirector.gemini } }),
+    directorSettings: async () => ({ ...harnessDirector, openai: { ...harnessDirector.openai } }),
     setDirectorSettings: async (patch: {
-      provider?: 'auto' | 'ollama' | 'gemini'
+      provider?: 'auto' | 'ollama' | 'openai'
       ollama?: Partial<{ baseUrl: string; model: string }>
-      gemini?: Partial<{ apiKey: string; model: string }>
+      openai?: Partial<{ baseUrl: string; apiKey: string; model: string }>
     }) => {
       if (patch.provider) harnessDirector.provider = patch.provider
       Object.assign(harnessDirector.ollama, patch.ollama ?? {})
-      if (patch.gemini?.model !== undefined) harnessDirector.gemini.model = patch.gemini.model
-      if (patch.gemini?.apiKey !== undefined) harnessDirector.gemini.hasKey = patch.gemini.apiKey.length > 0
-      return { ...harnessDirector, gemini: { ...harnessDirector.gemini } }
+      if (patch.openai?.baseUrl !== undefined) harnessDirector.openai.baseUrl = patch.openai.baseUrl
+      if (patch.openai?.model !== undefined) harnessDirector.openai.model = patch.openai.model
+      if (patch.openai?.apiKey !== undefined) harnessDirector.openai.hasKey = patch.openai.apiKey.length > 0
+      return { ...harnessDirector, openai: { ...harnessDirector.openai } }
     },
     directorComplete: unsupported('Directing with a model'),
 
