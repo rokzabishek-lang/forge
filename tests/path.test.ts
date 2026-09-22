@@ -13,10 +13,16 @@ describe('normalisePath', () => {
     expect(normalisePath([P(10, 0.2), P(10, 0.8)], 60)).toEqual([P(10, 0.8)])
   })
 
-  it('clamps waypoints into the clip', () => {
+  it('keeps waypoints outside the clip, so a trimmed move keeps its course', () => {
+    /*
+     * Replaces a test that asserted they were clamped in. Clamping squashed a
+     * waypoint past a trimmed edge onto the last frame, so the clip finished
+     * its move early instead of being part-way along it when it ends.
+     */
     const points = normalisePath([P(-20, 0), P(900, 1)], 60)
-    expect(points[0].frame).toBe(0)
-    expect(points[1].frame).toBe(60)
+    expect(points.map((p) => p.frame)).toEqual([-20, 900])
+    // Half-way along a move from x=-1 at 0 to x=1 at 120, seen in a 60-frame clip.
+    expect(pathAt([P(0, -1), P(120, 1)], 60, 60)!.x).toBeCloseTo(0, 6)
   })
 })
 

@@ -950,12 +950,66 @@ export function trackLimitReached(project: Project): boolean {
  * Split a clip at an absolute timeline frame.
  * Returns the two halves, or null when the frame is not strictly inside the clip.
  */
+/**
+ * Move everything a clip animates by `delta` frames of its own time.
+ *
+ * Keyframes and the motion path are measured from the clip's own first frame,
+ * so when that first frame moves — a head trim, the right half of a split — they
+ * have to move the other way to stay on the same PICTURE. The same lesson A1
+ * applied to the source in-point, one layer up: what is anchored to the content
+ * must not slide when the edit's edges do.
+ *
+ * Absent stays absent, so a clip that never animated serialises unchanged.
+ */
+export function rebaseAnimation(clip: Clip, delta: Frames): Pick<Clip, 'keyframes' | 'path'> {
+  const out: Pick<Clip, 'keyframes' | 'path'> = {}
+  if (clip.keyframes) {
+    out.keyframes =
+      delta === 0
+        ? clip.keyframes
+        : (Object.fromEntries(
+            Object.entries(clip.keyframes).map(([property, keys]) => [
+              property,
+              keys?.map((k) => ({ ...k, frame: k.frame + delta }))
+            ])
+          ) as KeyframeTracks)
+  }
+  if (clip.path) {
+    out.path = delta === 0 ? clip.path : clip.path.map((p) => ({ ...p, frame: p.frame + delta }))
+  }
+  return out
+}
+
 export function splitClip(clip: Clip, frame: Frames): [Clip, Clip] | null {
   if (frame <= clip.start || frame >= clipEnd(clip)) return null
   const leftDuration = frame - clip.start
-  const left: Clip = { ...clip, duration: leftDuration }
+
+  /*
+   * What belongs to an EDGE goes with that edge.
+   *
+   * A fade-in and an incoming transition describe the clip's head, and a
+   * fade-out its tail. Both halves used to get all three, so splitting a
+   * clip that dissolved in put a second dissolve at the cut — against nothing,
+   * which renders as a fade from black in the middle of the shot — and a clip
+   * with a fade-out faded out at the cut as well as at its end.
+   */
+  const { fadeOut: _tail, ...leftBase } = clip
+  const { fadeIn: _head, transitionIn: _incoming, ...rightBase } = clip
+
+  const left: Clip = { ...leftBase, duration: leftDuration }
   const right: Clip = {
-    ...clip,
+    ...rightBase,
+    /*
+     * Everything the clip animates, moved to the right half's own clock.
+     *
+     * Keyframes and the motion path are measured from a clip's first frame, so
+     * the right half used to replay the whole animation from its own start: a
+     * slow zoom split half-way began again at 1x on the far side of the cut.
+     * The left half keeps them unchanged — keys past its new end still shape
+     * the curve inside it, now that they are no longer squashed onto the last
+     * frame (keyframes.ts normaliseKeys).
+     */
+    ...rebaseAnimation(clip, -leftDuration),
     id: `${clip.id}-b`,
     start: frame,
     duration: clip.duration - leftDuration,
@@ -996,6 +1050,9 @@ export function trimStart(clip: Clip, newStart: Frames): Clip {
   const limited = Math.max(delta, -Math.floor(clip.inPoint / rate))
   return {
     ...clip,
+    // The animation stays on the picture it was drawn against, the same way
+    // the in-point keeps the source frame still. See `rebaseAnimation`.
+    ...rebaseAnimation(clip, -limited),
     start: clip.start + limited,
     duration: clip.duration - limited,
     inPoint: clip.inPoint + Math.round(limited * rate)

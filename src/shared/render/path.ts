@@ -13,9 +13,14 @@ import type { Clip, PathPoint } from '../timeline'
  */
 
 /** Sorted, de-duplicated, clamped into the clip. */
-export function normalisePath(path: PathPoint[], durationFrames: number): PathPoint[] {
+/**
+ * Sorted, whole-frame, one point per frame — not clamped to the clip, for the
+ * same reason as `normaliseKeys`: a point past a trimmed edge still shapes the
+ * move inside it, and clamping squashed it onto the last frame instead.
+ */
+export function normalisePath(path: PathPoint[], _durationFrames: number): PathPoint[] {
   const points = [...path]
-    .map((p) => ({ ...p, frame: Math.max(0, Math.min(durationFrames, Math.round(p.frame))) }))
+    .map((p) => ({ ...p, frame: Math.round(p.frame) }))
     .sort((a, b) => a.frame - b.frame)
 
   const unique: PathPoint[] = []

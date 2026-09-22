@@ -425,7 +425,16 @@ export function registerIpc(getWindow: () => BrowserWindow | null): JobQueue {
     }
     const dir = join(app.getPath('userData'), 'voiceover')
     await mkdir(dir, { recursive: true })
-    const base = typeof name === 'string' && name.trim() ? name.trim() : `Voice-over ${Date.now()}`
+    /*
+     * The name comes from the renderer, so it is sanitised HERE as well as
+     * there: it reaches a file path, and `../../somewhere` must become a name,
+     * not a place. Windows' illegal set, and no leading dots.
+     */
+    const cleaned =
+      typeof name === 'string'
+        ? basename(name).replace(/[<>:"/\\|?*\u0000-\u001f]/g, '').replace(/^[. ]+|[. ]+$/g, '').slice(0, 80)
+        : ''
+    const base = cleaned || `Voice-over ${Date.now()}`
     const raw = join(dir, `${base}.webm`)
     const wav = join(dir, `${base}.wav`)
     await writeFile(raw, Buffer.from(bytes as ArrayBuffer))

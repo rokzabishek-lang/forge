@@ -70,9 +70,24 @@ export function isAudioProperty(property: KeyedProperty): boolean {
 }
 
 /** Sorted, de-duplicated, clamped into the clip. */
-export function normaliseKeys(keys: Keyframe[], durationFrames: number): Keyframe[] {
+/**
+ * Sorted, whole-frame, one key per frame — and NOT clamped to the clip.
+ *
+ * It used to pin every key into `[0, duration]`, which looks like tidiness and
+ * was a distortion: trim a clip's tail and every key past the new end was
+ * squashed onto its last frame, so the curve arrived at the value of a key that
+ * should have been off the end — the fade that should have been half-way down
+ * finishing the whole way down. The curve is a function of the clip's own time;
+ * a key outside the visible stretch still shapes it inside, exactly as a
+ * keyframe past a trimmed edge does in every other editor. And it means trimming
+ * back OUT brings the keys back instead of having flattened them.
+ *
+ * `durationFrames` is kept in the signature because a dozen callers pass it;
+ * nothing here needs it any more.
+ */
+export function normaliseKeys(keys: Keyframe[], _durationFrames: number): Keyframe[] {
   const sorted = [...keys]
-    .map((k) => ({ ...k, frame: Math.max(0, Math.min(durationFrames, Math.round(k.frame))) }))
+    .map((k) => ({ ...k, frame: Math.round(k.frame) }))
     .sort((a, b) => a.frame - b.frame)
 
   const unique: Keyframe[] = []

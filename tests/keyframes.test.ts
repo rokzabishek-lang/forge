@@ -21,9 +21,25 @@ describe('normaliseKeys', () => {
     expect(normaliseKeys([key(30, 2), key(0, 1)], 60).map((k) => k.frame)).toEqual([0, 30])
   })
 
-  it('clamps into the clip', () => {
-    // A key past the end would animate towards a value never reached.
-    expect(normaliseKeys([key(-10, 1), key(999, 2)], 60).map((k) => k.frame)).toEqual([0, 60])
+  it('keeps keys outside the clip where they are', () => {
+    /*
+     * This test used to assert the opposite — "clamps into the clip", on the
+     * reasoning that a key past the end "would animate towards a value never
+     * reached". That is exactly what SHOULD happen after a trim: the curve is
+     * still heading for the key when the clip ends. Clamping squashed the key
+     * onto the last frame, so a fade trimmed half-way arrived at its bottom
+     * early. The test certified the distortion it was meant to prevent.
+     */
+    expect(normaliseKeys([key(-10, 1), key(999, 2)], 60).map((k) => k.frame)).toEqual([-10, 999])
+  })
+
+  it('evaluates the TRUE curve inside a clip whose keys run past its edges', () => {
+    // A ramp from 0 at frame 0 to 1 at frame 100, seen through a clip only 50
+    // frames long: at its last frame it is half-way, not at the top.
+    const ramp = [key(0, 0), key(100, 1)]
+    expect(valueAt(ramp, 50, 50, 0)).toBeCloseTo(0.5, 6)
+    // And from the other side: keys before the clip still decide where it opens.
+    expect(valueAt([key(-50, 0), key(50, 1)], 0, 50, 0)).toBeCloseTo(0.5, 6)
   })
 
   it('keeps the later of two keys at one frame', () => {

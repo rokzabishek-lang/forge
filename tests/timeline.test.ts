@@ -24,6 +24,8 @@ import {
   type Clip
 } from '@shared/timeline'
 import { sourceFrameAt } from '@shared/render/speed'
+import { valueAt } from '@shared/render/keyframes'
+import { pathAt } from '@shared/render/path'
 
 function clip(over: Partial<Clip> = {}): Clip {
   return {
@@ -701,5 +703,94 @@ describe('stackedSlot', () => {
     const busy: Project = { ...p, clips: [overlay('first', video[0].id, 0, 90)] }
     // The old behaviour is still there for clips that genuinely follow on.
     expect(findFreeSlot(busy, video[0].id, 30, 90)).toBe(90)
+  })
+})
+
+describe('split and trim keep what is relative to the clip', () => {
+  /*
+   * Keyframes and the motion path are measured from a clip's own first frame.
+   * `splitClip` copied them unchanged into both halves, so the right half
+   * replayed the whole animation from its own start — a slow zoom split
+   * half-way began again at 1x on the far side of the cut. And fades and an
+   * incoming transition went to BOTH halves, so splitting a clip that dissolved
+   * in put a second dissolve (a fade from black) in the middle of it.
+   */
+  const animated = (): Clip =>
+    clip({
+      start: 100,
+      duration: 60,
+      keyframes: {
+        // A linear ramp, and a SMOOTH segment — the one a boundary key could
+        // never reproduce exactly, which is why halves keep all their keys.
+        zoom: [
+          { frame: 0, value: 1 },
+          { frame: 30, value: 2, ease: 'smooth' },
+          { frame: 60, value: 1.2 }
+        ]
+      },
+      path: [
+        { frame: 0, x: -1, y: 0 },
+        { frame: 60, x: 1, y: 0.5 }
+      ]
+    })
+
+  /** The value a clip shows at a TIMELINE frame. */
+  const zoomAt = (c: Clip, frame: number): number =>
+    valueAt(c.keyframes?.zoom ?? [], frame - c.start, c.duration, 1)
+
+  it('shows exactly the same animation on both halves as the unsplit clip, frame by frame', () => {
+    const whole = animated()
+    for (const cut of [101, 115, 130, 145, 159]) {
+      const [left, right] = splitClip(whole, cut)!
+      for (let f = whole.start; f < whole.start + whole.duration; f++) {
+        const half = f < cut ? left : right
+        expect(zoomAt(half, f), `cut ${cut}, frame ${f}`).toBeCloseTo(zoomAt(whole, f), 9)
+        expect(pathAt(half.path!, f - half.start, half.duration)!.x, `path, cut ${cut}, frame ${f}`)
+          .toBeCloseTo(pathAt(whole.path!, f - whole.start, whole.duration)!.x, 9)
+      }
+    }
+  })
+
+  it('gives the head to the left half and the tail to the right', () => {
+    const c = clip({
+      start: 100, duration: 60, fadeIn: 10, fadeOut: 12,
+      transitionIn: { id: 'dissolve', durationFrames: 8 }
+    })
+    const [left, right] = splitClip(c, 130)!
+    expect(left.fadeIn).toBe(10)
+    expect(left.transitionIn).toEqual({ id: 'dissolve', durationFrames: 8 })
+    expect('fadeOut' in left).toBe(false)
+    expect(right.fadeOut).toBe(12)
+    expect('fadeIn' in right).toBe(false)
+    expect('transitionIn' in right).toBe(false)
+  })
+
+  it('keeps the animation on the picture when the head is trimmed', () => {
+    const whole = animated()
+    for (const newStart of [95, 110, 140]) {
+      const trimmed = trimStart(whole, newStart)
+      const from = Math.max(trimmed.start, whole.start)
+      for (let f = from; f < trimmed.start + trimmed.duration; f++) {
+        expect(zoomAt(trimmed, f), `head to ${newStart}, frame ${f}`).toBeCloseTo(zoomAt(whole, f), 9)
+      }
+    }
+  })
+
+  it('does not squash the curve when the tail is trimmed, and restores it when extended', () => {
+    const whole = animated()
+    const short = trimEnd(whole, 130, 1000)
+    // Half-way up the smooth segment is where the clip now ends — not at its top.
+    expect(zoomAt(short, 129)).toBeCloseTo(zoomAt(whole, 129), 9)
+    const back = trimEnd(short, 160, 1000)
+    for (let f = 100; f < 160; f++) expect(zoomAt(back, f)).toBeCloseTo(zoomAt(whole, f), 9)
+  })
+
+  it('leaves a clip with no animation without animation fields', () => {
+    // Absent stays absent, so an untouched clip serialises as it always did.
+    const [left, right] = splitClip(clip(), 120)!
+    for (const half of [left, right, trimStart(clip(), 110)]) {
+      expect('keyframes' in half).toBe(false)
+      expect('path' in half).toBe(false)
+    }
   })
 })

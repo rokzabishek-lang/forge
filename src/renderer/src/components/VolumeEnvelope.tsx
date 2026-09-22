@@ -140,7 +140,13 @@ export function VolumeEnvelope({
       ? `M 0 ${yOf(flat)} L ${width} ${yOf(flat)}`
       : [
           `M 0 ${yOf(valueAt(keys, 0, clip.duration, flat))}`,
-          ...keys.map((k) => `L ${k.frame * zoom} ${yOf(k.value)}`),
+          // Only the keys INSIDE the clip: one past a trimmed edge still shapes
+          // the curve — which is what the two edge samples above and below
+          // capture — but drawing to it would run the line backwards off the
+          // clip's left edge or forwards past its right.
+          ...keys
+            .filter((k) => k.frame > 0 && k.frame < clip.duration)
+            .map((k) => `L ${k.frame * zoom} ${yOf(k.value)}`),
           `L ${width} ${yOf(valueAt(keys, clip.duration, clip.duration, flat))}`
         ].join(' ')
 
@@ -179,7 +185,11 @@ export function VolumeEnvelope({
           className="pointer-events-none"
         />
       </svg>
-      {keys.map((key, index) => (
+      {/* Handles for the keys that are on the clip; `index` stays the real one,
+          because every drag and delete handler indexes the full list. */}
+      {keys.map((key, index) => ({ key, index }))
+        .filter(({ key }) => key.frame >= 0 && key.frame <= clip.duration)
+        .map(({ key, index }) => (
         <span
           key={`${key.frame}-${index}`}
           onPointerDown={grab(index)}
