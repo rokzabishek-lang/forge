@@ -648,6 +648,18 @@ export interface Track {
 }
 
 export interface Project {
+  /**
+   * This project's own identity, independent of where it is saved.
+   *
+   * Autosaves are keyed on it: a project saved under a new name is the same
+   * work, and keying on the path instead would orphan the old autosave and
+   * offer it back later as though it were a different project.
+   *
+   * Optional, because every project file written before it existed has none.
+   * `deserializeProject` mints one on the way in, so a project in memory
+   * always has one — it is the FILES that can be without.
+   */
+  id?: string
   name: string
   settings: ProjectSettings
   assets: MediaAsset[]
@@ -1370,8 +1382,14 @@ export function clipBefore(project: Project, clip: Clip): Clip | null {
   return index > 0 ? onTrack[index - 1] : null
 }
 
+/** A fresh project id, in the shape everything else here makes them. */
+export function newProjectId(): string {
+  return `p-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+}
+
 export function emptyProject(name = 'Untitled'): Project {
   return {
+    id: newProjectId(),
     name,
     settings: { ...DEFAULT_SETTINGS },
     assets: [],

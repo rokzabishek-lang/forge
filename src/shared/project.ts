@@ -1,5 +1,5 @@
 import type { Project } from './timeline'
-import { emptyProject } from './timeline'
+import { emptyProject, newProjectId } from './timeline'
 
 /**
  * The on-disk project format.
@@ -96,6 +96,17 @@ export function deserializeProject(raw: unknown): ProjectFile {
   if (!Array.isArray(project.tracks)) throw new ProjectFormatError('Project is missing its tracks')
   if (!Array.isArray(project.clips)) throw new ProjectFormatError('Project is missing its clips')
   if (!Array.isArray(project.assets)) throw new ProjectFormatError('Project is missing its media list')
+
+  /*
+   * An id for a file that predates them.
+   *
+   * Minted here rather than left undefined so everything downstream — the
+   * autosave key above all — can rely on a project in memory having one. It is
+   * written back on the next save, so a file only ever lacks an id once.
+   */
+  if (typeof project.id !== 'string' || project.id.length === 0) {
+    project.id = newProjectId()
+  }
 
   const settings = project.settings as Record<string, unknown>
   for (const key of ['width', 'height', 'fps'] as const) {

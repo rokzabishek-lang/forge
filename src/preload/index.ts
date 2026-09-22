@@ -81,10 +81,73 @@ const api = {
   chooseExportPath: (suggested: string): Promise<string | null> =>
     ipcRenderer.invoke('dialog:exportPath', suggested),
 
-  saveProject: (project: Project, path: string | null, decisions: DecisionRecord[]): Promise<string | null> =>
-    ipcRenderer.invoke('project:save', { project, path, decisions }),
+  saveProject: (
+    project: Project,
+    path: string | null,
+    decisions: DecisionRecord[],
+    forceDialog?: boolean
+  ): Promise<string | null> =>
+    ipcRenderer.invoke('project:save', { project, path, decisions, forceDialog }),
   openProject: (path?: string): Promise<OpenedProject | null> =>
     ipcRenderer.invoke('project:open', path),
+
+  /* --------------------------------------------------------- settings */
+
+  /** Everything that is the person's rather than the project's. */
+  getSettings: (): Promise<Record<string, unknown>> => ipcRenderer.invoke('settings:get'),
+  setSetting: (key: string, value: unknown): Promise<Record<string, unknown>> =>
+    ipcRenderer.invoke('settings:set', { key, value }),
+
+  /* --------------------------------------------- autosave and recovery */
+
+  autosaveProject: (
+    project: Project,
+    path: string | null,
+    decisions: DecisionRecord[]
+  ): Promise<string | null> =>
+    ipcRenderer.invoke('project:autosave', { project, path, decisions }),
+  /** Autosaves holding work their saved file does not, newest first. */
+  recoveries: (): Promise<
+    { projectId: string; file: string; savedAt: number; projectPath: string | null; name: string }[]
+  > => ipcRenderer.invoke('project:recoveries'),
+  recoverProject: (file: string): Promise<OpenedProject | null> =>
+    ipcRenderer.invoke('project:recover', file),
+  clearAutosave: (projectId: string): Promise<void> =>
+    ipcRenderer.invoke('project:clearAutosave', projectId),
+
+  /* ------------------------------------------------------------- menu */
+
+  /**
+   * What the menu needs to know to enable its items.
+   *
+   * A send rather than an invoke: it fires on every selection change and every
+   * edit, and nothing waits on the answer.
+   */
+  reportMenuState: (state: {
+    canUndo: boolean
+    canRedo: boolean
+    hasSelection: boolean
+    dirty: boolean
+  }): void => {
+    ipcRenderer.send('menu:state', state)
+  },
+  rememberRecent: (path: string): void => {
+    ipcRenderer.send('menu:recent', path)
+  },
+  /** The close guard waits on this before letting the window go. */
+  reportSaved: (ok: boolean): void => {
+    ipcRenderer.send('project:saved', ok)
+  },
+  onMenuCommand: (cb: (command: string) => void): (() => void) => {
+    const listener = (_e: unknown, command: string): void => cb(command)
+    ipcRenderer.on('menu:command', listener)
+    return () => ipcRenderer.removeListener('menu:command', listener)
+  },
+  onMenuOpen: (cb: (path: string) => void): (() => void) => {
+    const listener = (_e: unknown, path: string): void => cb(path)
+    ipcRenderer.on('menu:open', listener)
+    return () => ipcRenderer.removeListener('menu:open', listener)
+  },
 
   assetCatalog: (force?: boolean): Promise<{ catalog: AssetCatalog; root: string; exists: boolean }> =>
     ipcRenderer.invoke('assets:catalog', force),

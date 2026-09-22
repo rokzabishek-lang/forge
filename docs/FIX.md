@@ -332,7 +332,7 @@ said "less than or EQUAL to the width", which passes with the margin deleted —
 it now pins the spare room as a range, since a project fitted flush ends with
 its last clip against the edge and its trim handle half off-screen.
 
-### A7. Nothing is lost: autosave, close guard, recovery, a File menu
+### A7. Nothing is lost: autosave, close guard, recovery, a File menu — **DONE**
 
 **Where.** `src/main/index.ts:126-133` (no `close` handler; `before-quit` only
 stops the sidecar); `App.tsx:179-197` (Save/Open as bare hotkeys); no
@@ -354,6 +354,39 @@ stops the sidecar); `App.tsx:179-197` (Save/Open as bare hotkeys); no
 - **Save As**: `project:save` with `forceDialog`.
 - Undo/Redo arrows and a Save button in the header, so the keys are not the
   only way.
+
+**What was actually built.** The menu, the autosave, the recovery banner, the
+close guard, Save As, and a `⌘/` shortcuts sheet — which is what actually makes
+the keyboard discoverable, and is worth more than the header arrows it replaces
+in that role.
+
+Two things the item did not anticipate, both found while building it:
+
+- **Quitting walked straight past the close guard.** A window's `close` handler
+  does not run for a quit that has already been accepted, so `⌘Q` — the gesture
+  most people use to leave an app — was the one that lost their work. `before-quit`
+  routes through the window's own guard now, so there is one dialog and one answer.
+- **Saving from the close dialog had to be WAITED for.** The renderer owns the
+  project and the save is asynchronous, so closing on the reply alone raced the
+  write. The guard waits for `project:saved` and stays open if the write failed
+  or the dialog was cancelled.
+
+Projects gained an `id` (minted on load for files written before it existed), so
+an autosave is keyed to the WORK rather than to a path — a project saved under a
+new name is the same project. Saves are atomic now, write-then-rename: a crash
+mid-save could previously leave a truncated project where a whole one had been.
+
+**Also, at the user's request: saved export settings.** `ExportPreset` in
+`src/shared/render/presets.ts`, persisted in a new `settings.json` beside the
+autosaves. Three ship — reel, square, wide — so the picker is never empty, and
+each carries a filename suffix because otherwise the second export of one edit
+silently overwrites the first. This is also the unit a batch queue takes later
+(`docs/MARKET.md` Stage 4).
+
+Thirteen mutations, all killed. And the harness caught a crash before it
+shipped: the App reports its menu state during the first render, and neither
+fallback bridge had that method — so the whole window rendered into the error
+boundary. Both bridges now answer the startup calls.
 
 ### A8. Missing media is visible and relinkable; projects travel
 

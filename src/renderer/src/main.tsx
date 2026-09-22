@@ -27,7 +27,27 @@ function installFallbackBridge(): void {
     openProject: async () => null,
     revealPath: async () => undefined,
     openPath: async () => undefined,
-    onJobsChanged: () => () => undefined
+    onJobsChanged: () => () => undefined,
+    /*
+     * The ones the app calls while it is STARTING UP.
+     *
+     * The stubs above can throw because nothing calls them until a button is
+     * pressed, by which time the warning is on screen. These are different:
+     * the app reports its menu state and asks for its settings during the
+     * first render, so a throw here takes the window down with a stack trace
+     * instead of the message explaining that the bridge did not load.
+     */
+    getSettings: async () => ({}),
+    setSetting: async () => ({}),
+    autosaveProject: async () => null,
+    recoveries: async () => [],
+    recoverProject: async () => null,
+    clearAutosave: async () => undefined,
+    reportMenuState: () => undefined,
+    rememberRecent: () => undefined,
+    reportSaved: () => undefined,
+    onMenuCommand: () => () => undefined,
+    onMenuOpen: () => () => undefined
   } as unknown as Window['forge']
 
   queueMicrotask(() => {

@@ -21,6 +21,9 @@ const unsupported = (what: string) => async (): Promise<never> => {
   throw new Error(`${what} needs the real app — the harness has no ${what.toLowerCase()}`)
 }
 
+/** Settings for this page's lifetime; the harness has no disk to keep them on. */
+const harnessSettings: Record<string, unknown> = {}
+
 /** Files the harness has made, so they can be handed back as assets. */
 const made = new Map<string, { width: number; height: number }>()
 
@@ -564,7 +567,39 @@ export function installHarnessBridge(): void {
     openProject: async () => null,
     revealPath: async () => undefined,
     openPath: async () => undefined,
-    onJobsChanged: () => () => undefined
+    onJobsChanged: () => () => undefined,
+
+    /*
+     * Settings, held in memory for the session.
+     *
+     * Not faked as refusals like the render calls are: the app READS these
+     * during startup, so a throw here takes the whole window down — which is
+     * exactly what it did when they were missing and the App rendered into the
+     * error boundary instead. Nothing is written to disk, which is the honest
+     * limit; presets made here last as long as the page does.
+     */
+    getSettings: async () => ({ ...harnessSettings }),
+    setSetting: async (key: string, value: unknown) => {
+      harnessSettings[key] = value
+      return { ...harnessSettings }
+    },
+
+    /*
+     * Autosave, recovery and the menu: inert, by design.
+     *
+     * There is no main process to write a file or build a menu, and these are
+     * all fire-and-forget from the renderer's side — so doing nothing is the
+     * truthful answer rather than a refusal the caller would have to handle.
+     */
+    autosaveProject: async () => null,
+    recoveries: async () => [],
+    recoverProject: async () => null,
+    clearAutosave: async () => undefined,
+    reportMenuState: () => undefined,
+    rememberRecent: () => undefined,
+    reportSaved: () => undefined,
+    onMenuCommand: () => () => undefined,
+    onMenuOpen: () => () => undefined
   }
 
   window.forge = bridge as unknown as Window['forge']

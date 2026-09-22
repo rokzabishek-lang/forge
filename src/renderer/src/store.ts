@@ -21,6 +21,12 @@ import type { Mask, MaskShape } from '@shared/render/mask'
 import { clipSpeed, maxDurationAtSpeed, withClipSpeed } from '@shared/render/speed'
 import type { VoiceId } from '@shared/render/voice'
 import type { ClipKind } from '@shared/edit/clipKind'
+import {
+  BUILT_IN_PRESETS,
+  isBuiltIn,
+  sanePreset,
+  type ExportPreset
+} from '@shared/render/presets'
 import { defaultFadeFrames } from '@shared/render/audioFade'
 import { collapsesIntoBurst } from '@shared/edit/coalesce'
 import {
@@ -742,6 +748,27 @@ interface EditorState {
    */
   scrubAudio: boolean
   setScrubAudio: (on: boolean) => void
+  /**
+   * A request to export, from the menu.
+   *
+   * A counter rather than a boolean: exporting is an ACTION, and a boolean
+   * would have to be set and then cleared, with whoever forgets to clear it
+   * leaving the app permanently mid-export. Each increment is one request, and
+   * the panel that owns the export flow reacts to the change.
+   */
+  exportRequests: number
+  requestExport: () => void
+  /**
+   * Saved export settings — the person's, not the project's.
+   *
+   * Loaded once at startup and written back whenever one changes. The built-in
+   * three are always present and cannot be deleted, so the picker is never
+   * empty and never needs an explanation of what a preset is.
+   */
+  exportPresets: ExportPreset[]
+  loadPresets: () => Promise<void>
+  savePreset: (preset: ExportPreset) => Promise<void>
+  removePreset: (id: string) => Promise<void>
   select: (clipId: string | null) => void
   /**
    * Add to, remove from, or extend the selection — shift/cmd-click.
@@ -841,6 +868,8 @@ export const useEditor = create<EditorState>((set, get) => ({
   playing: false,
   loop: false,
   scrubAudio: true,
+  exportRequests: 0,
+  exportPresets: BUILT_IN_PRESETS,
   rangeIn: null,
   rangeOut: null,
   hiddenKinds: [],
@@ -3785,6 +3814,45 @@ export const useEditor = create<EditorState>((set, get) => ({
   setPlaying: (playing) => set({ playing }),
   setLoop: (loop) => set({ loop }),
   setScrubAudio: (scrubAudio) => set({ scrubAudio }),
+  requestExport: () => set((s) => ({ exportRequests: s.exportRequests + 1 })),
+
+  loadPresets: async () => {
+    try {
+      const settings = await window.forge.getSettings()
+      const saved = Array.isArray(settings.exportPresets) ? settings.exportPresets : []
+      /*
+       * Built-ins first and always, then whatever was saved — sanitised
+       * against the matching built-in so a hand-edited settings file cannot
+       * put a CRF of 900 or a dead aspect in front of ffmpeg.
+       */
+      const mine = saved.map((raw) =>
+        sanePreset(raw as Partial<ExportPreset>, BUILT_IN_PRESETS[0])
+      )
+      set({ exportPresets: [...BUILT_IN_PRESETS, ...mine.filter((p) => !isBuiltIn(p))] })
+    } catch {
+      // A settings file that cannot be read is a reason to use the built-ins,
+      // not a reason to say so: nothing the user can act on has happened.
+    }
+  },
+
+  savePreset: async (preset) => {
+    const clean = sanePreset(preset, BUILT_IN_PRESETS[0])
+    const next = [
+      ...get().exportPresets.filter((p) => p.id !== clean.id && !isBuiltIn(p)),
+      clean
+    ]
+    set({ exportPresets: [...BUILT_IN_PRESETS, ...next] })
+    await window.forge.setSetting('exportPresets', next).catch(() => undefined)
+  },
+
+  removePreset: async (id) => {
+    // A built-in is not the user's to delete; it is what the picker falls back
+    // to, and an empty picker teaches nothing.
+    if (isBuiltIn({ id })) return
+    const next = get().exportPresets.filter((p) => p.id !== id && !isBuiltIn(p))
+    set({ exportPresets: [...BUILT_IN_PRESETS, ...next] })
+    await window.forge.setSetting('exportPresets', next).catch(() => undefined)
+  },
 
   setRangeIn: (frame) =>
     set((s) => {

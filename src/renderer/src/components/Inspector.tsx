@@ -1,4 +1,4 @@
-import { useCallback, useState, type ReactNode } from 'react'
+import { useCallback, useRef, useState, type ReactNode } from 'react'
 import { Download, FolderOpen, Loader2, X } from 'lucide-react'
 import {
   DEFAULT_COLOR,
@@ -33,6 +33,12 @@ import { SpeedPanel } from './SpeedPanel'
 import { TextStylePicker } from './TextStylePicker'
 import { TextAnimationPicker } from './TextAnimationPicker'
 import { Slider } from './Slider'
+import {
+  isBuiltIn,
+  newPresetId,
+  pathForPreset,
+  type ExportPreset
+} from '@shared/render/presets'
 import { useEffect, useMemo, useMemo as useMemoLocal, useState as useLocalState } from 'react'
 
 function Field({ label, value }: { label: string; value: string }): ReactNode {
@@ -158,6 +164,9 @@ export function Inspector(): ReactNode {
   }, [style.fontFamily, ensureFont, catalogLoaded])
   const [exporting, setExporting] = useState(false)
   const [draft, setDraft] = useState(false)
+  const exportPresets = useEditor((s) => s.exportPresets)
+  const savePreset = useEditor((s) => s.savePreset)
+  const removePreset = useEditor((s) => s.removePreset)
 
   const clip = project.clips.find((c) => c.id === selectedClipId) ?? null
   /*
@@ -171,17 +180,28 @@ export function Inspector(): ReactNode {
   const asset = clip ? project.assets.find((a) => a.id === clip.assetId) ?? null : null
   const fps = project.settings.fps
 
-  const onExport = useCallback(async () => {
+  /**
+   * Export, optionally through a saved preset.
+   *
+   * A preset carries the canvas, the quality, the loudness target and the
+   * caption decision, so exporting the same edit as a reel and as a YouTube
+   * cut is two clicks rather than six settings changed from memory twice. Its
+   * suffix goes in the filename, because without one the second export would
+   * silently overwrite the first — they are both named after the project.
+   */
+  const onExport = useCallback(async (preset?: ExportPreset) => {
     if (project.clips.length === 0) {
       notify('Add something to the timeline first', 'info')
       return
     }
     setExporting(true)
     try {
+      const wanted: AspectKey = preset?.aspect ?? aspect
       const suggested =
-        `${project.name || 'Untitled'}-${aspect.replace(':', 'x')}${draft ? '-draft' : ''}.mp4`
-      const outputPath = await window.forge.chooseExportPath(suggested)
-      if (!outputPath) return
+        `${project.name || 'Untitled'}-${wanted.replace(':', 'x')}${draft ? '-draft' : ''}.mp4`
+      const chosen = await window.forge.chooseExportPath(suggested)
+      if (!chosen) return
+      const outputPath = preset ? pathForPreset(chosen, preset) : chosen
 
       /*
        * Draft halves the canvas, which is a quarter of the pixels.
@@ -192,7 +212,7 @@ export function Inspector(): ReactNode {
        * difference, filter threading made no difference, and replacing the
        * overlay chain with concat was ten times SLOWER.
        */
-      const full = ASPECTS[aspect]
+      const full = ASPECTS[preset?.aspect ?? aspect]
       const canvas = draft
         ? { width: Math.round(full.width / 2 / 2) * 2, height: Math.round(full.height / 2 / 2) * 2 }
         : { width: full.width, height: full.height }
@@ -238,8 +258,8 @@ export function Inspector(): ReactNode {
         project: useEditor.getState().project,
         outputPath,
         canvas,
-        crf: draft ? 26 : 20,
-        preset: 'medium',
+        crf: draft ? 26 : (preset?.crf ?? 20),
+        preset: preset?.preset ?? 'medium',
         captionOverlay: captionOverlay
           ? {
               listPath: captionOverlay.listPath,
@@ -254,6 +274,22 @@ export function Inspector(): ReactNode {
       setExporting(false)
     }
   }, [project, aspect, notify])
+
+  /*
+   * The File > Export… menu item, which cannot call this directly.
+   *
+   * The export flow lives here, in the panel that owns it, and the menu is in
+   * the main process. A counter in the store is the join: the menu increments
+   * it, this reacts to the change. Skipping the first value matters — without
+   * it, mounting the Inspector would start an export nobody asked for.
+   */
+  const exportRequests = useEditor((s) => s.exportRequests)
+  const seenExportRequest = useRef(exportRequests)
+  useEffect(() => {
+    if (exportRequests === seenExportRequest.current) return
+    seenExportRequest.current = exportRequests
+    void onExport()
+  }, [exportRequests, onExport])
 
   return (
     <div className="flex h-full flex-col bg-ink-900">
@@ -641,6 +677,71 @@ export function Inspector(): ReactNode {
           {exporting ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
           {draft ? 'Export draft' : 'Export'}
         </button>
+
+        {/*
+          Saved settings, one click each.
+          
+          The same ad goes out as a reel, a square and a wide cut, and each of
+          those is six decisions made again from memory. A preset carries all
+          six and puts its own suffix in the filename, because otherwise the
+          second export silently overwrites the first — both are named after
+          the project.
+        */}
+        <div className="mt-2">
+          <div className="mb-1 flex items-center justify-between">
+            <span className="text-[10px] uppercase tracking-wide text-ink-600">
+              Saved settings
+            </span>
+            <button
+              onClick={() => {
+                const name = window.prompt(
+                  'Name these settings',
+                  `${ASPECTS[aspect].label} ${draft ? 'draft' : 'final'}`
+                )
+                if (!name) return
+                void savePreset({
+                  id: newPresetId(),
+                  name,
+                  aspect,
+                  crf: draft ? 26 : 20,
+                  preset: 'medium',
+                  loudness: project.settings.loudness ?? null,
+                  captions: project.captions.enabled,
+                  suffix: `-${aspect.replace(':', 'x')}`
+                })
+              }}
+              className="rounded px-1.5 py-0.5 text-[10px] text-ink-400 hover:bg-ink-800 hover:text-ink-200"
+            >
+              + Save current
+            </button>
+          </div>
+          <div className="space-y-1">
+            {exportPresets.map((item) => (
+              <div key={item.id} className="group/preset flex items-center gap-1">
+                <button
+                  onClick={() => void onExport(item)}
+                  disabled={exporting}
+                  title={`${item.aspect} · CRF ${item.crf} · ${item.preset}${
+                    item.loudness === null ? '' : ` · ${item.loudness} LUFS`
+                  }`}
+                  className="flex min-w-0 flex-1 items-center gap-1.5 rounded bg-ink-850 px-2 py-1 text-left text-[11px] text-ink-300 transition-colors hover:bg-ink-800 hover:text-ink-100 disabled:opacity-50"
+                >
+                  <Download size={11} className="shrink-0 text-ink-500" />
+                  <span className="truncate">{item.name}</span>
+                </button>
+                {!isBuiltIn(item) && (
+                  <button
+                    onClick={() => void removePreset(item.id)}
+                    title="Forget these settings"
+                    className="rounded p-1 text-ink-600 opacity-0 transition-opacity hover:text-red-400 group-hover/preset:opacity-100"
+                  >
+                    <X size={11} />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="border-b border-ink-800 px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-ink-400">

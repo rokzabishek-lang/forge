@@ -1,10 +1,15 @@
 import { BrowserWindow, dialog, ipcMain, shell, app } from 'electron'
-import { access, readFile, writeFile } from 'node:fs/promises'
-import { basename } from 'node:path'
+import { access, mkdir, readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises'
+import { basename, join } from 'node:path'
 import type { Job } from '@shared/types'
 import type { MediaAsset, ParallaxBake, Project } from '@shared/timeline'
 import { ALL_EXTENSIONS } from '@shared/media'
 import { deserializeProject, serializeProject, type DecisionRecord } from '@shared/project'
+import {
+  autosaveName,
+  worthRecovering,
+  type AutosaveRecord
+} from '@shared/project/recovery'
 import { probeMany } from './ffmpeg/probe'
 import { getSidecar } from './sidecar/service'
 import { SIDECAR_METHODS } from '@shared/sidecar/protocol'
@@ -999,15 +1004,163 @@ export function registerIpc(getWindow: () => BrowserWindow | null): JobQueue {
 
   /* -------------------------------------------------------------- project */
 
-  ipcMain.handle('project:save', async (_e, payload: unknown) => {
+  /**
+   * Write, then rename.
+   *
+   * A partial file where a project used to be is worse than no file: it opens,
+   * it parses as far as the truncation, and what it loses is silent. `rename`
+   * within one directory is atomic on both platforms, so the project file is
+   * either the old one or the new one and never half of either.
+   *
+   * The temp name carries the process id: two windows autosaving the same
+   * project at the same moment would otherwise race on one temp file and each
+   * rename the other's half-written bytes into place.
+   */
+  const writeAtomic = async (target: string, text: string): Promise<void> => {
+    const temp = `${target}.${process.pid}.tmp`
+    await writeFile(temp, text, 'utf8')
+    try {
+      await rename(temp, target)
+    } catch (err) {
+      await unlink(temp).catch(() => undefined)
+      throw err
+    }
+  }
+
+  /* ------------------------------------------------------------ settings */
+
+  /**
+   * One JSON file in userData for everything that is the PERSON's rather than
+   * the project's — export presets today, and whatever else outlives a
+   * project later.
+   *
+   * Read fresh on every call rather than cached: it is a few hundred bytes,
+   * it is touched only when a panel opens, and a cache here would be a second
+   * copy of the truth that a second window could disagree with.
+   */
+  const settingsFile = (): string => join(app.getPath('userData'), 'settings.json')
+
+  const readSettings = async (): Promise<Record<string, unknown>> => {
+    try {
+      const raw: unknown = JSON.parse(await readFile(settingsFile(), 'utf8'))
+      return typeof raw === 'object' && raw !== null && !Array.isArray(raw)
+        ? (raw as Record<string, unknown>)
+        : {}
+    } catch {
+      // Missing is the normal first-run case, and a corrupt file must not stop
+      // the app — defaults are a better answer than a dialog nobody can act on.
+      return {}
+    }
+  }
+
+  ipcMain.handle('settings:get', () => readSettings())
+
+  ipcMain.handle('settings:set', async (_e, payload: unknown) => {
+    const { key, value } = (payload ?? {}) as { key?: unknown; value?: unknown }
+    if (typeof key !== 'string' || !key) throw new Error('Expected a settings key')
+    const current = await readSettings()
+    const next = { ...current, [key]: value }
+    // Atomic, like the project save: a truncated settings file would lose
+    // every preset rather than the one being written.
+    await writeAtomic(settingsFile(), JSON.stringify(next, null, 2))
+    return next
+  })
+
+  /* ------------------------------------------------- autosave & recovery */
+
+  const autosaveDir = (): string => join(app.getPath('userData'), 'autosave')
+
+  ipcMain.handle('project:autosave', async (_e, payload: unknown) => {
     const { project, path, decisions } = (payload ?? {}) as {
       project?: Project
       path?: unknown
       decisions?: DecisionRecord[]
     }
+    if (!project) return null
+
+    const dir = autosaveDir()
+    await mkdir(dir, { recursive: true })
+    const target = join(dir, autosaveName(project.id ?? 'untitled'))
+    const file = serializeProject(project, { appVersion: app.getVersion(), decisions })
+    await writeAtomic(
+      target,
+      JSON.stringify({ ...file, autosave: { projectPath: typeof path === 'string' ? path : null } })
+    )
+    return target
+  })
+
+  /**
+   * Autosaves that hold work the saved file does not.
+   *
+   * Read at launch, before anything is opened. A file that cannot be parsed is
+   * skipped rather than thrown: one corrupt autosave must not stop the app
+   * offering the other three, and it certainly must not stop the app starting.
+   */
+  ipcMain.handle('project:recoveries', async () => {
+    const dir = autosaveDir()
+    let names: string[] = []
+    try {
+      names = await readdir(dir)
+    } catch {
+      return []
+    }
+
+    const records: AutosaveRecord[] = []
+    for (const name of names) {
+      if (!name.endsWith('.forge.json')) continue
+      const file = join(dir, name)
+      try {
+        const raw = JSON.parse(await readFile(file, 'utf8')) as {
+          project?: { id?: string; name?: string }
+          autosave?: { projectPath?: string | null }
+        }
+        const id = raw.project?.id
+        if (!id) continue
+        const savedAt = (await stat(file)).mtimeMs
+        const projectPath = raw.autosave?.projectPath ?? null
+        const projectSavedAt = projectPath
+          ? await stat(projectPath).then((st) => st.mtimeMs, () => null)
+          : null
+        records.push({
+          projectId: id,
+          file,
+          savedAt,
+          projectPath,
+          projectSavedAt,
+          name: raw.project?.name || 'Untitled'
+        })
+      } catch {
+        // A half-written or hand-edited autosave is not a reason to offer
+        // nothing; it is a reason to skip this one.
+      }
+    }
+    return worthRecovering(records)
+  })
+
+  /** Take a recovery: read it back as an ordinary project file. */
+  ipcMain.handle('project:recover', async (_e, file: unknown) => {
+    if (typeof file !== 'string') throw new Error('Expected an autosave path')
+    const raw = JSON.parse(await readFile(file, 'utf8')) as { autosave?: { projectPath?: string } }
+    const parsed = deserializeProject(raw)
+    return { ...parsed, path: raw.autosave?.projectPath ?? null }
+  })
+
+  /** Clear an autosave once its work is safely in the real file. */
+  ipcMain.handle('project:clearAutosave', async (_e, projectId: unknown) => {
+    if (typeof projectId !== 'string') return
+    await unlink(join(autosaveDir(), autosaveName(projectId))).catch(() => undefined)
+  })
+
+  ipcMain.handle('project:save', async (_e, payload: unknown) => {
+    const { project, path, decisions, forceDialog } = (payload ?? {}) as {
+      project?: Project
+      path?: unknown
+      decisions?: DecisionRecord[]
+      forceDialog?: boolean
+    }
     if (!project) throw new Error('Nothing to save')
 
-    let target = typeof path === 'string' ? path : null
+    let target = forceDialog === true ? null : typeof path === 'string' ? path : null
     if (!target) {
       const window = getWindow()
       if (!window) return null
@@ -1021,7 +1174,10 @@ export function registerIpc(getWindow: () => BrowserWindow | null): JobQueue {
     }
 
     const file = serializeProject(project, { appVersion: app.getVersion(), decisions })
-    await writeFile(target, JSON.stringify(file, null, 2), 'utf8')
+    // Atomic here too: a crash mid-save used to be able to leave a truncated
+    // project where a whole one had been.
+    await writeAtomic(target, JSON.stringify(file, null, 2))
+    app.addRecentDocument(target)
     return target
   })
 
