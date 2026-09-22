@@ -477,6 +477,36 @@ were found that the list did not know about, three of them shipped:
 
 ## Phase B — the other three
 
+> **Where it stands (2026-09-22).** B1 is done (`55094a2`). A split/trim fix
+> found while planning B2 is pushed (`c5eb1ea`) — its mutation check is still
+> to run. B2 is STARTED: `src/shared/render/encode.ts` (codec families; the
+> arguments measured working on the Mac binary for x264, x265 and ProRes,
+> including bitrate mode) and `src/main/render/encoders.ts` (the runtime
+> probe) exist and are **not yet wired in**. B3 is mapped, not started.
+>
+> Before building from the line numbers below, note the survey found them
+> stale in several places: the encoder tail is `plan.ts` ~1568, not 1509; the
+> export dialog `ipc.ts` ~998, not 989; the fps default `timeline.ts` ~709, not
+> 656; the dialogue gate `plan.ts` ~1444, not 1419.
+>
+> Facts found on the way that are not in the items:
+> - **Listing an encoder is not evidence it works.** `h264_videotoolbox` is in
+>   `-encoders` on the Mac build and fails to open a session (`-12908`) — at
+>   least inside the development sandbox. The app probes at runtime, with the
+>   export's own arguments, and never assumes. Windows encoders cannot be
+>   measured from the Mac at all; the probe is the measurement.
+> - **Resolution is a multiplier on `request.canvas`**, not new `ASPECTS`
+>   entries: `aspectOf` matches by ratio, so a 3840×2160 entry would collide
+>   with 1920×1080.
+> - **A range export must drop clips wholly outside it** before trimming the
+>   output, or a five-second range of a ten-minute edit decodes all ten minutes.
+> - **`Preview.tsx` builds its crop without `crop.ts`**, so the preview and the
+>   export can disagree on an odd-sized crop — upstream of every B3 filter.
+>   Fix it before B3.
+> - **Still not rebased on a split:** `clip.motion` is normalised over the
+>   whole clip, so each half of a split replays the full camera move; text
+>   animations likewise. Keyframes and the motion path ARE rebased now.
+
 ### B1. The audio surface: gain, solo, meters, detach, video-track mute, voice-over — **DONE**
 
 **Where.** Level clamps at `store.ts:3411`, `Inspector.tsx:768-775`,
