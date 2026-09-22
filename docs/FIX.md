@@ -84,7 +84,7 @@ and the unclamped local rate. Not migrated: a 2× clip split *before* this fix
 has a wrong in-point saved in the project file, and nothing can tell that apart
 from a deliberate one — re-trim it.
 
-### A2. Transitions play in the preview
+### A2. Transitions play in the preview — **DONE**
 
 **Where.** `src/renderer/src/components/Preview.tsx:817-826` (the only
 transition code: a linear alpha), `src/shared/transitions/registry.ts`.
@@ -107,6 +107,42 @@ the stencil: on a synthetic left-to-right gradient mask, the opaque fraction
 rises monotonically from 0 to 1 across progress and equals the geq formula's
 prediction at three points. Harness: drop five different transitions on one
 cut and screenshot each at 50 % — they must differ.
+
+**What was actually built.** All of it, and two things the item did not
+anticipate — one a bug found on the way in, one a decision to take.
+
+`TransitionDef` gains `preview(progress, ctx)` returning `{alpha, dx, dy,
+scale}`, and each effect is now one `Effect` object carrying both spellings, so
+`fadeIn`, `slide` and `punchIn` each emit their filters and their numbers from
+one place. `both()` composes them, which is exactly what "slide and fade" and
+"zoom in" are. The luma wipe's ramp is a third spelling of one formula:
+`lumaAlphaRamp` is the line, `lumaAlphaExpression` is its geq, `lumaAlpha`
+evaluates it, and `lumaAlphaMatrix` is the `feColorMatrix` the preview's
+stencil runs on the GPU (`src/renderer/src/wipe.ts`) rather than a per-pixel
+loop over an ImageData sixty times a second.
+
+**The bug.** `position` REPLACED the clip's resting place in the render, and
+every transition's expression rests at 0 — so sliding a picture-in-picture, a
+corner logo or a shrunk title card on flew it to the top-left of the canvas and
+left it there for the rest of the shot. It is an offset added to the box now,
+which is also the only way the preview could agree with it: the draw loop has
+nothing to offset from except the box.
+
+**The decision, not taken here.** "Zoom in" does not zoom. `scale`+`crop` runs
+on the clip's whole chain, so it is a constant 15 % punch-in that outlives its
+own transition and leaves the shot permanently tighter — always has. The
+preview now shows that rather than hiding it behind a dissolve, and a test pins
+it deliberately. Making it animate means a time-varying zoom on the ffmpeg side
+(`zoompan`, or a second overlay), and both halves must move together.
+
+Nine mutations, all killed, against a green 1640-test gate. Measured in the
+harness rather than assumed: five transitions on one cut at the same frame give
+five distinct canvases; a slide enters fully off-canvas and settles; and the
+real `feColorMatrix` Chromium builds gives, half way through a ripple mask,
+49 % fully opaque and 40 % fully clear with an 11 % soft band between them —
+a wipe, where a fade would have been 100 % partial. The harness entry now also
+exposes `useCatalog`, because the 405 library wipes are otherwise unreachable
+in the one place they can be watched running.
 
 ### A3. The mix is heard: envelope, fades, crossfades, ducking
 

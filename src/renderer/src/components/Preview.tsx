@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode
+} from 'react'
 import type React from 'react'
 import { X } from 'lucide-react'
 import type { Clip, CropRect, MediaAsset, Project } from '@shared/timeline'
@@ -10,7 +18,13 @@ import {
   projectDuration
 } from '@shared/timeline'
 import { ASPECTS, useEditor } from '../store'
-import { mediaUrl } from '../media'
+import { assetUrl, mediaUrl } from '../media'
+import {
+  previewAt,
+  type TransitionDef,
+  type TransitionPreview
+} from '@shared/transitions/registry'
+import { forgetWipe, wipedSource } from '../wipe'
 import { motionSourceRect } from '@shared/render/motion'
 import { clipBox, parallaxBakeFor, planeShare } from '@shared/render/plan'
 import { pathAt } from '@shared/render/path'
@@ -106,8 +120,18 @@ interface Layer {
   clip: Clip
   asset: MediaAsset
   element: MediaElement
-  /** 0..1 — below 1 only while a transition is blending this clip in. */
-  alpha: number
+  /**
+   * What this clip's incoming transition is doing at this frame — the same
+   * fade, offset and punch-in the render compiles into its filters, evaluated
+   * here from the same factory so the two cannot drift.
+   */
+  transition: TransitionPreview
+  /**
+   * A luma wipe's mask and how far the reveal has swept, when this clip is
+   * being wiped on. Separate from `transition` because a wipe is a stencil
+   * rather than a number: the draw loop builds it, the formula does not.
+   */
+  wipe?: { mask: HTMLImageElement; progress: number; softness?: number }
   /** 0..1 across the clip, for the camera move. */
   progress: number
   /** Elapsed seconds into the clip; only shake needs it. */
@@ -168,20 +192,29 @@ function withoutCorsOnError(element: HTMLImageElement | HTMLVideoElement, url: s
   )
 }
 
+interface SourceRect {
+  sx: number
+  sy: number
+  sw: number
+  sh: number
+}
+
 /**
- * The source rectangle a keyframed zoom shows.
+ * A centred sub-rectangle — what any punch-in narrows the view to.
  *
- * Centred, matching the renderer's zoompan, which takes `iw/2-(iw/zoom/2)`.
+ * Centred, matching the renderer's zoompan, which takes `iw/2-(iw/zoom/2)`,
+ * and its transitions' `crop=iw/f:ih/f`, which crops about the middle too.
  */
-function zoomedRect(
-  width: number,
-  height: number,
-  zoom: number
-): { sx: number; sy: number; sw: number; sh: number } {
+function insetRect(rect: SourceRect, zoom: number): SourceRect {
   const z = Math.max(1, zoom)
-  const sw = width / z
-  const sh = height / z
-  return { sx: (width - sw) / 2, sy: (height - sh) / 2, sw, sh }
+  const sw = rect.sw / z
+  const sh = rect.sh / z
+  return { sx: rect.sx + (rect.sw - sw) / 2, sy: rect.sy + (rect.sh - sh) / 2, sw, sh }
+}
+
+/** The source rectangle a keyframed zoom shows. */
+function zoomedRect(width: number, height: number, zoom: number): SourceRect {
+  return insetRect({ sx: 0, sy: 0, sw: width, sh: height }, zoom)
 }
 
 /**
@@ -337,6 +370,10 @@ export function Preview(): ReactNode {
 
   const fps = project.settings.fps
   const ensureFont = useCatalog((s) => s.ensureFont)
+  // Wipes live in the asset library, so the preview needs both the table of
+  // transitions and the root their mask files are relative to.
+  const transitions = useCatalog((s) => s.transitions)
+  const assetsRoot = useCatalog((s) => s.root)
 
   // Canvas silently falls back to a default face for a font it does not have.
   useEffect(() => {
@@ -404,6 +441,44 @@ export function Preview(): ReactNode {
     planePool.current.set(file, image)
     return image
   }, [repaint])
+
+  /**
+   * A wipe's mask, pooled by file.
+   *
+   * Keyed by the library-relative path rather than by clip, because one mask
+   * commonly reveals every cut in a reel — and there are 405 of them, so
+   * decoding one per cut is exactly the waste the plane pool exists to avoid.
+   */
+  const maskPool = useRef(new Map<string, HTMLImageElement>())
+  const wipeMaskFor = useCallback(
+    (file: string): HTMLImageElement => {
+      const existing = maskPool.current.get(file)
+      if (existing) return existing
+      const image = new Image()
+      const url = assetUrl(assetsRoot, file)
+      image.addEventListener('load', repaint)
+      image.crossOrigin = 'anonymous'
+      withoutCorsOnError(image, url)
+      image.src = url
+      image.style.display = 'none'
+      holderRef.current?.appendChild(image)
+      maskPool.current.set(file, image)
+      return image
+    },
+    [repaint, assetsRoot]
+  )
+
+  /**
+   * Every transition by id, masks included.
+   *
+   * `transitionById` knows only the eight built-ins; the other 405 arrive from
+   * the asset library at startup, and looking a wipe up in the built-in table
+   * would find nothing and quietly draw a hard cut.
+   */
+  const transitionsById = useMemo(
+    () => new Map<string, TransitionDef>(transitions.map((t) => [t.id, t])),
+    [transitions]
+  )
 
   /**
    * The greyscale half of a clip sticker, pooled beside the colour it belongs to.
@@ -545,6 +620,9 @@ export function Preview(): ReactNode {
       // and a stencil, and none of them should outlive the clip.
       forgetMask(clipId)
       forgetTextPreview(clipId)
+      // And the wipe's, which is keyed `<clip>#wipe` for the same reason a
+      // sticker's matte is: it belongs to the clip, not to the mask file.
+      forgetWipe(`${clipId}#wipe`)
     }
 
     // Plane images outlive individual clips, so they are evicted against the
@@ -814,16 +892,39 @@ export function Preview(): ReactNode {
           height: bake.height
         }))
 
-        // During its transition the incoming clip is partially transparent, so
-        // whatever it overlaps shows through — the same thing the render does.
-        let alpha = 1
-        const transition = clip.transitionIn
-        if (transition && transition.durationFrames > 0) {
-          const into = frame - clip.start
-          if (into < transition.durationFrames) {
-            alpha = Math.max(0, Math.min(1, into / transition.durationFrames))
-          }
-        }
+        /*
+         * The transition, played rather than approximated.
+         *
+         * Every transition used to fade in here, whatever it actually was: a
+         * slide dissolved instead of sliding, a punch-in dissolved instead of
+         * punching in, and each of the 405 wipes dissolved instead of wiping.
+         * The preview was not showing the edit, it was showing the one effect
+         * the preview knew how to draw — so a cut was judged on timing that
+         * only a dissolve would have.
+         */
+        const transitionFrames = clip.transitionIn?.durationFrames ?? 0
+        const def = clip.transitionIn ? transitionsById.get(clip.transitionIn.id) : undefined
+        const swept =
+          transitionFrames > 0 ? Math.max(0, Math.min(1, into / transitionFrames)) : 1
+        const canvas = ASPECTS[aspect]
+        const transition = previewAt(def, swept, {
+          duration: transitionFrames / project.settings.fps,
+          canvasWidth: canvas.width,
+          canvasHeight: canvas.height
+        })
+        /*
+         * A wipe only exists while it is sweeping. Past the transition the
+         * render's geq has saturated to fully opaque, which is the same picture
+         * as no stencil at all — and cheaper to draw that way.
+         */
+        const wipe =
+          def?.mask && transitionFrames > 0 && into < transitionFrames
+            ? {
+                mask: wipeMaskFor(def.mask),
+                progress: swept,
+                ...(def.softness === undefined ? {} : { softness: def.softness })
+              }
+            : undefined
         const keyed = {
           zoom: valueAt(clip.keyframes?.zoom ?? [], into, clip.duration, 1),
           rotation: valueAt(clip.keyframes?.rotation ?? [], into, clip.duration, 0),
@@ -839,13 +940,14 @@ export function Preview(): ReactNode {
           shapeClip && shapeAsset ? elementFor(shapeClip, shapeAsset) : undefined
 
         return {
-          clip, asset, element, alpha, progress, elapsed, planes, keyed,
+          clip, asset, element, transition, progress, elapsed, planes, keyed,
           matteElement, matteClip: shapeClip,
-          stickerMatte: stickerMatteFor(clip, asset)
+          stickerMatte: stickerMatteFor(clip, asset),
+          ...(wipe ? { wipe } : {})
         }
       })
     },
-    [project, elementFor, planeFor, stickerMatteFor]
+    [project, aspect, elementFor, planeFor, stickerMatteFor, transitionsById, wipeMaskFor]
   )
 
   /* ---------------------------------------------------------- draw loop */
@@ -1031,7 +1133,9 @@ export function Preview(): ReactNode {
         const w = layer.asset.width ?? naturalW
         const h = layer.asset.height ?? naturalH
         const layerFit = fitTransform(w, h, leftBox.width, leftBox.height)
-        ctx.globalAlpha = layer.alpha
+        // The source viewport shows the whole frame as it is being blended in;
+        // where it lands and how tight it is are the output's business.
+        ctx.globalAlpha = layer.transition.alpha
         ctx.drawImage(
           picture(layer),
           leftBox.x + layerFit.offsetX,
@@ -1128,11 +1232,26 @@ export function Preview(): ReactNode {
             ? coverTransform(crop.width, crop.height, boxOf.width * px, boxOf.height * py)
             : fitTransform(crop.width, crop.height, boxOf.width * px, boxOf.height * py)
 
-        ctx.globalAlpha = layer.alpha * boxOf.opacity * layer.keyed.opacity
+        /*
+         * A wipe whose mask has not decoded yet falls back to the fade.
+         *
+         * Without this the clip would pop to fully visible for the frame or two
+         * a first decode takes — louder and more wrong than the approximation
+         * it replaces, and it would happen exactly when the user drops a new
+         * wipe on a cut and looks straight at it.
+         */
+        const pending = layer.wipe !== undefined && !elementReady(layer.wipe.mask)
+        const blend = pending ? layer.wipe!.progress : layer.transition.alpha
+        ctx.globalAlpha = blend * boxOf.opacity * layer.keyed.opacity
+
+        // A transition offsets the clip from where it rests — the same number
+        // the renderer adds to the box inside its overlay expression.
+        const slideX = layer.transition.dx
+        const slideY = layer.transition.dy
 
         const destination = [
-          frame.x + (boxOf.x + driftX) * px + inner.offsetX,
-          frame.y + (boxOf.y + driftY) * py + inner.offsetY,
+          frame.x + (boxOf.x + driftX + slideX) * px + inner.offsetX,
+          frame.y + (boxOf.y + driftY + slideY) * py + inner.offsetY,
           crop.width * inner.scale,
           crop.height * inner.scale
         ] as const
@@ -1195,18 +1314,21 @@ export function Preview(): ReactNode {
           ctx.save()
           ctx.beginPath()
           ctx.rect(
-            frame.x + (boxOf.x + driftX) * px,
-            frame.y + (boxOf.y + driftY) * py,
+            frame.x + (boxOf.x + driftX + slideX) * px,
+            frame.y + (boxOf.y + driftY + slideY) * py,
             boxOf.width * px,
             boxOf.height * py
           )
           ctx.clip()
         }
 
-        // A flat move: the same rectangle the renderer's zoompan would show.
-        const rect = motion
+        // A flat move: the same rectangle the renderer's zoompan would show,
+        // narrowed again by a transition that punches in.
+        const moved = motion
           ? motionSourceRect(motion, layer.progress, layer.elapsed, crop.width, crop.height)
           : zoomedRect(crop.width, crop.height, layer.keyed.zoom)
+        const rect =
+          layer.transition.scale === 1 ? moved : insetRect(moved, layer.transition.scale)
 
         /*
          * The shape, live.
@@ -1269,7 +1391,38 @@ export function Preview(): ReactNode {
             )
           : null
 
-        if (masked) {
+        /*
+         * The wipe, last, over whatever the clip had already become.
+         *
+         * It is a stencil on the finished layer, so it composes with a matte, a
+         * mask and a grade instead of competing with them — the same order the
+         * render uses, where the wipe's alpha is multiplied into the one
+         * stencil every other shape has already contributed to.
+         *
+         * A masked or matted layer arrives as a canvas already cut to the
+         * destination, so it is wiped whole; a plain picture is wiped straight
+         * from its source rectangle.
+         */
+        const finished = masked ?? shaped
+        const wiped =
+          layer.wipe && !pending
+            ? wipedSource(
+                `${layer.clip.id}#wipe`,
+                finished ?? picture(layer),
+                layer.wipe.mask,
+                finished
+                  ? { sx: 0, sy: 0, sw: destination[2], sh: destination[3] }
+                  : { sx: crop.x + rect.sx, sy: crop.y + rect.sy, sw: rect.sw, sh: rect.sh },
+                destination[2],
+                destination[3],
+                layer.wipe.progress,
+                layer.wipe.softness
+              )
+            : null
+
+        if (wiped) {
+          ctx.drawImage(wiped, destination[0], destination[1], destination[2], destination[3])
+        } else if (masked) {
           ctx.drawImage(masked, destination[0], destination[1], destination[2], destination[3])
         } else if (shaped) {
           // Already cut to size by the scratch canvas, so it draws whole.

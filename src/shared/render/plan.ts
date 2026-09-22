@@ -1221,13 +1221,22 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
     const place = transition?.position
       ? (() => {
           const p = transition.position(context)
-          // Same shift as the resting box: a transition places the clip's
-          // picture, and the picture no longer starts at the stream's corner.
-          const shift = (expression: string, grow: number): string =>
-            grow === 0 ? expression : `(${expression})-${grow}`
+          /*
+           * An OFFSET from where the clip rests, added to its box.
+           *
+           * This used to replace the box outright, and the transition's own
+           * expressions rest at 0 — so a slide onto a picture-in-picture, a
+           * corner logo or anything else not filling the frame flew it to the
+           * top-left of the canvas and left it there for the rest of the shot.
+           * The box carries the same `-grow` shift it does without a
+           * transition: a turned clip's frame is grown to keep its corners, and
+           * the picture no longer starts at the stream's corner.
+           */
+          const from = (rest: number, expression: string): string =>
+            `(${rest})+(${expression.replace(/\bS\b/g, start)})`
           return {
-            x: shift(p.x.replace(/\bS\b/g, start), growX),
-            y: shift(p.y.replace(/\bS\b/g, start), growY)
+            x: from(box.x - growX, p.x),
+            y: from(box.y - growY, p.y)
           }
         })()
       : hasPath(clip)

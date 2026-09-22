@@ -4,6 +4,7 @@ import App from '../App'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { installHarnessBridge } from './bridge'
 import { useEditor } from '../store'
+import { useCatalog } from '../catalog'
 import '../styles.css'
 
 /**
@@ -25,6 +26,18 @@ installHarnessBridge()
  * only the harness hands out a reference to it.
  */
 ;(window as unknown as { forgeStore: typeof useEditor }).forgeStore = useEditor
+
+/*
+ * The catalog too, for the same reason and one more.
+ *
+ * The asset library is the one thing the harness genuinely cannot have — the
+ * bridge returns an empty transition list, because those 405 masks are files on
+ * a disk the browser cannot reach. So the only way to drive a luma wipe here is
+ * to put one in by hand, pointing at a mask the dev server will serve. Without
+ * this the entire wipe path — 405 of the 413 transitions — is unreachable in
+ * the one place it can be watched running.
+ */
+;(window as unknown as { forgeCatalog: typeof useCatalog }).forgeCatalog = useCatalog
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
