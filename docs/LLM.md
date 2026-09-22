@@ -5,8 +5,10 @@ to ask. Most of this file is rejected options, because the expensive mistakes
 here are the plausible ones, and every one below was argued for before it was
 dropped.
 
-Nothing in this file is built yet. It is the design, settled in conversation,
-written down because a conversation does not survive a new session.
+The design was settled in conversation and written down because a conversation
+does not survive a new session. The section at the end, **Built**, says how
+much of it exists and what changed on the way — read that before assuming
+anything here is still only a plan.
 
 ---
 
@@ -301,3 +303,96 @@ helped.
 If step 4 works on a 2B with real footage, the architecture is proven and the
 rest is repetition. If it does not, a week was spent finding out instead of
 three months.
+
+---
+
+## Built — 21–22 September 2026
+
+The spine pass, end to end, with **no model run against it yet**. That last
+clause is the important one: everything below is tested against fixtures and
+a fake server, and clicked through in the harness with the baseline plan. The
+first live measurement is still ahead, and it is the one that matters.
+
+### Where it lives
+
+| file | what |
+|---|---|
+| `src/shared/director/menu.ts` | slots, cut candidates, transition families — the MENU the model picks from |
+| `src/shared/director/schema.ts` | the plan's JSON schema; `spineSchema(menu)` puts the menu's ids in as enums |
+| `src/shared/director/conforms.ts` | a checker for the flat subset of JSON Schema; refuses drift outside it |
+| `src/shared/director/validate.ts` | the semantic rows: repair where unambiguous, reject where not; emits a LAYOUT |
+| `src/shared/director/baseline.ts` | the standard cut — always validates; the fallback and the harness's provider |
+| `src/shared/director/prompt.ts` | the playbook (system) and the menu as tables (user); `maxTokensFor` |
+| `src/shared/director/apply.ts` | plan → ordinary clips, in one project; `clearDirector` undoes exactly its own work |
+| `src/shared/director/provider.ts` | the contract, as voice: `ollama` and `openai` (LM Studio, llama-server, hosted) |
+| `src/main/director.ts` | the two HTTP clients, status, image encoding |
+| `src/renderer/src/store.ts` `direct()` | the runner; `fillAssetPath` for history-less bakes |
+| `src/renderer/src/components/Director.tsx` | the panel, first in the Auto tab |
+
+### What changed from the design above, and why
+
+The transitions pass was **folded into the spine**: each segment carries an
+`enter` family (`cut` or one that is installed) and the app picks the member.
+One call instead of two — on CPU each call is seconds of prefill — and a
+ten-item enum instead of twenty-five ids to invent. The N-pass runner shape
+survives for captions and stickers, which genuinely need the spine first.
+
+Seven fields per segment: `slot`, `role`, `ends_at`, `enter`, `headline`,
+`punch_word`, `why`. `punch_word` is the word copied verbatim, not an index —
+models are bad at counting and good at copying — and it lands on
+`TextSpec.highlight` with a colour AND a scale, because with neither the
+accent is invisible. `why` goes on the clip as its reason (DIRECTOR.md §3
+step 5). `role` gained `offer`.
+
+The design was reviewed adversarially before implementation — 24 agents, 18
+findings confirmed — and the ones that would have shipped as bugs:
+
+- **The music trim was a one-way edit.** Shortening the user's music clip to
+  the ad, with `clearGenerated` unable to see it, meant every later run built
+  its menu from the shorter clip: the ad could only ever shrink. `Clip.
+  directorTrim` records the original; `clearDirector` restores it; the runner
+  clears BEFORE building the menu.
+- **N background bakes were N undo entries.** Five cards, six presses of
+  Undo, five doing nothing visible. `fillAssetPath` never touches history;
+  `addTextClip` and `rebakePaper` use it too.
+- **Orphaned card assets became slots.** `clearGenerated` removes clips, not
+  assets; a baked card with no clip has a real path and passed every filter.
+  Slots now exclude `size === 0` — the mark every self-drawn asset carries —
+  and `clearDirector` removes the cards' assets with them.
+- **`cut_end` came from the decode window**, which buildReel already knew can
+  come back seconds short of the clip. It now comes from the timeline length
+  and the length asked for, and the ad is never longer than asked.
+- **Re-sort was never safe.** `ends_at` is positional; sorting segments by
+  slot hands every span to a different picture. Out of order rejects.
+- **A flat 450-token cap could not hold twelve segments.** ~95 tokens each;
+  the budget grows with the menu.
+
+### The rows (validate.ts)
+
+Reject: truncated answer · wrong shape · slots out of order · `ends_at` unknown,
+on the start, or not after the previous · a segment under 0.4 s · nothing
+left. Repair with a note: unknown or duplicate slot dropped · video capped at
+its footage AND the next segment enters with a cut · first segment, or an
+uninstalled family, becomes a cut · more than 60% of cuts with a transition
+loses the quietest · a headline longer than reading speed allows (16 chars/s,
+never under a 1.2 s card's worth) is dropped · a punch word that is not a whole
+word of its headline is cleared.
+
+### Two things to measure first, tonight or whenever a model is at hand
+
+**`think: false` with `format` drops the schema on Ollama** for Gemma 4 and
+Qwen 3.5 — an open bug (ollama/ollama #15260, #14645). The runner asks once
+with thinking off and, if prose comes back, once more with it on. Which mode
+works on which version is unknown until tried. LM Studio's OpenAI shape is
+the other route and does not have this bug; it may have others.
+
+**Can a 2–4B write the copy?** The open question above, still open.
+
+### Not built
+
+The planner that DRESSES the spine — text styles and animations, SFX on the
+punch word, a look, grid split / strips / ring as per-segment treatments,
+stickers (which need the semantic index) — is the next pass, and it is where
+the library the app already has becomes the product. Slot placement is pool
+order; a reorder UI is still to come. Images are plumbed to both clients and
+not yet sent.

@@ -19,6 +19,7 @@ measurements and paper sketches that do not survive a new session.
 | `docs/REFERENCES.md` | the reference recordings, what each was measured at, repo/CI facts |
 | `docs/EFFECTS.md` | ~1,900 lines: every effect, and every ffmpeg finding that cost real time |
 | `docs/WHERE-THINGS-ARE.md` | a map of the UI — read before adding a panel nobody can find |
+| `docs/LLM.md` | the LLM design — the plan schema, the passes, what was rejected and why, and what is built |
 | `docs/STACK.md`, `docs/SIDECAR.md` | architecture and the optional Python capabilities |
 
 Before re-measuring something against ffmpeg, check whether `EFFECTS.md` already

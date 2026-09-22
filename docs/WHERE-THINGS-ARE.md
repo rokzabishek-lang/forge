@@ -308,6 +308,17 @@ no multi-select; no markers; and no audio fades.
 
 ## The automations (Auto tab)
 
+**Director** — first in the tab: an ad from your pictures, your music and a
+line about the product. Only the product line is required. Your pictures are
+listed in pool order with a field each for what is in them; the gear opens
+the model settings (Auto / Ollama / an OpenAI-shaped server such as LM
+Studio, with a write-only key field). Direct asks the model for a plan,
+checks it, and places shots on V1, headline cards on the lane above,
+transitions where the plan asked, and trims the music to the ad — as ONE
+undo. When the model's plan cannot be used you get the standard cut and a
+note saying why. Clear takes exactly its own work back, music included.
+See `docs/LLM.md`.
+
 **Beat-synced reel** — many photos cut to music. Pick the music range on the
 waveform, set motion and transition rate, press Analyse & build.
 
