@@ -27,6 +27,7 @@ import {
 import { forgetWipe, wipedSource } from '../wipe'
 import { PreviewMixer } from '../audioGraph'
 import { fadeGainAt, fadesWithNeighbours } from '@shared/render/audioFade'
+import { NO_SCRUB, SCRUB_BURST_MS, scrubStep, type ScrubState } from '@shared/render/scrub'
 import { motionSourceRect } from '@shared/render/motion'
 import { clipBox, parallaxBakeFor, planeShare } from '@shared/render/plan'
 import { pathAt } from '@shared/render/path'
@@ -302,6 +303,7 @@ export function Preview(): ReactNode {
   const applyDropIntent = useEditor((s) => s.applyDropIntent)
   const setPlaying = useEditor((s) => s.setPlaying)
   const loop = useEditor((s) => s.loop)
+  const scrubAudio = useEditor((s) => s.scrubAudio)
   const showThirds = useEditor((s) => s.showThirds)
   const showSafe = useEditor((s) => s.showSafe)
   const previewTool = useEditor((s) => s.previewTool)
@@ -325,6 +327,9 @@ export function Preview(): ReactNode {
    * AudioContext on a re-render would cut the sound every time a panel moved.
    */
   const mixer = useRef(new PreviewMixer())
+  /** The scrub throttle's state, and the timer that ends the current burst. */
+  const scrubRef = useRef<ScrubState>(NO_SCRUB)
+  const burstStop = useRef<number>(0)
   /**
    * The timeline's clock: when playback was anchored, and the last frame the
    * clock itself wrote. `wrote` is what tells a scrub apart from our own
@@ -771,6 +776,40 @@ export function Preview(): ReactNode {
     (frame: number, isPlaying: boolean) => {
       const activeIds = new Set<string>()
 
+      /*
+       * Scrubbing: let each audible element sound for a moment, then stop it.
+       *
+       * Deciding WHETHER once, here, rather than per element — otherwise ten
+       * clips under the playhead would each run their own throttle and the
+       * bursts would interleave into a continuous smear. The decision is a pure
+       * function so the throttle is testable without dragging anything;
+       * `shared/render/scrub.ts` has why the numbers are what they are.
+       */
+      const scrubbing = !isPlaying && scrubAudio
+      const decision = scrubbing
+        ? scrubStep(scrubRef.current, frame, performance.now())
+        : { burst: false, next: NO_SCRUB }
+      scrubRef.current = decision.next
+
+      const burst = (element: HTMLMediaElement): void => {
+        if (!decision.burst) return
+        mixer.current.resume()
+        void element.play().then(
+          () => {
+            // One timer per burst, cleared if another lands first, so a fast
+            // drag does not leave a dozen pending stops racing each other.
+            window.clearTimeout(burstStop.current)
+            burstStop.current = window.setTimeout(() => {
+              for (const [, media] of pool.current) {
+                if (media instanceof HTMLVideoElement && !media.paused) media.pause()
+              }
+              for (const [, media] of audioRefs.current) if (!media.paused) media.pause()
+            }, SCRUB_BURST_MS)
+          },
+          () => undefined
+        )
+      }
+
       for (const { clip, asset } of activeVideoClips(project, frame)) {
         activeIds.add(clip.id)
         if (asset.kind === 'image') continue
@@ -826,7 +865,8 @@ export function Preview(): ReactNode {
           video.volume = Math.max(0, Math.min(1, clip.volume ?? 1))
         }
         if (isPlaying && video.paused) void video.play().catch(() => undefined)
-        if (!isPlaying && !video.paused) video.pause()
+        if (!isPlaying && !video.paused && !scrubbing) video.pause()
+        if (!isPlaying && scrubbing && asset.hasAudio) burst(video)
       }
 
       for (const [clipId, element] of pool.current) {
@@ -852,9 +892,16 @@ export function Preview(): ReactNode {
         }
 
         if (!isPlaying) {
-          if (!element.paused) element.pause()
-          // Scrubbing: land exactly, since nothing is listening to a glitch.
+          /*
+           * Land exactly, then sound for a moment if this is a scrub.
+           *
+           * The seek comes first either way: an 80 ms burst played from
+           * wherever the element happened to be is worse than silence, because
+           * it is confidently the wrong audio.
+           */
+          if (!element.paused && !scrubbing) element.pause()
           if (Math.abs(element.currentTime - target) > 0.02) element.currentTime = target
+          if (scrubbing) burst(element)
           continue
         }
 
@@ -887,7 +934,7 @@ export function Preview(): ReactNode {
         }
       }
     },
-    [project, fps]
+    [project, fps, clipGainAt, scrubAudio]
   )
 
   useEffect(() => {

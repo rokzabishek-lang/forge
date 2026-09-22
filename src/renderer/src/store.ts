@@ -667,6 +667,15 @@ interface EditorState {
   setPlaying: (playing: boolean) => void
   loop: boolean
   setLoop: (loop: boolean) => void
+  /**
+   * Hear the sound while dragging the playhead. On by default.
+   *
+   * A toggle rather than always-on because it is the one preview behaviour
+   * people genuinely differ about — it is how you find a beat, and it is also
+   * the thing you turn off while someone is talking to you.
+   */
+  scrubAudio: boolean
+  setScrubAudio: (on: boolean) => void
   select: (clipId: string | null) => void
   /**
    * Select a clip AND make sure it is on screen.
@@ -727,6 +736,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   playhead: 0,
   playing: false,
   loop: false,
+  scrubAudio: true,
   selectedClipId: null,
   zoom: 0.6,
   aspect: '16:9',
@@ -3619,6 +3629,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
   setPlaying: (playing) => set({ playing }),
   setLoop: (loop) => set({ loop }),
+  setScrubAudio: (scrubAudio) => set({ scrubAudio }),
   select: (clipId) => set({ selectedClipId: clipId }),
 
   revealClip: (clipId) => {

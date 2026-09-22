@@ -211,7 +211,7 @@ Eleven mutations, all killed, against a green 1657-test gate — including both
 shipped bugs, put back and caught by the render check. Rendered evidence in
 `tests/output/mix/` (see A-note below).
 
-### A4. Audio while scrubbing
+### A4. Audio while scrubbing — **DONE**
 
 **Where.** `Preview.tsx:696-701` pauses every element when not playing.
 
@@ -219,6 +219,20 @@ shipped bugs, put back and caught by the render check. Rendered evidence in
 the target and plays a burst of ~80 ms through the graph, throttled to ~12
 bursts a second — the way every NLE scrubs. A toggle in the Transport,
 default on.
+
+**What was actually built.** Exactly that. The decision of WHETHER to burst is
+a pure function (`src/shared/render/scrub.ts`) taken once per sync rather than
+per element — ten clips under the playhead each running their own throttle
+would interleave into a continuous smear — and the burst plays through the A3
+graph, so a scrub is heard at the clip's real level.
+
+One bug the tests caught before it shipped: the "nothing has fired yet"
+sentinel was `lastAt: 0`, which is indistinguishable from a clock reading of
+zero, so the throttle skipped itself and let bursts through eight milliseconds
+apart. It only ever engaged by luck. `-Infinity` now, and `NaN` for the frame so
+a drag starting at frame 0 still counts as a move.
+
+Five mutations, all killed.
 
 ### A5. Multi-select, clipboard, ripple delete, right-click
 

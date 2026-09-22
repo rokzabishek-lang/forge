@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Check, Pause, Play, Repeat, Scissors, SkipBack, SkipForward, Trash2, ZoomIn, ZoomOut } from 'lucide-react'
+import { Check, Pause, Play, Repeat, Scissors, SkipBack, SkipForward, Trash2, Volume2, ZoomIn, ZoomOut } from 'lucide-react'
 import { formatTimecode, projectDuration } from '@shared/timeline'
 import { useEditor } from '../store'
 
@@ -34,6 +34,8 @@ export function Transport(): ReactNode {
   const splitAtPlayhead = useEditor((s) => s.splitAtPlayhead)
   const loop = useEditor((s) => s.loop)
   const setLoop = useEditor((s) => s.setLoop)
+  const scrubAudio = useEditor((s) => s.scrubAudio)
+  const setScrubAudio = useEditor((s) => s.setScrubAudio)
   const selectedClipId = useEditor((s) => s.selectedClipId)
   const removeClip = useEditor((s) => s.removeClip)
 
@@ -73,6 +75,35 @@ export function Transport(): ReactNode {
         />
         <Repeat size={12} className={loop ? 'text-flame-400' : 'text-ink-400'} />
         <span className={`text-[11px] ${loop ? 'text-flame-400' : 'text-ink-400'}`}>Loop</span>
+      </label>
+
+      {/* Scrub audio, beside Loop because both are "how playback behaves"
+          rather than actions. On by default: finding a beat is done by ear. */}
+      <label
+        className="flex cursor-pointer select-none items-center gap-1.5 rounded px-1.5 py-1 hover:bg-ink-800"
+        title={
+          scrubAudio
+            ? 'Hearing the sound while you drag the playhead'
+            : 'Silent while you drag the playhead'
+        }
+      >
+        <span
+          className={`flex size-3.5 items-center justify-center rounded-[3px] border transition-colors ${
+            scrubAudio ? 'border-flame-500 bg-flame-500' : 'border-ink-600 bg-transparent'
+          }`}
+        >
+          {scrubAudio && <Check size={10} strokeWidth={3} className="text-ink-950" />}
+        </span>
+        <input
+          type="checkbox"
+          checked={scrubAudio}
+          onChange={(e) => setScrubAudio(e.target.checked)}
+          className="sr-only"
+        />
+        <Volume2 size={12} className={scrubAudio ? 'text-flame-400' : 'text-ink-400'} />
+        <span className={`text-[11px] ${scrubAudio ? 'text-flame-400' : 'text-ink-400'}`}>
+          Scrub
+        </span>
       </label>
 
       <div className="mx-2 h-4 w-px bg-ink-700" />
