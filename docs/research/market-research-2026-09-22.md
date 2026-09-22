@@ -1,0 +1,879 @@
+# Market research — raw digest, 22 September 2026
+
+> Machine-generated digest of a 16-agent research pass: one researcher per product on vendor documentation, one checker per product on backend and pricing claims. Certainty marks and the checkers' corrections are in each app's section; the synthesis is `docs/COMPARISON.md`. Prices and versions are as read on 22 September 2026.
+
+# MARKET RESEARCH DIGEST — 8 apps
+
+
+# CAPCUT — CapCut — desktop app (macOS / Windows), by ByteDance (Chinese domestic twin: 剪映 / JianYing)
+VERSION: CapCut Desktop 9.3.0, released 1 September 2026 (per FileHorse's version listing — CapCut does not publish a public desktop changelog with version numbers; capcut.com/resource/new-release carries feature announcements with dates, not build numbers). Prior listed desktop builds: 7.9.0 (14 Jan 2026), 6.8.1 (10 Aug 2025). Stated system requirements on CapCut's own desktop page: Windows 7 or above (Wi…
+CATEGORY: Freemium consumer/prosumer desktop NLE for short-form video, with a heavy AI-automation layer and a template marketplace; part of a family that also includes CapCut Web, CapCut Mobile, Dreamina (AI generation) and Pippit (ex-CapCut Commerce Pro, the e-commerce/ad product).
+PLATFORMS: Desktop: macOS and Windows (native apps). Also iOS, iPadOS, Android, HarmonyOS NEXT, and a browser editor (CapCut Web). Note the regulatory history: banned in India (2020); US service went dark 18 Jan 2025, partially resumed 21 Jan 2025, app stores r…
+TARGET: Social-first creators, small brands, e-commerce sellers and agency juniors making TikTok / Reels / Shorts and short product ads. CapCut positions the desktop app for "beginners to experts". The genuinely professional colorist/audio user is not the target; the person who wants a finished vertical ad …
+PRICING: Free tier: full basic editing (multi-track timeline, cut/split, keyframes, chroma key, speed ramping, filters, free music/SFX), export up to high resolutions, large free template/effect library — but any asset, template or effect flagged Pro exports with a watermark, and the heavier AI tools are limited or credit-metered.
+
+CapCut's own comparison page gives Pro at $19.99/month or $179.99/year for individuals, and a Team plan from about $24.99/month; it lists Free/Standard at $0 and explicitly says prices vary by region, platform (mobile/desktop/web), tax and promotion. Third-party coverage (BIGVU, Flowith, fluxnote) describes a 2025 restructure that split the paid tier into Standard (~$9.99/mo, mobile-leaning: watermark removal plus more templates/transitions/text styles) and Pro (~$19.99/mo), and reports buying direct on capcut.com is 20–30% cheaper than via the App Store / Play, with m…
+
+## timeline_editing
+- Multi-track timeline with unlimited video/audio/text/effect layers; drag-and-drop from a media panel
+- Split at playhead (Ctrl/Cmd+B), trim-left / trim-right of playhead (Q / W), frame-step with arrow keys, Shift+Z to fit timeline
+- Ripple delete (Ctrl+Shift+E on desktop) — deletes and closes the gap, shifting downstream clips
+- Keyframes on transform, opacity, volume, effect parameters; keyframe panel at Alt+K, Shift+Click to add a keyframe in the panel; CapCut markets 'keyframes and graphs' (ease curves) on the desktop page
+- Speed: uniform speed plus curve-based speed ramping with editable control points (Montage/Hero/Bullet presets and custom curves)
+- Compound clips (CapCut's nesting equivalent), markers, snapping, magnetic-ish placement
+- In-app keyboard shortcut reference panel (keyboard icon in the toolbar / next to Settings); ~49-50 documented hotkeys, remappable in recent builds
+- Media search across the library by object and by spoken dialogue — CapCut's own desktop page calls out 'powerful searching tools' that find footage by objects and dialogue, which is an indexing feature most NLEs don't have
+- Honest gap: CapCut does not expose a classic three-point-edit / slip / slide / trim-window model the way Premiere or Resolve does; editing is direct-manipulation on the timeline. Precision trim exists but the grammar is drag-first, not JKL-and-trim-mode-first.
+
+## preview_playback
+- Native desktop app (not Electron/browser) with GPU-accelerated preview; Settings > Performance exposes 'Speed up hardware decoding' and 'Speed up hardware encoding'
+- Proxy generation is built in and user-controlled: click empty timeline space > Menu > Settings > Project settings > Performance > turn on Proxy, choose 720p or 540p. Originals stay untouched; the proxy is used for scrubbing and effects preview
+- Preview parity is generally good for cuts/text/transitions; heavy AI effects and 4K H.265 sources are where playback degrades and proxies become necessary
+- No professional scopes (waveform/vectorscope/parade) in the consumer desktop app — colour work is done on a colour wheel plus auto-adjust, which CapCut names on its own desktop page
+
+## audio
+- Multi-track audio, per-clip volume with keyframes, fade in/out, audio detach from video
+- Beat detection / auto beat markers for music sync (the basis of beat-synced templates and AutoCut)
+- Noise reduction and voice enhancement (Pro-gated per CapCut's comparison page)
+- Vocal isolation / vocal-and-accompaniment separation (reported as Pro)
+- Text-to-speech voices; AI voice effects / voice changer; AI voice cloning in the wider CapCut family
+- Large built-in royalty-free music and SFX library with a free subset and a Pro subset
+- Auto-ducking of music under voice in the automated flows (AutoCut, AI Ads) rather than as a prominent manual mixer feature; there is no full mixer with buses or VST support
+
+## media_project_export
+- Broad import/export codec coverage — CapCut says 'a wide range of audio and video formats' without enumerating; practically H.264/H.265/AV1-era MP4 and MOV, plus images, GIF and common audio
+- Hardware-accelerated encode toggle; export dialog exposes resolution, frame rate, bitrate/quality and format; CapCut's own comparison page claims up to 8K export capability, while third-party coverage says 4K is Pro-gated — the gating story is not cleanly docu…
+- Aspect-ratio presets for TikTok / Reels / Shorts / YouTube; direct publish to social platforms from the app
+- Project cloud sync across devices via the ~1024 GB Pro cloud storage; free cloud storage was discontinued in August 2024
+- Project files are JSON on disk (draft_content.json / draft_info.json) — undocumented by ByteDance but well-known enough that third-party tools (e.g. the unofficial capcut-cli project) read and write CapCut/JianYing drafts directly. That is an integration seam,…
+- No published plugin API, no OpenFX/OpenTimelineIO/AAF/XML interchange — you cannot round-trip a CapCut edit into another NLE
+
+## effects_color_text
+- Colour: colour wheels, HSL/curves-style adjustments, auto-adjust, LUT-style filters; not a node-based grade
+- Very large transition and effect library (video effects, body effects, overlays, particle packs), refreshed continuously and largely Pro-gated at the premium end
+- Text: animated text presets, text templates, font library (free + Pro), outline/shadow/background, text-to-speech directly from a text layer
+- Chroma key (free), masks (linear/mirror/circle/rectangle/heart), blend modes, picture-in-picture
+- Motion tracking and camera tracking (Pro) — attach text/stickers/effects to a moving subject
+- AI background removal / auto cutout without a green screen; portrait retouch and beauty tools
+- Stabilisation, video enhance / upscale
+
+## ai_automation
+- Auto captions — automatic speech recognition to subtitles, many languages, with styling and caption templates; speaker-identification captions reported as Pro
+- Auto translate / caption translation and AI dubbing into other languages
+- AutoCut — analyses footage, detects highlights in talking-head/podcast material, syncs cuts to music beats, generates subtitles and produces a rough cut the user then refines
+- Long video to shorts / AI Clip Maker — takes a long source, picks multiple highlight clips, auto-reframes 16:9 to 9:16 with subject tracking, and writes captions per clip
+- Smart reframe / auto reframe with subject tracking
+- Script-to-video and an AI writer (both named on CapCut's own desktop page) — generate a script, then assemble matched stock or uploaded media to it
+- AI Ads / AI ad generator — prompt or script in, choose aspect ratio, visual style, voiceover style and duration, and it produces a finished ad with voiceover, captions, music and either 'Match stock media' or your own clips. Primarily the Web surface; CapCut a…
+- AI avatars — synthetic presenters that deliver a script; voices reported to cover 100+ languages and accents. Strongest in Pippit (ex-CapCut Commerce Pro), which added analytics, auto-publishing and Shopify hooks after its 2025 rebrand
+- Text-to-speech, AI voice cloning, voice changer
+- AI image generation (Seedream family) and AI video generation (Seedance family) surfaced inside CapCut via Dreamina; CapCut's desktop page advertises editing and refining Dreamina Seedance 2.5 output
+- Background removal, video enhance/upscale, noise reduction, motion/camera tracking (listed above but all are ML features)
+
+## templates_library
+- Template marketplace: pick a template, drop clips into placeholder slots, and CapCut keeps the template's timing, transitions, effects, animations and music while swapping in your media. Drop onto the placeholder — dropping elsewhere loses the timing.
+- Slot semantics: template authors mark specific clips as 'replaceable material clips'; the consumer then sees a Replace / Click-to-Replace affordance on exactly those clips, while everything else stays locked. If a template wants 8 clips, fill all 8 — beat-sync…
+- Important desktop limitation, from CapCut's own help centre: **CapCut Desktop cannot set replaceable material clips.** You can use and open templates containing placeholders (authored on Mobile or Web) on desktop, but there is no desktop UI to author them. Tem…
+- Library: stickers, transitions, filters, effects packs, fonts, animated text templates, and a royalty-free music/SFX catalogue; free and Pro subsets, with Pro assets watermarking the export if used on a free account
+- Marketing claims a catalogue of 12M+ royalty-free assets at the Pro tier (third-party reporting; not verified at a primary source)
+
+## backend
+ENGINE: Not public in any detail. What is public: CapCut/JianYing desktop is a native application (not a browser wrapper), with user-facing 'hardware decoding' and 'hardware encoding' toggles, GPU-accelerated preview and a built-in proxy pipeline at 720p/540p — so a GPU decode/encode path clearly exists, but CapCut names no API (no confirmation of Metal vs VideoToolbox vs D3D11/NVENC/QSV in vendor docs). ByteDance separately open-sourced BMF (Babit Multimedia Framework, github.com/BabitMF/bmf), built with NVIDIA, which its own README says is used across ByteDance 'video streaming, live transcoding, cl…
+AI MODELS: Partly public, and unusually so for a consumer editor. Publicly documented/announced by ByteDance: the **Seedance** video-generation family and the **Seedream** image-generation family, both surfaced in CapCut through **Dreamina** (the international twin of Jimeng). Timeline from vendor pages and reporting: Seedance launched June 2025; Seedance 2.0 released February 2026 and TechCrunch (26 Mar 2026) reported Dreamina Seedance 2.0 rolling into CapCut; Seedance 2.5 (July 2026) does native 30-second 4K generation with audio, accepts up to 50 multimodal references, and supports localised in-scene …
+ASR/TTS: ASR: auto captions exist across many languages with speaker identification at the Pro tier; the underlying ASR system is **not public** — no model name, no vendor, no on-device/cloud statement per feature. TTS: a large text-to-speech voice set, AI voice cloning, voice changer and AI dubbing; CapCut's own help centre names text-to-speech as an AI feature but names no model. Third-party/AI-avatar co…
+COMPUTE: Hybrid, but the split is deliberately undocumented feature by feature. Documented by CapCut: the help article 'Is CapCut AI safe to use?' says only that 'some AI-powered features may need to process the videos, images, audio, or text you provide in order to generate or edit content', and its privacy policy discloses **pre-uploading of user content at creation/import/upload time, whether or not you…
+CERTAINTY: PUBLIC (vendor docs/pages read directly): desktop system requirements; AI feature names (auto captions, background removal, enhance, TTS, AI image/video generation, script-to-video, AI writer, media search by object and dialogue, colour wheel + auto-adjust, keyframes and graphs); the replaceable-material-clips help article stating desktop cannot author template slots; the privacy statement on pre-uploading content to generate captions; Seedance/Seedream version names and announcement dates on ca…
+
+## ad workflow
+Three realistic routes for a marketer making a 15–30s product ad, September 2026.
+
+**A. Template route (fastest, most common).** Open CapCut Desktop, go to Templates, filter by category/duration, preview a 15s or 30s product-ad template. Drag your product clips and photos onto the placeholder slots in order — drop directly onto each placeholder or the template's timing and effects are lost. AUTOMATIC: cut timing, beat sync to the template's music, transitions, effect stack, text animation, aspect ratio. MANUAL: choosing and ordering the clips, rewriting every text layer (product name, price, CTA), trimming inside each slot to pick the right moment, swapping music if you need licensed-clean audio, and export settings. Fill every slot — beat-synced templates look broken with gaps. Time: 10–20 minutes. Caveat: if the template uses Pro assets and you are on Free, the export carries a waterma…
+
+## checker
+- [reported] CapCut/JianYing desktop is a native app with user-facing hardware decoding/encoding toggles, GPU-accelerated preview and a built-in proxy pi… — Not documented on CapCut's own desktop page, which says nothing about GPU, hardware decode/encode or proxies. The Settings > Performance panel with proxy and separate hardware decoding/encoding/interface-rendering controls is described only in third-party guid…
+- [inference] No ByteDance doc says BMF powers the CapCut desktop editor; BMF is a plausible shared substrate (labelled inference) — Correctly labelled. Verified at source: the BMF README claims use in ByteDance 'video streaming, live transcoding, cloud editing and mobile pre/post processing', 2B+ videos/day, C++/Python/Go APIs, Linux/Windows/macOS, x86/ARM, NVIDIA-codeveloped GPU pipeline …
+- [reported] CapCut/JianYing project drafts are JSON on disk (draft_content.json, draft_info.json), documented only by third-party reverse-engineering — Accurate and correctly hedged. capcut-cli reads and writes those files and carries an explicit disclaimer that it is not affiliated with, sponsored by or endorsed by CapCut, JianYing or ByteDance. The format is implemented there, not specified anywhere by the …
+- [public] Seedance 2.5 (July 2026) does native 30-second 4K generation with audio, up to 50 multimodal references, localised in-scene edits — Substantively right, with one date slip and one omission. The launch post is dated 31 July 2026 and says it 'will start rolling out in the coming week', so general availability is early August 2026, not July. The product page also advertises a beta long-video …
+- [public] Seedream 5.0 Pro announced across capcut.com/resource/new-release on 28 Jul 2026 — Confirmed — four Seedream 5.0 Pro pieces dated 28 Jul 2026 on the new-release feed, covering the AI image generator and Design Studio. Nano Banana Pro (24 Nov 2025) and ChatGPT 5 Video Generator (9 Dec 2025) are also there as described, and the feed's framing …
+- [public] TechCrunch (26 Mar 2026) reported Dreamina Seedance 2.0 rolling into CapCut — Confirmed at source. Adds detail worth keeping: clips up to 15 seconds, six aspect ratios, rollout to Brazil/Indonesia/Malaysia/Mexico/Philippines/Thailand/Vietnam first, invisible watermark on generated content, and a mid-March pause over Hollywood copyright …
+- [public] Which model does ASR for captions, segmentation, tracking, highlight selection, or the LLM behind script-to-video is not public; 'CapCut cap… — Holds up. The auto-caption tool page describes one-tap captions and bilingual translation and names no model, no vendor and no processing location; the desktop page lists AI feature names only. Nothing found contradicts the researcher's refusal to name a model…
+- [public] CapCut's help article 'Is CapCut AI safe to use?' says 'some AI-powered features may need to process the videos, images, audio, or text you … — Confirmed verbatim. Worth noting what else that article does not do: it gives no local-vs-cloud statement and no per-feature breakdown, and it defers to the privacy policy — which is exactly the gap the researcher flags.
+- [public] The privacy policy discloses pre-uploading of user content at creation/import/upload time, whether or not you save or publish, to recommend … — Correct and the strongest fact in the brief — but cite the right URL: the policy lives at capcut.com/clause/privacy-policy, not capcut.com/privacy-policy (404). The policy goes further than quoted: it says CapCut identifies objects and scenery, the existence a…
+- [public] Pro is $19.99/mo or $179.99/yr, Team from ~$24.99/mo, ~1024 GB Pro cloud, free cloud storage discontinued Aug 2024, per CapCut's own compari… — All confirmed on the vendor comparison page, including the caveat that prices vary by region, platform, tax and promotion. The page names the free tier 'CapCut Standard' — which is why the $9.99 paid 'Standard' claim collides with vendor naming rather than mer…
+MISSING:
+- Export is blocked, not watermarked, when a project contains Pro materials — the vendor's own words are that free users may preview advanced features but exporting them requires an active Pro subscription, and watermark removal on Pro materi…
+- CapCut's export-resolution help article grounds 2K/4K availability in device hardware, OS, app version, platform, project resolution and source media, and describes a performance safeguard that auto-downgrades to 1080p to prevent crashes. S…
+- The vendor comparison page states both Standard and Pro can save in 8K, which flatly contradicts the third-party '4K is Pro-only' line the researcher passed through. The contradiction itself is the fact worth carrying. https://www.capcut.co…
+- The privacy policy's content-analysis detail goes well past 'pre-uploading': CapCut identifies objects and scenery, the existence and location of faces and body parts, the nature of audio, and text from spoken words (explicitly naming auto-…
+- Pippit is ByteDance's separate 'powered by CapCut' platform aimed at SMEs and e-commerce, with an Agent Mode that turns a script into a finished video and a Seedance 2.0 Short Drama Agent that renders scripts up to 100,000 words end to end.…
+- The AI Ads flow is CapCut Web, browser-based with no install: AI script writing, AI avatars and voiceovers, industry ad templates, stock-media matching, captions, music and aspect-ratio variants, advertised as free to start with no card. Th…
+- Long-video-to-shorts bundles highlight detection with smart cropping, resizing and subject tracking plus automatic captions, and on web ingests from Cloud, Google Drive or Dropbox — i.e. the whole short-form automation pipeline Forge compet…
+- The desktop page's own AI feature list is the defensible feature-parity checklist and is broader than what the researcher enumerated: AI video generator, AI voice generator, AI dubbing, AI video upscaler, AI relight, AI avatar generator, AI…
+- Auto-caption language coverage is weakly sourced in both directions: CapCut's own tool page names only 'multiple languages' with bilingual translation examples (English to Chinese/Spanish/French) and no count, while third-party testing puts…
+- Seedance 2.5's beta long-video mode reaches 180 seconds, and audio is a multimodal input with lip-sync generation gated to premium tiers — not simply '30-second 4K with audio'. https://dreamina.capcut.com/seedance/seedance-2-5
+
+SOURCES (30): https://en.wikipedia.org/wiki/CapCut | https://www.capcut.com/resource/new-release | https://www.capcut.com/tools/desktop-video-editor | https://www.capcut.com/resource/capcut-standard-vs-pro | https://www.capcut.com/resource/capcut-auto-cut | https://www.capcut.com/tools/long-video-to-shorts | https://www.capcut.com/tools/ai-ads | https://www.capcut.com/help/how-to-set-replaceable-material-clips
+
+
+# PREMIERE — Adobe Premiere (formerly "Adobe Premiere Pro"; Adobe dropped the "Pro" with the 2026 release, though installers, Start-m…
+VERSION: 26.5, released 10 September 2026 (announced around IBC 2026, 8–9 Sept). The 2026 cycle so far: 26.0 on 20 January 2026 (rebrand, Object Mask, redesigned shape masks, Windows-on-ARM native, GPU-accelerated thumbnails, Frame.io v4 panel, Adobe Stock panel, ~90 new real-time effects); 26.2 in April 2026 (Film Impact-derived effects/transitions, Content Credentials at export in Media Encoder); 26.3 on…
+CATEGORY: Professional desktop NLE (non-linear editor) with an increasingly deep generative-AI layer; part of Creative Cloud, with companion apps (Media Encoder, After Effects, Audition, Frame.io) and a separate Premiere on iPhone.
+PLATFORMS: macOS (Intel and Apple Silicon) and Windows x64; as of 26.0 it also runs natively on Windows on ARM (ARM64). Desktop only for the full app; Frame.io v4 and Firefly Boards are browser/cloud companions.
+TARGET: Professional and semi-professional editors: film/TV post, broadcast and news, agencies, corporate and event video, YouTube and social teams. It is priced and shaped for people who edit for a living, not for a marketer who wants one ad by lunchtime — though the 2026 social features (single-word capti…
+PRICING: Subscription only. Premiere single-app is listed from about US$22.99/month on an annual plan billed monthly, and about US$34.49/month month-to-month; Creative Cloud Standard around US$54.99/month and Creative Cloud Pro around US$69.99/month (US list, pre-tax, varies by region and promotion — I read aggregator/reseller pages for these figures, not an Adobe checkout page, so treat the exact numbers as approximate). The AI layer is the real cost variable: generative features spend Firefly generative credits, and reporting says a usable monthly credit allocation effectively comes with the Creative Cloud Pro tier. Extra credits are sold as Firefly Standard (2,000 credits/mo, ~$9.99), Firefly Pro (4,000, ~$19.99) and Firefly Pro Plus (10,000, ~$49.99). Reported example costs: roughly 100 credits for a 5-second Firefly video; a Veo 3.1 generation at 720p/8s with audio reported at 400 credits. G…
+
+## timeline_editing
+- Multi-track timeline with unlimited video/audio tracks, track targeting, sync locks and track locks
+- Full trim model: ripple and roll edits, slip and slide, the dedicated Ripple Edit / Rolling Edit / Slip / Slide tools, and a Trim Monitor with dynamic (JKL) trimming
+- Three/four-point editing with in/out points, insert and overwrite, replace edit, replace with clip from bin
+- Ripple delete, extract/lift, close gap; ripple-aware delete of selected ranges
+- Sequence and clip markers with comments, colours, durations and chapter/web-link types; marker panel; markers travel to Media Encoder and to Frame.io comments round-trip
+- Linked audio/video with Link/Unlink and Group; merged clips; multicam sequences with camera switching during playback
+- Nesting (Nest… into a sub-sequence), and sequences-in-sequences; Productions for large multi-project workflows — 26.3 added a just-in-time Production upgrade that converts projects on open instead of all at once
+- Speed: Clip Speed/Duration, reverse, frame blending/optical flow interpolation, and time remapping with keyframed speed ramps and bezier-handled ease on the speed keyframes in the timeline
+- Nudge, snapping, adjustment layers, keyboard-customisable command set with a visual keyboard-shortcut editor, and workspace-level customisation (26.3 made workspace switching notably faster)
+- 26.5 Paper Edit: select lines of a transcript in the Text panel and build a sequence from them, with preview before committing
+
+## preview_playback
+- Mercury Playback Engine, in software-only and GPU-accelerated modes; Adobe documents CUDA and OpenCL on Windows and Metal on macOS as the acceleration paths, selected per-project in Project Settings > General > Renderer
+- Hardware-accelerated decode of H.264/HEVC (Intel Quick Sync, and on supported NVIDIA/AMD hardware); 26.5 adds NVIDIA Blackwell support for 4:2:2 10-bit decode of AVC and HEVC inside MXF
+- Proxy workflow: Ingest settings in the Project Settings/Media Browser can create proxies on import via Media Encoder, with proxy presets (ProRes, H.264, QuickTime/GoPro CineForm); a Toggle Proxies button in the program monitor switches between proxy and full-r…
+- Playback resolution switching (full/half/quarter), Render In to Out preview files, render-bar colour states
+- Lumetri Scopes: waveform (RGB/luma/YC), vectorscope (YUV and HLS), parade, histogram; Reference Monitor and gang-to-program
+- Colour management with per-clip and per-sequence colour space, HDR support, and (26.0) GPU-accelerated, colour-managed thumbnail generation
+- 26.3 added VRAM compatibility warnings when the GPU is under-specified for the project
+
+## audio
+- Essential Sound panel with Dialogue / Music / SFX / Ambience roles, and per-role controls: Loudness auto-match, Repair (noise, rumble, hum, DeEss, reverb reduction), Clarity/EQ, Creative reverb, Clip Volume, Ducking
+- Auto-ducking of music under dialogue via Essential Sound, generating keyframes on the clip; the September 2026 announcements add Dynamic Auto Ducking
+- Remix: retimes a music track to a target duration by finding musical edit points, as an effect or in the Essential Sound panel
+- Enhance Speech: removes noise and room tone and reconstructs dialogue; Adobe states the Premiere version runs locally on the machine (unlike the cloud version on Adobe Podcast), with no per-clip limit
+- Audio track mixer and clip mixer, submixes, sends, VST3/AU effect support, 5.1 and multichannel/adaptive tracks, audio channel mapping
+- Interactive audio fades on clips (26.0), the older constant-power crossfades, and keyframable clip gain/volume
+- Speech-to-text transcription, speaker diarisation and caption generation; 26.3 added a Single Word caption style for the one-word-at-a-time Reels/Shorts/TikTok look
+- IBC 2026 announcements add Enhance Audio with independent dialogue/music/effects control, and Separate Crosstalk (separating bleed between mics)
+- 26.5 Match Source improvements now match audio channel counts and sample rates with downmixing and format warnings
+- 32-bit float Hi-Res audio support with Sony XAVC/XOCN media (26.0/26.5)
+
+## media_project_export
+- Broad native format support: ProRes (incl. ProRes RAW, improved in 26.5), R3D and the new single-file R3D NE (RED, and Nikon ZR), ARRI including ARRICORE for ALEXA 35 Xtreme (26.5), Sony XAVC/XOCN and Burano, Canon, Blackmagic RAW via plug-in, H.264/HEVC, MXF,…
+- Export mode with presets, Media Encoder queue for background and batch encoding, watch folders, and publishing destinations (YouTube, Vimeo, Frame.io, Behance, FTP, social presets)
+- Hardware encoding for H.264/HEVC: NVENC on NVIDIA, VCE/VCN on AMD, Quick Sync on Intel, VideoToolbox on macOS — chosen via Preferences > Media > Enable hardware encoding and the Performance dropdown in Encoding Settings; it silently falls back to software when…
+- Match Source presets (improved for audio in 26.5), Smart Rendering where source and target match, and multiple simultaneous export outputs
+- Project autosave (including Autosave to Creative Cloud), Project Manager for consolidate/trim/transcode, and relinking — 26.0 explicitly improved file relinking and naming/organisation schemes
+- Content Credentials attached at export (Media Encoder 26.2 gave more control over what attribution travels), and automatic Content Credentials on AI-generated clips
+- Frame.io v4 panel in-app (alongside the legacy panel) for review, comments and asset transfer; Adobe Stock panel with ~50+ million assets and in-panel licensing (26.3)
+- Media Intelligence: on-import AI analysis of footage so the Search panel can find shots by described content, objects, spoken words, and (26.0) described sounds; also runs in Media Encoder
+
+## effects_color_text
+- Lumetri Color: Basic Correction, Creative with LUTs and looks, Curves (RGB and Hue/Sat curves), Color Wheels, HSL Secondary, Vignette; Comparison View and Color Match; per-clip and adjustment-layer grading
+- Object Mask (26.0): AI selection of a person or object with a hover-and-click, then tracked through the shot; Adobe says tracking is up to 20x faster than the previous masking workflow. 26.2/26.5 add Sharp and Smooth edge modes and broader object detection per…
+- Redesigned Shape Masks (26.0) with dynamic bezier curves and new shaping controls, in addition to the older per-effect ellipse/rectangle/pen masks with tracking
+- Over 90 new real-time (GPU) effects in 26.0, including effects and transitions derived from Film Impact; 26.2 added Channel Blur, Gradient, Noise, 3D Spinback and Slide; 26.3 added Shape Dissolve and Magnify; 26.5 updated Lens Flare, Twirl and Mosaic softness.…
+- Essential Graphics / Properties panel: text, shapes, responsive design (time and position), Motion Graphics Templates (.mogrt) authored in After Effects or Premiere, and Adobe Fonts integration
+- Captions as a first-class track type with styles, Caption-to-Graphic conversion, burn-in on export or sidecar SRT/embedded CEA-608/708
+- Warp Stabilizer, Ultra Key, Morph Cut, Scene Edit Detection, Auto Reframe (subject-tracking reframe for 9:16/1:1/4:5 with keyframed motion you can correct by hand)
+- Dynamic Link to After Effects for compositing without intermediate renders
+
+## ai_automation
+- Object Mask (26.0) — Adobe states this uses an assistive AI model that runs entirely on-device and that customer data is not used to train it
+- Generative Media Tool (26.5, IBC 2026): Generate Video from a text prompt with optional reference frames from the project, and Generate Sound Effects from a prompt with voice-guided timing; Generate Soundscape (beta, analyses up to ~15s of video) and Generate …
+- Generative Extend — extends a clip's picture and/or audio using the Firefly Video Model; 26.5 broadened it from a fixed set of resolutions to 360p through 4K UHD, any aspect ratio, and interlaced or non-square-pixel footage
+- Text-Based Editing: transcribe a clip or sequence, then cut the video by editing the transcript in the Text panel; 26.5's Paper Edit turns selected transcript lines directly into a sequence
+- Speech to Text transcription, speaker labelling, and auto captions, including the 26.3 Single Word caption mode for social
+- Enhance Speech (local dialogue repair), and the announced Enhance Audio and Separate Crosstalk
+- Media Intelligence search: find footage by describing content, spoken words or sounds; find similar shots and alternate takes
+- Auto Reframe, Scene Edit Detection, Color Match, Morph Cut, Auto-ducking, Remix
+- Firefly Boards round-trip: generate/storyboard in Firefly Boards, push one or many assets into the project in a click; 26.3 can auto-build a sequence from them in the selected order
+- Content Credentials are attached to AI-generated material
+
+## templates_library
+- Motion Graphics Templates (.mogrt) via the Essential Graphics browser, backed by Adobe Stock's motion-graphics templates and by anything authored in After Effects; installed templates are editable through exposed controls rather than being fixed
+- Adobe Stock panel in-app (26.0) with access to 50+ million assets — video, audio, images, templates — and licensing from inside the panel (26.3)
+- Adobe Fonts included with the subscription
+- Effects and transitions presets, saveable user presets, and the Film Impact-derived packs bundled from 26.0 onward
+- No 'pick a TikTok template and drop your clips in' library of finished social ad formats in the CapCut sense — the template layer here is a motion-graphics system for editors, plus the stock marketplace
+
+## backend
+ENGINE: Mercury Playback Engine is the marketing name for the playback/render architecture; Adobe documents two renderer modes in Project Settings — 'Mercury Playback Engine Software Only' and 'Mercury Playback Engine GPU Acceleration', the latter backed by CUDA or OpenCL on Windows and Metal on macOS. Adobe publishes GPU and driver requirement pages and a recommended-VRAM floor (commonly cited as 4GB minimum, 8GB+ for 4K); I could not read those pages directly this session (see certainty). Codec stack: a mix of Adobe's own decoders/encoders and platform hardware paths — Intel Quick Sync, NVIDIA NVENC…
+AI MODELS: Mixed, and unusually well documented for this category. PUBLIC/vendor-stated: Object Mask uses an Adobe assistive AI model that runs entirely on-device, and Adobe states customer data is not used to train it. Generative Extend is powered by the Firefly Video Model. The Generative Media Tool offers Adobe Firefly plus third-party partner models — Google Veo, Kling, Runway and Luma are named by Adobe/coverage; reporting around IBC 2026 names specific versions in the wider Firefly picker (Veo 3.1, Runway Gen-4.5, Luma Ray3, Kling 3.0 / 3.0 Omni, FLUX.2, Nano Banana 2) and an integrated Topaz upsca…
+ASR/TTS: ASR: on-device Speechmatics model since ~April 2026 (vendor-announced), with cloud and on-prem options still existing in Adobe's wider line; it drives transcription, speaker diarisation, captions (including 26.3 single-word captions), text-based editing and Paper Edit. Explicitly NOT Whisper — the Speechmatics release benchmarks against Whisper-powered competitors. TTS: Premiere has no documented …
+COMPUTE: Hybrid, and Adobe is unusually explicit about which side each feature sits on. LOCAL: all conventional editing, playback and export; Object Mask (stated as entirely on-device); Enhance Speech; speech-to-text since the Speechmatics on-device model; Media Intelligence analysis on import; Auto Reframe, Scene Edit Detection, Color Match. CLOUD, and metered in Firefly generative credits: Generative Ext…
+CERTAINTY: PUBLICLY DOCUMENTED (Adobe blog, Adobe community announcements, Speechmatics joint release): the 26.x version numbers and dates; the rebrand to 'Adobe Premiere'; Object Mask being an Adobe model running entirely on-device; Generative Extend being the Firefly Video Model, cloud-based and requiring an internet connection, extended to 360p–4K UHD in 26.5; Generative Media Tool existing in 26.5 with Firefly plus Veo/Kling/Runway/Luma; Enhance Speech running locally; Speechmatics on-device ASR; NVIDI…
+
+## ad workflow
+How a marketer would actually make a 15–30s product ad in Premiere 26.5 today, step by step. (1) Subscribe and install — realistically Creative Cloud Pro if the AI features are the reason you are here, because that is the tier reporting says carries a usable generative-credit allowance. (2) Create a project and a sequence; either set it to 1080x1920 by hand or edit in 16:9 and reframe later — MANUAL, there is no 'make me a vertical ad' entry point. (3) Import footage; Media Intelligence analyses clips on import so the Search panel can later find shots by description — AUTOMATIC and background. Proxies are AUTOMATIC only if you turned on Ingest settings first; otherwise manual. (4) If you have a talking-head or VO, open the Text panel and transcribe — AUTOMATIC, on-device, fast (~55s per hour of audio). Then either delete words in the transcript to cut the video (text-based editing) or, n…
+
+## checker
+- [public] Mercury Playback Engine has two documented renderer modes (Software Only / GPU Acceleration), backed by CUDA or OpenCL on Windows and Metal … — Vendor-documented: Adobe has a help page titled 'Enable Mercury Playback Engine GPU accelerated renderer' and the long-running Adobe community FAQ 'Mercury Playback Engine, CUDA, OpenCL, Metal and what it all means'. One correction to the phrasing: OpenCL is n…
+- [reported] Recommended-VRAM floor of 4GB minimum, 8GB+ for 4K — Adobe's own GPU-requirements and tech-specs pages on helpx returned HTTP 403 to me as well (every helpx URL I tried, including regional /in/ and /uk/ mirrors, 403s), so this is third-party only. Multiple 2026 spec round-ups state 4GB VRAM minimum with DirectX …
+- [public] 26.5 adds NVIDIA Blackwell hardware decode for 4:2:2 10-bit AVC and HEVC inside MXF — Confirmed almost verbatim in Adobe's own 26.5 announcement: 'NVIDIA Blackwell GPUs now support hardware-accelerated 4:2:2 10-bit decoding for AVC and HEVC in MXF'.
+- [reported] 26.0 moved thumbnail generation onto the GPU and made the app native on Windows on ARM — I could not re-verify these two against a vendor page in this session (the Adobe 26.0 community post and helpx were not readable/returned 403); they appear in the 26.0 trade coverage the researcher cited. Treat as credibly reported rather than vendor-confirmed…
+- [reported] Object Mask uses an Adobe assistive AI model that runs entirely on-device and customer data is not used to train it — Adobe's 8 Sept 2026 blog mentions Object Mask only as 'Create complex masks in a snap with Object Mask in Premiere (beta)' — no on-device or training statement. The 26.5 post documents Object Mask Sharp/Smooth modes and a Sharpness slider but says nothing abou…
+- [public] Generative Extend extended to 360p–4K UHD and any aspect ratio in 26.5 — Confirmed in Adobe's 26.5 announcement: resolutions from 360p to 4K UHD, any aspect ratio, plus interlaced and non-square-pixel footage. The 'powered by the Firefly Video Model, cloud, internet required' part is from Adobe's earlier Generative Extend material,…
+- [public] Generative Media Tool in 26.5 offers Adobe Firefly plus partner models Google Veo, Kling, Runway and Luma — Adobe's own blog names exactly these: 'choice of which models to create with including Adobe Firefly and partner models including Google Veo, Kling, Runway and Luma'. Note Adobe's 26.5 community post itself says only 'Adobe Firefly and partner AI models' witho…
+- [inference] The specific per-model version list in Premiere's picker (Veo 3.1, Runway Gen-4.5, Luma Ray3, Kling 3.0 / 3.0 Omni, FLUX.2, Nano Banana 2) p… — The researcher's hedge is right but the sourcing can be tightened: that version list is documented by Adobe for the Firefly *web* picker, not for Premiere's in-timeline picker. Adobe's Firefly video-partner-model help page lists Gemini Omni Flash, Kling 2.5 Tu…
+- [public] Speechmatics on-device STT in Premiere: C/C++ library on macOS and Windows, within 5% of cloud accuracy over ~10M words, 12–16% better than … — Every number checks out verbatim against the Speechmatics release (a vendor claim, as the researcher says, and jointly with Adobe). One fact they left out: the release also states GPU acceleration on Mac M5, NVIDIA RTX and AMD GPUs, with support for older Inte…
+- [inference] Explicitly NOT Whisper — the Speechmatics release benchmarks against Whisper-powered competitors — The release says the model is '12-16% improvement against Whisper-powered creative solutions', i.e. it benchmarks against *competitors* using Whisper. That supports 'Premiere's model is Speechmatics, not Whisper' but is not an Adobe statement that Whisper was …
+MISSING:
+- Premiere on iPhone is a free standalone app with a multi-track timeline, unlimited layers, 4K HDR, no watermark, built-in automatic captions with stylised subtitles and one-tap export to TikTok / YouTube Shorts / Instagram — and Adobe's own…
+- Templates/slots: the Essential Graphics panel was removed in Premiere 25.0 and replaced by a Graphics Templates panel browsing Motion Graphics templates and Adobe Stock. The .mogrt format (authored in After Effects or Premiere, exposing nam…
+- Single-word captions, added in 26.3 (17 June 2026): Premiere generates single-word captions directly from a transcript, auto-synced to audio, explicitly aimed at social platforms. This is the karaoke-caption style short-form ad editors comp…
+- Auto Reframe operates at sequence level, reframing a whole sequence to square, vertical or 16:9 by tracking the dominant subject/motion — the product-video / ad reformat path — and Adobe documents it as Sensei-powered. Source: https://helpx…
+- Metering is surfaced per generation in the UI: the Generative Media Tool shows the credit cost for the selected model and settings in the taskbar before you commit, and generations automatically inherit the project's resolution and aspect r…
+- The Generative Media Tool's audio side is broader than 'sound effects': sound-effect generation can follow a text prompt, sync to visible on-screen action, or take a recorded voice/guide track for timing and intensity, with music and sounds…
+- Paper Edit (26.5) builds sequences from the transcript — select lines in the Text panel, preview, then create a sequence — a transcript-driven assembly path that competes directly with 'paste a script, get a cut' ad tools, and it rides the …
+- Firefly Boards integration (26.3): assets imported from Firefly Boards automatically create a sequence in the selected order — a storyboard-to-timeline path, and the Boards side is cloud and credit-metered. Source: https://community.adobe.c…
+- Asset sourcing is metered separately from compute: Adobe Stock can now be browsed AND licensed from inside Premiere's Stock panel (26.3), which is a licence cost, not a credit cost — a distinct line item from generative credits in any prici…
+- Credit allocations and enforcement: Creative Cloud Pro includes 4,000 generative credits/month (unlimited 'standard' generations), older All-Apps-tier allocations were around 250/month, and Adobe began enforcing credit limits worldwide from…
+
+SOURCES (11): https://blog.adobe.com/en/publish/2026/01/20/new-ai-powered-video-editing-tools-premiere-major-motion-design-upgrades-after-effects | https://community.adobe.com/announcements-727/what-s-new-in-adobe-premiere-26-5-september-2026-1641187 | https://community.adobe.com/announcements-727/what-s-new-in-adobe-premiere-26-3-june-2026-1628369 | https://www.newsshooter.com/2026/01/20/whats-new-in-adobe-premiere-pro-26-0/ | https://postperspective.com/quick-look-adobes-premiere-and-after-effects-2026-updates/ | https://nofilmschool.com/adobe-generative-media-tool | https://www.speechmatics.com/company/articles-and-news/adobe-and-speechmatics-deliver-cloud-grade-speech-recognition-on-device-for-premiere | https://helpx.adobe.com/premiere/desktop/whats-new/whats-new.html (HTTP 403 - could not read)
+
+
+# RESOLVE — DaVinci Resolve / DaVinci Resolve Studio (Blackmagic Design)
+VERSION: DaVinci Resolve 21.1, released 9 September 2026 at IBC 2026 as a free update. Resolve 21.0 was announced at NAB on 14 April 2026 and left public beta on 3 June 2026. Predecessor line: Resolve 20 (announced NAB April 2025, 20.x through 20.3.x). Platform support as of 21.x: macOS 15.0+, Windows 10+, Rocky Linux 8.6; a separate DaVinci Resolve for iPad exists. Note: I could not load Blackmagic's own …
+CATEGORY: Full professional post-production suite — a single application containing an NLE (two of them: Cut and Edit), a node-based colour grader, a node compositor (Fusion), a DAW (Fairlight), a new stills darkroom (Photo page), and a render/Deliver page. It is a desktop NLE first, not an ad generator; shor…
+PLATFORMS: macOS 15.0+ (Apple silicon and Intel), Windows 10 and later (x64), Rocky Linux 8.6. Also DaVinci Resolve for iPad (a reduced subset — Cut, Color, Deliver; no Fusion/Fairlight pages). No browser version, no Android. Hardware floor per Blackmagic's sta…
+TARGET: Professional editors, colourists, finishing artists and audio post engineers — Resolve's centre of gravity is episodic, feature and commercial finishing, and the colour page is the industry standard. The Cut page and the free tier pull in a large second population of YouTubers, wedding/event shooter…
+PRICING: Two SKUs only. DaVinci Resolve (free): genuinely free, no watermark, no time limit, no account required to use, full commercial use permitted. DaVinci Resolve Studio: USD $295 one-time perpetual licence (dongle or activation key), which has historically included all future major upgrades — owners of Studio 20 got Studio 21 free. There is no subscription and no per-use or per-minute metering: every AI feature is included in the $295 and costs nothing extra to run, because it runs on your own hardware. Studio is also bundled free with many Blackmagic cameras and hardware panels. Free-vs-Studio limits that matter: free is capped at 8-bit, up to 3840x2160 (Ultra HD) and 60 fps on both timeline and export; Studio adds 10-bit, above-4K resolutions, up to 120 fps, temporal and AI spatial noise reduction, dozens of extra Resolve FX, stereoscopic 3D, remote/collaborative workflows — and, critical…
+
+## timeline_editing
+- Two separate editing pages. Cut page: source tape (all media treated as one continuous tape), dual timeline (full timeline plus zoomed detail, no scrolling or zooming needed), smart indicators and smart edit modes, fast review, sync bin for multicam, close-up/…
+- Edit page: conventional pro NLE — multi-select, ripple/roll/slip/slide, trim editor, in/out marking, three- and four-point edits, markers with notes and colours, link/unlink audio and video, compound clips and nesting, timeline nesting, retime and speed ramps …
+- Resolve 21 keyframe work: Loop, Ping Pong and Relative keyframe modes, multi-clip keyframe adjustment, four-point Bezier easing, and Fusion effects now adjustable directly from the keyframe editors.
+- Vertical timeline editing is supported natively (set timeline resolution to e.g. 1080x1920) — useful for short-form, but it is a manual timeline-settings change, not a format switcher.
+- Multicam editing on both Cut and Edit, plus AI Multicam SmartSwitch (Studio, from 20) which picks the angle by recognising the active speaker.
+
+## preview_playback
+- GPU-accelerated realtime playback engine; the same engine drives grading and Fusion, so what you see is the graded, composited result — colour parity between preview and render is one of Resolve's genuine strengths.
+- Optimised media and proxy media generation inside the app, user-selectable codec and resolution, with automatic fall-back to originals.
+- Proxy Generator, a separate free Blackmagic utility that watch-folders a drive and builds proxies outside Resolve.
+- Render cache (user/smart/none) at clip, node, fusion and timeline level, so heavy grades and comps play back in realtime once cached.
+- Full video scopes built in — waveform, parade, vectorscope, histogram, CIE chromaticity — and hardware monitoring out via Blackmagic DeckLink/UltraStudio for reference-display accuracy.
+- Performance is strongly GPU-bound; reporting consistently notes Magic Mask and Super Scale scale with VRAM, and long-clip mask tracking is the heaviest routine operation.
+
+## audio
+- Fairlight is a full DAW inside the app: up to 2,000 tracks realtime (Blackmagic's figure), buses, sub-mixes, automation, ADR panel, Foley sampler, immersive/3D audio formats including Dolby Atmos, elastic wave audio retiming, and an FairlightFX plugin set plus…
+- Resolve 21 Fairlight: collapsible track folders, six-band clip EQ, EQ and level matching, and Chain FX.
+- Studio AI audio: Voice Isolation (realtime dialogue extraction from background noise), Dialogue Separator (splits dialogue/music/effects out of a mixed track), Music Remixer, AI Audio Assistant (analyses all tracks and produces a balanced mix), AI Dialogue Mat…
+- AI Speech Generator (Studio, 21): text-to-narration voiceover generated inside the app from customisable voice models.
+- Loudness normalisation and metering to broadcast standards; audio-follows-video sync and auto-sync by timecode or waveform.
+
+## media_project_export
+- Deliver page with render queue, per-clip or single-clip render, and named presets — YouTube (720p/1080p/1440p/2160p), Vimeo, Twitter/X, ProRes, DNxHD/HR, H.264 Master, IMF, Dolby Vision, plus custom user presets.
+- Codecs: H.264, H.265/HEVC (Resolve 21 adds a MainConcept encoder option for H.265 and MV-HEVC including 4:2:2 and 4:2:0), ProRes, DNxHD/HR, EXR, TIFF, DPX, CinemaDNG; camera RAW in (BRAW, ARRIRAW, R3D, ProRes RAW — with expanded ProRes RAW on Windows in 21.1, …
+- Hardware encode and decode via NVENC/Quick Sync/Apple Media Engine where the GPU supports it.
+- Free edition caps render output at Ultra HD (3840x2160) and 60 fps, 8-bit; above that needs Studio.
+- Project management: a real database (local disk or PostgreSQL), project libraries, bins, power bins, smart bins, metadata and keywords, proxy relink, media-offline relink by path/filename, project archive with all media, autosave and live save, and timeline im…
+- Publishing: no built-in one-click post to TikTok/Instagram/YouTube from Deliver in the way a social-first tool has. Blackmagic Cloud offers hosted project libraries and Blackmagic Cloud Presentations for client review — a paid, account-based service, separate …
+
+## effects_color_text
+- Colour is the flagship: node-based grading (serial, parallel, layer, outside nodes), primaries and log wheels, curves, qualifiers, power windows with tracking, colour warper, Chroma Warp (20), HDR grading wheels, ACES 2.0 and OpenColorIO, LUT management and DC…
+- Fusion page: full node compositor with hundreds of 2D and 3D tools, planar and point tracking, camera tracking, paint, rotoscoping, particles (new 3D particle system in 21.1), keying, 3D scene with OpenPBR material shaders (21), deep compositing and Cryptomatt…
+- Resolve FX: a large built-in effects library (blurs, glows, film grain, film look creator, lens flares, beauty/face refinement, optical blur, depth map, warper, patch replacer, object removal, dead pixel fixer, stabiliser). Some — film grain, optical blur, doz…
+- Text: the basic Text tool plus Text+ (a Fusion-backed titler with full control over font, tracking, shading, outlines, background), Fusion title templates, and a small set of bundled animated title templates. There is no modern kinetic-typography preset browse…
+- 21/21.1 image tools: AI Motion Deblur, AI UltraSharpen, AI CineFocus (click-to-focus synthetic depth of field), AI Face Age Transformer, AI blemish removal and face refinement, Magic Mask 2.0 with improved edge detection, IntelliTrack.
+
+## ai_automation
+- Everything below is DaVinci Neural Engine and therefore DaVinci Resolve Studio only. The free edition has none of it — credible reporting states not even transcription.
+- Magic Mask / Magic Mask 2.0 — paint a stroke, get a tracked matte for a person, body part or object; single unified people-and-objects mode since 20; Render In Place option in 21.
+- Smart Reframe — reframes 16:9 to vertical/square by detecting and following the subject. This is the one feature closest to an ad-repurposing workflow.
+- Speech-to-text transcription of clips and timelines, and Text-Based Editing — edit by selecting words in the transcript, which assembles the timeline.
+- IntelliScript (20) — you supply the shooting script and it builds an edit timeline by matching transcribed takes to it, tolerant of paraphrase and ad-libs, and organises multiple takes.
+- IntelliSearch (21) — natural search of the Media Pool by people, objects, faces and on-screen text; documented as requiring separate model downloads.
+- IntelliTrack (21.1) — ML object tracking with effects applied across a timeline.
+- Voice Isolation, Dialogue Separator, Dialogue Matcher, Audio Assistant, Music Editor, Silence Removal, Speech Generator (see audio).
+- AI Multicam SmartSwitch — picks the camera angle by active speaker.
+- Animated Subtitles (20) — generates subtitles from transcription with animated presentation; subtitle editor improved in 21.1 with more caption formats.
+- Other Neural Engine tools: Super Scale upscaling, Speed Warp optical-flow retiming, Face Detection/face refinement, Scene Cut Detection, Auto Color and shot match, Depth Map, Object Removal, Slate ID (clapperboard detection, 21), AI-assisted dialogue replaceme…
+- What is absent: there is no text-to-video generation, no script/ad-copy generation, no AI b-roll sourcing, no template-filling 'make me an ad' agent, and no AI dubbing into other languages of the kind CapCut/HeyGen-class tools ship. Resolve's AI accelerates po…
+
+## templates_library
+- Deliberately thin compared with social-video tools. Bundled: Fusion title and transition templates, the standard transition and effects library, Resolve FX, and the Fusion/Krokodove generator set. Fusion compositions can be saved as reusable macros and templat…
+- Blackmagic runs no stock music, stock footage, stock sticker or font marketplace inside Resolve. There is no licensed music library, no sticker/emoji packs, no auto-beat-sync to a supplied track. A large third-party market (MotionVFX, Bilo, etc.) exists precis…
+- Blackmagic Cloud provides hosted project libraries, Blackmagic Cloud Store sync and Presentations for review — infrastructure, not creative assets.
+- Photo page (21) adds library/album organisation for stills with RAW support for Canon, Fujifilm, Nikon and Sony, Lightroom catalogue import, Apple Photos integration on macOS, and GPU-accelerated batch export.
+
+## backend
+ENGINE: Publicly documented: Resolve's processing is GPU-accelerated and the GPU API is user-selectable in Preferences > Memory and GPU, with the documented options being Metal and OpenCL on macOS and CUDA and OpenCL on Windows/Linux. Blackmagic's own system requirements state the floor as OpenCL 1.2 or Metal on Mac, OpenCL 1.2 or CUDA 11 on Windows, 2 GB VRAM for HD and 4 GB for 4K, and Studio supports multiple GPUs (documented up to 8). The internal image pipeline is 32-bit float YRGB with ACES 2.0 and OpenColorIO support, and DCTL is the public shader-authoring interface. Codec stack: hardware enco…
+AI MODELS: Not public. Blackmagic ships the DaVinci Neural Engine as an opaque brand and has never published model names, architectures, parameter counts, training data or licensing for any of it — not for Magic Mask, Smart Reframe, Super Scale, Speed Warp, Depth Map, the face tools, CineFocus, IntelliScript, IntelliSearch or IntelliTrack. There is no model card, no published benchmark, no open-source attribution list that I could find. What IS publicly documented, in Blackmagic's own 21 material and in reporting on it, is that some features (IntelliSearch is the named case) require downloading additiona…
+ASR/TTS: Not public. Resolve's speech-to-text drives transcription, Text-Based Editing, subtitle generation, IntelliScript and the active-speaker logic in Multicam SmartSwitch, and it works offline; Blackmagic does not name the ASR model or say whether it is proprietary or derived from an open model such as Whisper. Anyone claiming Resolve uses Whisper is asserting more than the vendor has said — I found n…
+COMPUTE: Locally, on the user's machine, and nothing is metered. This is well supported: Blackmagic sells a one-time $295 perpetual licence with no credit system, no per-minute pricing and no account tier for AI; the software's own requirements are framed entirely around local GPU and VRAM; features like IntelliSearch download models to the machine; and consistent credible reporting (The Post Flow among ot…
+CERTAINTY: Public documentation (Blackmagic's own pages, product page, compare page, 20/21 New Features Guides and release announcements): the Metal/CUDA/OpenCL selection and the VRAM/OS system requirements; multi-GPU support in Studio; the MainConcept H.265/MV-HEVC encoder in 21; the feature names themselves (Magic Mask, Smart Reframe, IntelliScript, IntelliSearch, IntelliTrack, CineFocus, Speech Generator, Audio Assistant, Dialogue Matcher, Music Editor, Multicam SmartSwitch, Voice Isolation); the Free-v…
+
+## ad workflow
+Today, a marketer making a 15-30 second product ad in DaVinci Resolve Studio 21.1 does roughly this. (1) Create a project and set the timeline resolution manually — for a vertical ad, 1080x1920; there is no aspect-ratio or ad-format picker, so this is Project Settings by hand, and if the footage was shot 16:9 you either duplicate the timeline and reframe or run Smart Reframe per clip (Studio). (2) Import footage into the Media Pool. Nothing is supplied: no stock video, no stock music, no licensed sound effects, no fonts beyond the system's, no product-mockup templates. Any asset the ad needs is sourced outside Resolve and imported. (3) Assemble on the Cut page — this is the part Resolve is genuinely fast at: source tape plus the dual timeline lets you scrub everything as one strip and slam selects down without zooming or scrolling, and smart edit modes place them. Studio users can instea…
+
+## checker
+- [public] GPU API is user-selectable in Preferences > Memory and GPU: Metal/OpenCL on macOS, CUDA/OpenCL on Windows/Linux — Correct and documented in the Resolve manual/config guides, but worth qualifying for 21: Resolve 21 is Apple-silicon-only, so the Mac path is effectively Metal; OpenCL on Mac is legacy/deprecated by Apple.
+- [wrong] System-requirement floor is OpenCL 1.2 or CUDA 11, 2 GB VRAM for HD and 4 GB for 4K — Stale (Resolve 18/19-era numbers). For Resolve 21 the published floor is OpenCL 1.2 or CUDA 12.8 with NVIDIA Studio Driver 570.65+ (Linux 580.119.02+), and 4 GB VRAM minimum outright — not 2 GB for HD. RAM floor is 16 GB on Windows (32 GB with Fusion), 8 GB on…
+- [wrong] Platform support as of 21.x is macOS 15.0+, Windows 10+, Rocky Linux 8.6 — Incomplete in a way that matters: Resolve 21 dropped Intel Mac support entirely — it requires Apple silicon (M1+) on macOS 15 Sequoia. Intel Macs are capped at Resolve 20. Also omits the native Windows-on-ARM (Snapdragon X Elite) build.
+- [reported] Studio supports multiple GPUs, documented up to 8 — Multi-GPU as a Studio-only capability is vendor-stated; the specific '8 GPUs' number and the fact that free is single-GPU come from spec/reporting write-ups, and independent testing (Puget) says it scales poorly past 3-4.
+- [public] 32-bit float YRGB pipeline with ACES and OpenColorIO, DCTL as the public shader interface — Accurate and long-documented in Blackmagic's manual and colour-management pages. No correction.
+- [public] Resolve 21 adds a MainConcept encoder for H.265 and MV-HEVC — Confirmed on Blackmagic's own What's New page: 'new MainConcept render option for H.265 and MV-HEVC 4:2:0 and 4:2:2'. Missing context: MainConcept has separately sold a paid Codec Plugin for Resolve Studio since 2021, so 'MainConcept in Resolve' is not new, on…
+- [inference] Internal renderer architecture, scheduler, CPU fallbacks and any shared abstraction layer over Metal/CUDA/OpenCL are not public; the abstrac… — Correctly labelled. Nothing found contradicting it.
+- [public] Blackmagic has never published model names, architectures, parameter counts, training data or licensing for any Neural Engine feature — Holds up — no model cards, benchmarks or attribution lists found on vendor pages for Magic Mask, Smart Reframe, Super Scale, Speed Warp, IntelliTrack, IntelliSearch, CineFocus etc.
+- [reported] IntelliSearch requires downloading additional models into the application, establishing models as discrete local artefacts — Reported rather than prominently vendor-documented, but consistent with the on-device framing; reasonable as stated.
+- [wrong] Whether the hardware NPU is used, as opposed to the GPU, is not public — Partly wrong. Blackmagic has publicly and specifically claimed NPU acceleration of the Neural Engine on Snapdragon X Elite — 'up to 4.7x faster' Magic Mask and 2x faster Smart Reframe via the NPU — so at least one NPU path is vendor-documented and even quantif…
+MISSING:
+- Resolve Studio 21.1 ships a NATIVE MCP SERVER (File > Setup AI Assistants) that connects Resolve to Claude, Claude Code and ChatGPT Codex, letting an assistant build a highlight edit, prune sub-1s clips and render H.265 from a conversationa…
+- 20 new scripting APIs in 21.1 covering render/keyboard presets, codec queries, retrieval of Media Pool transcriptions WITH SPEAKER TIMING, multicam create/flatten, timeline Inspector properties, transitions, audio normalisation and output b…
+- Inspector presets arrived only in 21.1 — recalling a saved Inspector configuration for audio/video clip effects across clips. Resolve still has no slot-based template system in the CapCut/short-form sense; the nearest equivalents are Fusion…
+- Smart Reframe is the auto 16:9 -> 9:16 / 1:1 vertical conversion feature and it is Studio-only, with Auto (Neural Engine subject tracking) and Reference Point modes. This is the direct counterpart to a short-form editor's auto-reframe and t…
+- Caption/subtitle plumbing in 21.1: a redesigned subtitle editor, additional caption format support, and QuickTime and MXF renders carrying MULTIPLE embedded caption tracks — relevant to multi-language ad delivery. https://www.newsshooter.co…
+- Blackmagic Cloud is the metered part of the product and has real numbers: $5/month per project library (host pays, collaborators free) and $15/TB/month cloud media storage after a 50% cut in Nov 2024, with a further Blackmagic Cloud price i…
+- Blackmagic Cloud Presentations (the Frame.io-style client review path an ad shop would use) has its own tiers: a free account with 2 GB, 2 members and 1 presentation, and a $15/month tier with 500 GB, 30 members and 20 presentations. Known …
+- Resolve 21 added a whole Photo page plus 100+ new motion graphics effects — product/still-heavy ad work is now in scope in a way the researcher's backend summary never mentions. https://www.blackmagicdesign.com/products/davinciresolve
+- Vendor-documented AI features the researcher's list omits, several of which map directly onto product-video and ad work: UltraSharpen, Motion Deblur, AI Face Age Transformer, facial reshaping and blemish removal, and AI Slate ID metadata ex…
+- AI Speech Generator does voice cloning from a ~10-second sample, per Blackmagic's own copy — a direct feature-for-feature comparison point against an ad editor's synthetic-VO offering, and one the researcher wrongly filed as 'not public'. L…
+
+SOURCES (9): https://www.blackmagicdesign.com/products/davinciresolve | https://www.blackmagicdesign.com/products/davinciresolve/compare | https://www.blackmagicdesign.com/support/family/davinci-resolve-and-fusion | https://www.sportsvideo.org/2026/09/09/ibc-2026-blackmagic-design-releases-davinci-resolve-21-1/ | https://www.cgchannel.com/2026/06/blackmagic-design-releases-davinci-resolve-21-0/ | https://www.cgchannel.com/2025/05/blackmagic-design-releases-davinci-resolve-20-0/ | https://davinciresolveclub.com/davinci-resolve-21-whats-new/ | https://thepostflow.com/ai/ai-in-davinci-resolve/
+
+
+# FINALCUT — Final Cut Pro (Mac), with Final Cut Pro for iPad as a companion app
+VERSION: Mac: Final Cut Pro 12.3, released 30 June 2026 — the newest entry on Apple's release-notes page as of 22 Sept 2026. Prior 2026 releases: 12.2 (9 Apr 2026), 12.0 (28 Jan 2026). 11.2 (late 2025) added ProRes RAW controls for iPhone 17 Pro footage. The AI feature set being compared here largely arrived in Final Cut Pro 11 (13 Nov 2024). iPad: Final Cut Pro for iPad 3.3, released 30 June 2026 (3.0 on …
+CATEGORY: Professional desktop NLE (trackless "Magnetic Timeline" model), macOS-only, with a touch-first iPad sibling. Not an ad generator: there is no text-to-video, no script/copy generation, no stock-ad template marketplace in the app.
+PLATFORMS: macOS only for the Mac app — macOS 15.6 or later, 8 GB RAM (16 GB recommended), ~7.2 GB disk, per Apple's tech-specs. Intel Macs still run the app, but essentially every AI feature (Transcribe to Captions / Generate Captions, Transcript Search, Visua…
+TARGET: Professional and prosumer editors on Mac: documentary, corporate, wedding/event, YouTube and social creators. On iPad, a lighter creator-oriented tool (Creator Themes, Montage Maker, Live Multicam). It is not aimed at marketers who want an ad produced for them — it assumes someone who edits.
+PRICING: Two routes as of 2026. (1) One-time purchase, still available: Final Cut Pro for Mac US$299.99 on the Mac App Store, Compressor US$49.99, Motion US$49.99 (Compressor/Motion prices are long-standing and widely reported rather than quoted from the page I read). Existing one-time owners keep getting updates including 12.0–12.3. (2) Apple Creator Studio, launched 28 Jan 2026: US$12.99/month or US$129/year (students/educators US$2.99/month or US$29.99/year), one-month free trial, Family Sharing up to six people. It bundles Final Cut Pro, Logic Pro and Pixelmator Pro on Mac and iPad, plus Motion, Compressor and MainStage on Mac, plus premium features in Keynote/Pages/Numbers/Freeform. Final Cut Pro for iPad remains its own subscription, widely reported at US$4.99/month or US$49/year. None of the AI features is metered or charged per use — captions, masks, Smooth Slo-Mo, Voice Isolation, Transc…
+
+## ai_automation
+- Transcribe to Captions / Generate Captions — automatic captions or subtitles from spoken audio, created as connected clips synced to speech. Apple documents it as requiring a Mac with Apple silicon; the guide page I read states the feature is available in U.S.…
+- Magnetic Mask (FCP 11, Nov 2024) — isolates people and objects without a green screen or manual rotoscoping, tracked across frames with machine learning; combinable with color correction and effects.
+- Auto Mask (FCP 12.3, June 2026) — isolates recognized categories such as skin, hair, sky, foliage and clothing with no tracking step. Apple's guide describes Auto Mask and Magnetic Mask together as "AI-enhanced mask effects"; Auto Mask is an addition, not a re…
+- Enhance Light and Color — one-click automatic improvement of color, color balance, contrast and brightness on video or stills; documented as running on the Neural Engine and tuned for SDR, HDR, RAW and Log media. Also on iPad since 2.1.
+- Smooth Slo-Mo — generates and blends intermediate frames for high-quality slow motion (Apple's launch example was iPhone 16 Pro 4K120). Apple silicon required; above 1920x1080 it needs analysis and render time; above 4K needs M2 or later; 8K is the ceiling.
+- Voice Isolation — enhances speech and reduces background noise from field audio, in the Enhance audio section of the guide.
+- Transcript Search (12.0, Jan 2026) — find spoken words or phrases in footage by exact match or natural-language description. Apple silicon required.
+- Visual Search (12.0) — find moments, objects and actions in footage using natural language. Apple silicon required.
+- Beat Detection (12.0) — analyzes a song to expose its bars and beats so cuts can be aligned to the rhythm.
+- Edit Detection (12.3) — automatically reveals shot changes in an already-flattened clip.
+- Match Color, rebuilt in 12.3 — match a clip's color to a reference frame across cameras, lighting and cinematic styles.
+- Scene Removal Mask, Object Tracker, Smart Conform (auto reframe to a new aspect ratio), auto speech/audio classification — all pre-11 ML features that remain.
+- iPad-only: Montage Maker (AI-assisted montage building), Creator Themes.
+- Not present: no text-to-video generation, no script or ad-copy writing, no AI voice/dubbing, no AI b-roll sourcing, no "remove filler words / silences" one-click cut of the kind CapCut or Descript ship.
+
+## audio
+- Voice Isolation and the Enhance audio panel (speech enhancement, background-noise reduction, level optimization)
+- Role-based audio organization, audio lanes, subroles
+- Built-in EQ, compressor and other audio effects; Logic-derived processing; Audio Units plugin support (12.3 specifically reduced startup time with many Audio Units installed)
+- Audio keyframing, fades, detach audio (detach added on iPad in 3.3)
+- Voiceover recording
+- Beat Detection for music-driven cutting
+- Round-trip to Logic Pro (same bundle under Creator Studio)
+
+## effects_color_text
+- Color Wheels, Color Curves, Hue/Saturation Curves, Color Board; LUT support including camera-manufacturer log LUTs
+- HDR grading, Apple Log and Apple Log 2 support, ProRes RAW parameter controls (exposure, temperature, tint) added in 11.2
+- Magnetic Mask, Auto Mask, Scene Removal Mask, shape and color masks for targeted grades
+- Match Color (rebuilt 12.3)
+- Titles and generators; dynamic titles on iPad 3.0; Motion (bundled in Creator Studio) authors custom titles, transitions, effects and generators that appear inside FCP
+- Third-party effect ecosystem is large and mostly paid (FxFactory, MotionVFX and similar) — this is where most "ad template" looks actually come from
+- Spatial video editing and delivery to Apple Vision Pro (FCP 11)
+
+## media_project_export
+- Library / Event / Project model with a database-backed library file, not a flat project file; 12.0 added a toolbar menu for creating projects, events and libraries
+- Automatic background saving — there is no manual save step
+- Optimized (ProRes) and proxy media generation and relinking; 12.3 switched proxy media to HEVC from H.264
+- FCPXML 1.14 (12.0) for interchange with other tools and for the plugin/automation ecosystem
+- Share destinations with presets: master file, Apple Devices presets, YouTube, Facebook, Vimeo, plus user-defined destinations and Compressor settings as destinations
+- Compressor (separate app, bundled in Creator Studio) for HDR, HEVC, MXF, 360/spatial, closed captions in several formats, audio descriptions, iTunes Store packaging, batch and distributed encoding across Macs, and presets for iPhone/iPad/Apple TV, YouTube, Ins…
+- Hardware encode/decode via the Apple silicon media engine (ProRes and H.264/HEVC accelerators) — Apple markets the speed; see backend certainty note
+- iPad 3.0 added background exports with Live Activities
+
+## preview_playback
+- Real-time playback without a pre-render step for most work; background rendering runs continuously and can be disabled
+- Proxy, optimized and original/optimized playback modes, with a Better Quality / Better Performance toggle
+- Video scopes: waveform, vectorscope, histogram
+- Metal-based rendering and the Apple silicon media engine for ProRes/HEVC decode
+- Persistent two-up display for precise trimming (12.3)
+- Practically: parity between preview and export is high because preview and export use the same render pipeline, but heavy ML effects (Smooth Slo-Mo above HD, masks) need analysis/render time rather than playing back live
+
+## templates_library
+- No stock-footage, stock-music or ad-template marketplace inside the app. This is the sharpest contrast with CapCut-style tools.
+- Built-in titles, generators, transitions and effects, plus a modest bundled sound-effects and music collection
+- Motion templates are the extension mechanism: anything authored in Motion appears as a native FCP title/effect/transition/generator, and a large third-party paid market exists for these
+- Creator Themes on iPad (enhanced in 3.3) are the closest thing to a social-video template system Apple ships
+- Apple mentions "premium content" that requires the Creator Studio subscription — the exact catalogue is not something I verified
+
+## timeline_editing
+- Magnetic Timeline: a trackless primary storyline. Apple's guide states that when you insert, trim or move clips in the primary storyline, surrounding clips automatically move out of the way or snap together to avoid unwanted gaps and collisions.
+- Ripple is the DEFAULT trim: Apple documents that the default trim type is a ripple edit, which adjusts a start or end point without leaving a gap, and the duration change ripples outward moving all later clips. This is the inverse of a track-based NLE, where o…
+- Gaps therefore have to be asked for. Delete removes and closes up; Edit > Replace with Gap (Shift-Delete) substitutes an explicit gap clip to preserve total duration and timing — and Apple notes this method preserves connected clips.
+- Connected clips instead of tracks: B-roll, titles and graphics attach above the primary storyline, music and SFX below, and Apple documents that moving a primary-storyline clip moves its connected clips with it, keeping the edit in sync. Connection points can …
+- Compound clips (nesting), secondary storylines (a mini magnetic timeline hanging off the primary one, which is how you ripple-trim connected material safely), auditions
+- Trim tools: Select, Trim (with slip and slide by dragging inside/across a clip), Position (overwrite behavior, turns the magnetic timeline off locally), Range, Blade, Zoom, Hand; precision trim window; numeric trim
+- In/out points, markers (including to-do markers and chapter markers), keywords, ranges, favorites/rejects
+- Retiming with speed ramps, constant and variable speed, hold, reverse, and Smooth Slo-Mo as a retiming quality option
+- Link/unlink is not the model — audio and video are one clip and are expanded or detached rather than link-toggled; detach audio exists on both Mac and iPad
+- Roles drive organization and export stems rather than track assignment
+- Deep, learnable keyboard model with a full command editor and importable/exportable command sets
+
+## backend
+ENGINE: Public: Apple markets Final Cut Pro as built for Apple silicon and taking full advantage of M-series chips, with rendering on Metal (Metal is the only GPU API on macOS; Apple documents Final Cut Pro as a Metal-based app and the third-party plugin path, FxPlug 4, is explicitly a Metal API). Codec stack is Apple's: ProRes and ProRes RAW encode/decode accelerated by the media engine in M-series silicon, H.264/HEVC hardware encode/decode, Apple Log and Apple Log 2, HDR pipelines, MXF via Compressor. No CUDA — there is no NVIDIA path on this platform at all. INFERENCE (labelled): playback is almost…
+AI MODELS: Publicly documented by Apple: Transcribe to Captions uses "an Apple-trained large language model" (Apple's own newsroom wording for Final Cut Pro 11), and Apple's support guide says the language model is downloaded to the Mac once on first use, after which captioning runs locally. Apple documents that Magnetic Mask and Auto Mask are "AI-enhanced mask effects" that track an item "using machine learning", that Enhance Light and Color leverages the Neural Engine, and that Smooth Slo-Mo uses an AI-enhanced frame-generation algorithm on Apple silicon. Apple states these features are "made possible …
+ASR/TTS: ASR: Transcribe to Captions (called Generate Captions in the 12.x UI) is Apple's own speech-to-text via the Apple-trained LLM above, not OpenAI Whisper and not a third party — Apple says so explicitly. The Apple support page I read for automatic subtitles says it requires Apple silicon and is available in U.S. English only; Nov-2024 reporting (9to5Mac) said further English variants shipped with ma…
+COMPUTE: Local. Every AI feature named here runs on the user's Mac — Apple's only documented network dependency is the one-time download of the captioning language model, and the support page says that download happens once. Nothing is metered per render, per minute of transcription or per mask. Uploading to YouTube/Vimeo/Facebook from Share, and Compressor's iTunes Store delivery, are obviously networked.…
+CERTAINTY: Public documentation (Apple newsroom, apple.com/final-cut-pro, Apple Support release notes and user guide): the Apple-trained LLM for captions; the one-time local model download; Apple-silicon requirements for captions, Transcript Search, Visual Search, Smooth Slo-Mo and the mask tools; Smooth Slo-Mo's M2/4K/8K limits; Neural Engine for Enhance Light and Color; Metal as the graphics foundation of macOS and the ProRes/media engine in M-series silicon; version numbers and dates; $299.99 one-time a…
+
+## ad workflow
+A marketer making a 15-30 s product ad in Final Cut Pro 12.3 today, honestly: (1) Create a library, event and project; pick a preset or a vertical/square custom resolution up front — there is no \"make me a 9:16 ad\" starting point, though Smart Conform will reframe an existing horizontal edit and keep the subject in frame. (2) Import footage. Manual. (3) Find your takes: Transcript Search and Visual Search (12.0, Apple silicon) genuinely help here — type a phrase someone said, or describe a shot in natural language, and jump to it. Edit Detection (12.3) will split an already-flattened supplied clip back into shots. (4) Cut on the magnetic timeline: append/insert into the primary storyline, and ripple is the default so the ad tightens as you trim, with no gap cleanup — this is the model's best trait for short punchy cuts. Connected clips keep product beauty shots, logo stings and music p…
+
+## checker
+- [public] Final Cut Pro is built for Apple silicon, renders on Metal, and uses Apple's ProRes/ProRes RAW media engine; no CUDA/NVIDIA path. — Apple's product page markets the Apple-silicon/media-engine story and FxPlug 4 is documented as a Metal API. The 'no CUDA' half is really an inference from macOS having no NVIDIA driver path — correct, but Apple never states it about Final Cut Pro. Fine as wri…
+- [inference] Playback is almost certainly AVFoundation/Core Video plus Metal compute; Apple publishes no render-engine architecture document. (labelled I… — Correctly labelled. I found no Apple architecture document for the Final Cut Pro render engine; nothing contradicts it.
+- [public] 12.3 changed proxy media from H.264 to HEVC. — Confirmed verbatim in Apple's release notes for 12.3 (30 June 2026): proxy media is now generated using HEVC instead of H.264, for improved compression efficiency and HDR support. Same release also sets background rendering to Off by default — a pipeline fact …
+- [public] Apple's newsroom calls the captioning model 'an Apple-trained large language model'. — Confirmed verbatim in the Final Cut Pro 11 newsroom post; the same post says 'existing AI-powered features made possible by Apple's Neural Engine' and 'takes full advantage of Apple's M-series chips'. Their quoting is accurate.
+- [public] The captioning language model is downloaded to the Mac once on first use, after which captioning runs locally. — The support guide says the download happens only once and an internet connection is required. Apple does not say 'after which captioning runs locally' in those words — that part is a (reasonable) inference, not a quote.
+- [inference] Model identity, architecture, parameter count, training data and licensing are not public; Core ML on the Neural Engine is an inference. — Accurate and correctly hedged. Apple publishes no model card for any Final Cut Pro model and never links the caption model to Apple Intelligence's foundation model.
+- [inference] 'Transcribe to Captions' is simply called 'Generate Captions' in the 12.x UI — a rename. — Apple never documents a rename. The 12.3 release notes introduce Generate Captions as a new item alongside 'easily convert existing closed captions to subtitles' and a command to select all subtitles — i.e. it produces subtitles, which are a different object i…
+- [wrong] The live caption language list may exceed U.S. English; 9to5Mac reported English variants in macOS 15.2 and French/Japanese/Portuguese/Spani… — As of today Apple's current Generate Captions guide still states 'Available in U.S. English only', and the 12.3 and iPad 3.3 release notes repeat 'U.S. English only'. The 9to5Mac piece was reporting an expected Apple Intelligence roadmap in Nov 2024, not a shi…
+- [inference] No TTS, no synthetic voiceover, no AI dubbing or translation of any kind. — Sound but argued from absence. I checked the 12.0/12.2/12.3 and iPad 3.0/3.3 release notes and the product page: no speech synthesis, dubbing or translation appears. Worth stating as 'not documented anywhere' rather than as a positive fact.
+- [wrong] Every AI feature runs on the user's Mac; the only documented network dependency is the one-time caption model download. — Too absolute for the 2026 app. Apple's own Creator Studio support page says certain intelligence features 'require specific devices, iOS and macOS versions, and an Apple Account with iCloud enabled', and that some features may require internet access. Creator …
+MISSING:
+- Apple acquired MotionVFX on 16 March 2026 — the largest maker of Final Cut Pro templates, transitions, plugins and the in-app Design Studio browser, with ~70 staff joining Apple. For a templates/slots comparison this is the single most impo…
+- Creator Studio's Content Hub: premium templates, themes, and a library of royalty-free photos and graphics, and Apple states plainly that 'access to some of the premium content is available only to Apple Creator Studio subscribers' — i.e. t…
+- Smart Conform: content-aware auto-reframe that analyses each clip for faces and areas of visual interest and reframes to 9:16, 1:1 or custom ratios via Duplicate Project As. This is Final Cut Pro's core short-form repurposing feature and th…
+- Edit Detection (12.3): analyses any rendered video, reveals its shot changes and automatically splits it into separate clips — directly comparable to an ad editor's auto-cut/scene-split. Source: https://support.apple.com/en-us/102825
+- Beat Detection (12.0, Apple silicon): analyses a music track and shows a bar/beat grid so cuts land on the rhythm — the feature short-form editors usually market as 'auto beat sync'. Source: https://support.apple.com/en-us/102825
+- Final Cut Pro for iPad 3.0's Montage Maker ('effortlessly create visual highlights videos set to your music') plus 3.3's Creator Themes with multiple aspect ratios, dynamic titles, countdowns and timers, and customizable backgrounds — this …
+- Auto Mask (12.3) is distinct from Magnetic Mask: it isolates recognized classes (skin, hair, sky, clothing) with no manual tracking, which is the product-video retouch primitive. Source: https://support.apple.com/en-us/102825
+- Voice Isolation and Object Tracker are on Apple's feature list alongside Enhance Light and Color; 12.3 also adds ML-based background-noise level adjustment for speech clarity. The researcher named Voice Isolation only in the pricing paragra…
+- Apple's Creator Studio support page states some intelligence features require 'an Apple Account with iCloud enabled' and that some features may require internet access — the one documented crack in the 'fully local, no sign-in' framing, and…
+- Image Playground / Apple Intelligence image generation is built into Final Cut Pro 11.1 and Final Cut Pro for iPad 2.2 (requires macOS 15.2+ and M1 or later) — generative AI inside the editor, which the research's 'no generative capability'…
+
+SOURCES (18): https://support.apple.com/en-us/102825 | https://support.apple.com/en-us/102731 | https://www.apple.com/final-cut-pro/ | https://www.apple.com/final-cut-pro/compressor/ | https://www.apple.com/newsroom/2024/11/final-cut-pro-11-begins-a-new-chapter-for-video-editing-on-mac/ | https://www.apple.com/mt/newsroom/2026/01/introducing-apple-creator-studio-an-inspiring-collection-of-creative-apps/ | https://support.apple.com/guide/final-cut-pro/generate-subtitles-automatically-verd6d52c4e8/mac | https://support.apple.com/guide/final-cut-pro/use-auto-mask-or-magnetic-mask-ver574fc632c/mac
+
+
+# DESCRIPT — Descript
+VERSION: No public semantic version number for the desktop app — Descript ships continuously and does not publish a numbered release/changelog publicly (not public). What is datable as of 22 Sep 2026: the current metering model (media minutes + AI credits) replaced the old transcription-hours model in September 2025; Underlord is still labelled "(Beta)" in the help center article title; the "Season 6 / mee…
+CATEGORY: Cloud-backed, transcript-first video/audio editor with an agentic AI co-editor. It is a hybrid: desktop apps (macOS/Windows) plus a Chromium web app, with project media and all AI processing in Descript's cloud. Positioned for podcasts, YouTube, courses, internal/marketing video and social repurposi…
+PLATFORMS: macOS 14 (Sonoma) or later, Intel 7th-gen+ or Apple Silicon M1+; Windows 11 or later, Intel 7th-gen+ with Quick Sync or AMD Ryzen 3000+. Recommended 16 GB RAM (16–32 GB on Intel/Windows depending on resolution), 8 GB minimum, 4–6 GB dedicated GPU mem…
+TARGET: Podcasters, YouTubers, course and webinar creators, and increasingly marketing/comms teams doing talking-head, demo and repurposed social video. The core user is someone who thinks in script, not in frames — Descript's entire premise is that deleting a word deletes the audio. It is a poor fit for an…
+PRICING: Five tiers, per user, annual saves ~33–35%.
+- Free: $0. 60 media minutes/month, 100 one-time AI credits, limited AI tool access, 5 GB storage, 720p export with watermark (one watermark-free export/month per third-party reporting; the pricing page itself just says watermarked 720p).
+- Hobbyist: $24/mo monthly, $16/mo billed annually. 10 media hours/month, 400 AI credits/month, 1080p watermark-free export, 100 GB storage.
+- Creator: $35/mo monthly, $24/mo annually. 30 media hours/month, 800 AI credits/month, 4K export, 1 TB storage, unlimited stock media, "Full Underlord access", Lip Sync.
+- Business: $65/mo monthly, $50/mo annually. 40 media hours/month, 1,500 AI credits/month, 2 TB storage, Brand Studio, translation/dubbing in 30+ languages, translation proofreading, SLA support.
+- Enterprise: custom, with custom media hours/credits, SOC 2 Type II, SSO, SCIM.
+
+What is metered — two meter…
+
+## timeline_editing
+- Script Editor as the primary surface: automatic transcription, then edit media by editing text — delete a word, the audio and video go with it
+- A real timeline exists alongside it, collapsed by default, opened with Ctrl/Control+Alt/Option+T; contains a script track, a Wordbar showing script-to-audio alignment, layer lanes, a time ruler with timecode/markers/comments/audio levels, and transport control…
+- Five named tools with single-key shortcuts: Select (A) for move/trim/combine, Range (R) to highlight a section of the script track, Blade (B) to split, Slip (S) to change which portion of a clip plays without moving it, Hand (H) to navigate
+- Split button at the top of the timeline splits scenes, clips and layers; also used to trim layers or isolate a section of audio
+- Scenes and layers model rather than pure tracks: a composition is a sequence of scenes, each carrying visual and audio layers that appear in both the scene editor and the timeline
+- Storyboard view as an alternative to the timeline view; zoom-to-fit scene or whole composition
+- Multitrack sequence editor for separate mic tracks, with solo and per-track mono export
+- Notable gaps versus an NLE: Descript's own timeline docs do not describe ripple-delete semantics, slide, trim-with-keyboard, nesting, or speed ramps as first-class named features — ripple behaviour is implicit in script editing rather than a timeline mode
+
+## preview_playback
+- Playback is local in the desktop app over media that has been uploaded to and synced from Descript's cloud
+- Recommended hardware assumes GPU acceleration (4–6 GB dedicated GPU memory) and Quick Sync on Intel Windows machines; the screen recorder requires 2021-or-newer GPU drivers
+- No published proxy workflow, no scopes, no colour-managed preview parity claims — Descript does not present itself as a finishing tool
+- AI effects are not real-time: Studio Sound, Eye Contact, Green Screen and dubbing are jobs sent to the cloud and rendered back, and Descript warns Studio Sound is slow on files of 6+ hours or several GB
+
+## audio
+- Studio Sound — AI enhancement of spoken voice that reduces background noise, echo and other distractions, with an Intensity slider; applies at the file level across the whole project, cannot be applied to AI-generated speech without first converting it to an a…
+- Remove Filler Words with per-instance control: Delete, Delete and replace with gap, Ignore (strikethrough, audio removed, record kept), Remove from transcript only; an 'Avoid harsh cuts' option skips fillers that cannot be cut without clipping neighbouring wor…
+- Volume normalization on export to LUFS targets from -14 to -24
+- Multitrack sequence editor; export individual sequence tracks as mono
+- Underlord can apply audio effects (e.g. reverb) and adjust levels on request
+- Built-in music and sound-effects stock library
+
+## media_project_export
+- Local export to MP4 (and GIF, now a format option under Local Export → Video). MP4 is the only container Descript exports
+- Resolutions 480p / 720p / 1080p / 4K, gated by plan (Free 720p watermarked, Hobbyist 1080p, Creator+ 4K); Low/Medium/High quality
+- Audio export settings: 44.1 or 48 kHz, mono/stereo, 32–256 kbps
+- Export scope: current composition, a selection, a single scene, or batch-export all scenes/all compositions — genuinely useful for cutting many ad variants at once
+- Metadata: show/episode titles, and markers exported as chapters
+- Subtitles exported as embedded (not burned-in) tracks, plus separate subtitle export
+- Timeline export/round-trip to Premiere Pro, Final Cut Pro and Pro Tools with media, edits and source timecode intact
+- Direct publish to YouTube from the Export panel with title, description, tags and thumbnail, up to 4K/3 hours on Creator+ (720p/1 hour Free, 1080p/1 hour Hobbyist)
+- Projects live in cloud Drives; storage quota is part of the plan (5 GB free up to 2 TB Business)
+
+## effects_color_text
+- Captions: styled, social-ready text; Underlord can add and style them; captions can be translated into other languages
+- Layout packs and the Remixer for building branded layouts; animated callouts, lower thirds, camera layouts
+- Animations and transitions: pans, zooms, fades and effects, applicable by hand or by asking Underlord
+- Green Screen (AI background removal) and Eye Contact as AI video effects in the Effects tab
+- Brand Studio (Business/Enterprise): Drive-level brand assets — Google Fonts added to the Drive, brand colours, layout packs built in the Remixer, and up to 50 shared media assets (music, logos, b-roll) that do not consume media minutes when reused
+- No colour grading, scopes, LUTs or node-based compositing — this is not where Descript competes
+
+## ai_automation
+- Underlord — the agentic co-editor in the right sidebar of any project. Named capability areas in Descript's own docs: Captions, Clips, Animations & Transitions, Translation, Audio, and Slides to Video. Marketing adds: writing scripts and giving editorial feedb…
+- Underlord has an explicit model picker (cube icon) offering Claude, Gemini, GPT and Grok variants, with premium models gated to paid plans — this is unusual candour and it is in the vendor's own help doc
+- Underlord templates, plus user-saved custom templates, to re-run a workflow
+- Undo/rollback of changes Underlord made
+- Create Clips — turns a long composition into 1–20 self-contained clips, each 10 s to 5 min, in 9:16 / 1:1 / 16:9 plus gallery and custom layout packs, optionally steered by a topic/goal/criteria prompt; each clip becomes its own editable composition in a folde…
+- Remove Filler Words (English only)
+- Studio Sound
+- Eye Contact — redirects gaze to camera; single clear face, well lit, mostly straight-on; skips sections where the subject turns away; fails on variable frame rate video
+- Green Screen background removal
+- AI Speech / Overdub lineage: stock AI voices, custom voice clone (Overdub), TTS from typed text, and AI Speaker management. Descript has rebranded the surfaces to 'AI Speech' and 'Regenerate' while 'Overdub' persists in marketing and user vocabulary
+- Translate captions, Dub speech (translated AI voiceover), and Lip Sync to match mouth movement to dubbed audio (Creator+). Translation proofreading is Business/Enterprise. Descript is explicit that translation is a finishing step producing a new composition wi…
+- Avatars and generated video are listed as credit-consuming features
+- Automatic transcription in 26 supported languages
+
+## templates_library
+- Built-in stock library in the Media panel: stock video, images, GIFs, stickers, backgrounds, music and sound effects, alongside your own Media Library. Unlimited stock media access is a Creator-plan entitlement; Descript does not publish a catalogue size (not …
+- Layout packs, including a gallery of packs and custom packs built with the Remixer
+- Underlord templates (Descript-provided) and custom templates you save yourself — the closest thing to a repeatable ad recipe
+- Brand Studio (Business/Enterprise) as the team-level template/asset store: fonts, colours, layout packs, up to 50 shared media assets
+
+## backend
+ENGINE: Not public. Descript does not document its render/playback engine, codec stack or GPU frameworks. What IS documented: exports are MP4 only (with GIF as an option), audio at 44.1/48 kHz and 32–256 kbps, and system requirements that call for 4–6 GB of dedicated GPU memory and specifically Intel Quick Sync on Intel Windows machines — which credibly implies hardware-accelerated H.264 encode/decode in the desktop app, but Descript never names the codec or the encoder. Inference on my part, clearly labelled: an editor that lists Quick Sync as a requirement and exports MP4 is almost certainly doing H…
+AI MODELS: Mixed, and unusually well evidenced for a closed product.
+
+Publicly documented by Descript: (a) Underlord lets the user choose the reasoning model from Claude, Gemini, GPT and Grok variants — stated in Descript's own help article, so Descript is explicitly a reseller of third-party frontier LLMs for the agent layer. (b) Descript's subprocessor page names Anthropic API (Claude, Claude Code), OpenAI API, OpenRouter, Hugging Face, ElevenLabs, Baseten, Andromeda.ai, AWS and Google Cloud, all under Engineering. OpenRouter's presence is consistent with the multi-model picker; Baseten is a model-infe…
+ASR/TTS: ASR: Descript transcribes automatically in 26 supported languages and lets you import your own transcript or correct the generated one. The underlying ASR model is not public — Descript names no vendor and no model, and I found no vendor statement that it is Whisper or anything else. Filler-word detection is English-only, which is a transcript-layer limitation rather than an ASR one. Descript publ…
+COMPUTE: Hybrid, tilted hard toward cloud. Documented: media is uploaded to Descript Drives; Studio Sound explicitly 'requires an internet connection and processes in the cloud'; Eye Contact is explicitly cloud-based and needs an active connection during processing; transcription, Underlord, translation and dubbing are all cloud services. Descript states a minimum 50 Mbps down / 10 Mbps up. There is no off…
+CERTAINTY: Claim by claim.
+PUBLICLY DOCUMENTED (Descript's own site/help/subprocessor/research pages): the Underlord model picker offering Claude/Gemini/GPT/Grok; the subprocessor list (Anthropic, OpenAI, OpenRouter, Hugging Face, ElevenLabs, Baseten, Andromeda.ai, AWS, GCP, Vercel); the research papers and model names (UVM-v2, ATS, Video Regenerate, Jumpcut Smoothing, PoDAR, DAC/Improved RVQGAN, MelGAN, NU-GAN, Wav2CLIP) with their dates; Studio Sound and Eye Contact being cloud-processed and internet-req…
+
+## ad workflow
+Making a 15–30 s product ad in Descript today, honestly described.
+
+Path A — you have footage of a person talking (Descript's home ground, and it works well):
+1. Record in-app (screen, webcam, mic, or a Rooms session with guests) or upload. Every minute counts against media minutes on upload, before you have made a single edit.
+2. Transcription happens automatically. This is the unlock: you now edit by deleting text.
+3. Ask Underlord, or run the tools by hand: Remove Filler Words (English only, with the 'avoid harsh cuts' option), Studio Sound on the audio, Eye Contact if they were reading notes, Green Screen if you want a background swap. Each is a cloud job costing credits.
+4. Cut to length. For a 15–30 s ad from a longer take, Create Clips is the intended route: ask for N clips of 10–30 s in 9:16, optionally with a prompt like "the strongest product benefit statement". Each returned c…
+
+## checker
+- [public] Engine/codec stack not public; MP4-only export (GIF option), 44.1/48 kHz, 32–256 kbps audio, LUFS normalization — Confirmed on the export help page: MP4 with GIF as a Format option under Local Export → Video; 480p/720p/1080p/4K; mono/stereo; 44.1 or 48 kHz; bitrate 32–256 kbps; normalization Off/Peak/-14/-16/-18/-23/-24 LUFS. No codec, encoder or engine is named anywhere …
+- [public] System requirements call for 4–6 GB dedicated GPU memory and Intel Quick Sync on Intel Windows machines — Confirmed: macOS 14+ / Windows 11+, Intel 7th Gen (Kaby Lake)+ or Apple silicon M1+, Windows additionally requires Quick Sync or AMD Ryzen 3000/Threadripper 2000+, GPU 4 GB (HD/some 4K) and 6 GB+ for 4K, 8 GB RAM min / 16–32 GB recommended, 50 Mbps down / 10 M…
+- [inference] Local export almost certainly does hardware H.264 (plausibly H.265) encode locally — labelled inference — Correctly labelled. Descript names no codec or encoder. The Quick Sync + AMD Ryzen 3000 requirement is real and is the strongest available signal, but it is equally explicable as a decode/playback requirement for the editor's scrubbing. Keep it as inference; d…
+- [public] Underlord lets the user choose the reasoning model from Claude, Gemini, GPT and Grok variants — Confirmed, and more specific than the researcher stated: the model selector (cube icon) in the Underlord chat offers named versions — Claude (Fable 5.1 +Thinking, Haiku 4.5, Sonnet 5/4.6/4.5 +Thinking, Opus 5 +Thinking/4.8/4.7/4.6), Gemini 3.1 Pro and 3.8 Flas…
+- [public] Subprocessor page names Anthropic API (Claude, Claude Code), OpenAI API, OpenRouter, Hugging Face, ElevenLabs, Baseten, Andromeda.ai, AWS, G… — All confirmed present and categorised Engineering. The page also lists Braintrust (LLM eval), Stytch (auth), LaunchDarkly, Honeycomb, Sentry, Amplitude, Segment, BigQuery, Stripe and Forethought — Braintrust in particular is worth noting as evidence of in-hous…
+- [public] Research papers and dates: ATS 19 May 2026, PoDAR 11 May 2026, Improved RVQGAN/DAC 26 Oct 2023, Wav2CLIP, CARGAN, NU-GAN, MelGAN Dec 2019; p… — Confirmed on Descript's research page, with dates matching: 'Goodbye Drift: Anchored Tree Sampling' 19 May 2026; 'PoDAR' 11 May 2026; 'High-Fidelity Audio Compression with Improved RVQGAN' 26 Oct 2023; Wav2CLIP 21 Oct 2021; Chunked Autoregressive GAN 19 Oct 20…
+- [wrong] No per-feature model attribution anywhere in the help center; which model powers each AI feature is not public — Wrong for generative media, and this is the researcher's most significant error. Descript publishes a models page naming, per feature, the third-party models the user picks between: images — Nano Banana / Nano Banana 2 / Nano Banana Pro (Google DeepMind), Flux…
+- [inference] ElevenLabs on the subprocessor list suggests some stock/dubbing voices are ElevenLabs — labelled inference — Correctly labelled and correctly not asserted. ElevenLabs is on the list under Engineering; Descript never attributes any voice surface to it. Given that Descript does name third-party models for images/video/avatars but not for voice, the silence on voice is …
+- [inference] OpenRouter is what backs the multi-model picker — labelled inference — Correctly labelled. Reasonable, but note that Anthropic API and OpenAI API are separately listed, so direct vendor access plus OpenRouter for the long tail (Grok, Gemini) is equally consistent. Unverifiable either way.
+- [public] ASR: 26 supported languages, own-transcript import, model/vendor not public, no WER figures, filler-word detection English-only — 26 languages and English-only filler-word detection both confirmed ('This feature currently detects filler words in English transcripts only'). No ASR vendor, model or accuracy figure is published — I found none. But the researcher missed the constraint that a…
+MISSING:
+- A public REST API and an MCP server — the single biggest omission for a competitive comparison. The API creates projects, imports media from public or pre-signed URIs (no direct file upload), applies 'any edits Underlord can do' including f…
+- API metering: 'API access is available for all paying users at no additional cost. Usage draws from the AI credits and media minutes on your plan.' So there is no separate API meter — programmatic use competes with interactive use for the s…
+- Transcription is Latin-alphabet only: 'supported transcription languages are limited to those using the Latin alphabet. Languages such as Chinese, Japanese, or Russian are not yet supported.' For a short-form ad tool this is a harder limit …
+- Named, user-selectable third-party generation models with per-model credit cost: images (Nano Banana, Nano Banana 2, Nano Banana Pro — Google DeepMind; Flux Kontext — Black Forest Labs; GPT Image 2 — OpenAI); video (Veo 3.1; Kling O3 Pro, K…
+- The whole templating layer the researcher never mentions: Layout packs — 'reusable creative briefs' — with a gallery of packs, custom packs saved from your own scenes, remixing to a brand style, publishing packs to a team or publicly, and D…
+- Scenes as the composition primitive: scene boundaries, per-scene properties, splitting a scene to change visuals mid-way, controlling whether layers extend across or repeat between scenes, and scene reordering. Layouts apply at scene level,…
+- Quick Design — 'turns a raw script or transcript into a scene-based rough cut' — i.e. script-to-storyboard automation, the closest analogue to an ad editor's script-to-timeline path. Source: https://help.descript.com/ai-assistant/quick-desi…
+- AI Video Maker — 'turns a prompt, script, or footage into an editable video' — plus Extend video (generating extra frames for clips that are too short), Edit with AI (modify part of an image by text description), AI-generated morphing trans…
+- Captions are a real first-class layer, not a by-product: built straight from the script so timing is automatic; searchable/filterable preset styles with font, colour and animation; word-, line- or paragraph-level arrival and exit animations…
+- Subtitle export as SRT or VTT files, and transcript upload as captions to YouTube — a burned-in-only comparison would be wrong. Source: https://help.descript.com/export-and-share/subtitles.md
+
+SOURCES (25): https://www.descript.com/pricing | https://www.descript.com/underlord | https://www.descript.com/subprocessors | https://www.descript.com/research | https://help.descript.com/llms.txt | https://help.descript.com/hc/en-us/articles/27841674958221-Track-and-understand-your-media-minutes-and-AI-credits | https://help.descript.com/getting-started/underlord-beta-your-ai-co-editor-in-descript.md | https://help.descript.com/getting-started/descript-system-requirements.md
+
+
+# OPUSCLIP — OpusClip (Opus Clip, by Opus Pro / opus.pro) — with Agent Opus and Opus Labs "Motion Studio" as the generative arm
+VERSION: No semantic version is published for the product as a whole; it is a continuously deployed web app. The last named major numbered release was "OpusClip 3.0: Clip Different" (blog dated 19 Feb 2024). Current state as of 22 Sep 2026 is defined by the public changelog (opusclip.canny.io/changelog), whose most recent entries are: Motion Studio (18 Sep 2026), official Claude connector (11 Sep 2026), Sp…
+CATEGORY: Cloud long-to-short AI clipping tool with a lightweight browser editor bolted on, now extending into a generative "AI video agent" (Agent Opus) that aggregates third-party video models. Same category as Vizard and Klap: upload/link a long video, the service returns ranked vertical clips with burned-…
+PLATFORMS: Browser-based web app (no desktop application, no macOS/Windows binary, no offline mode). Native iOS and Android apps, localised into 8 languages as of 21 Aug 2026 (French, German, Italian, Spanish, Dutch, Polish, Portuguese + English). Pro adds expo…
+TARGET: Podcasters, streamers, agencies and social/content teams who already have long-form footage of a person talking and want ranked vertical cutdowns without opening an editor. Secondarily, performance marketers, via Agent Opus "AI Ads" — upload brand assets once, generate ad variants to test. Not aimed…
+PRICING: Four tiers on opus.pro/pricing as of 22 Sep 2026. Free $0 — 60 processing minutes/month, basic clipping on spoken-word detection only, regular queue, local imports up to 10GB, 3-day storage expiry, watermarked captions, AI captions with emoji and keyword highlighter, one brand template, and NO virality score. Starter $15/mo — 150 processing minutes/month, clipping also on visual objects, sound and emotion, faster queue, imports from YouTube/Google Drive/Vimeo/Zoom/Rumble/StreamYard, auto-import from a verified YouTube channel, virality scoring, AI voice-over capped at 20/day, basic B-roll at 3 clips/month each, posting to Shorts/TikTok/Instagram. Pro $29/mo — 300 minutes/month or 3,600/year, fastest non-enterprise queue, many more import sources (Dropbox, Twitch, Facebook, LinkedIn, X, Loom, Riverside, Frame.io), 100GB storage, text- and timeline-based editing, transitions, music, dubbin…
+
+## timeline_editing
+- Browser editor reachable after clipping, with both a transcript/text-based edit mode and a timeline mode (timeline editing is a Pro-gated feature per the pricing page)
+- Media tab: upload additional clips and drag them onto the timeline; drag to reorder, trim, arrange (documented as the 'video joiner' workflow)
+- Per-segment control: layout and reframing can be changed per clip or per segment from the timeline
+- Speech cleanup — removal of filler words and dead pauses, driven by the transcript
+- Story Mode editor (27 Aug 2026) with history-based editing, custom segment duration, reference-image attachment and InPaint object/region editing — this is a generative editor, not an NLE
+- No documented ripple/roll/slip/slide, nesting, link-unlink, in/out marks, markers or keyboard-shortcut model; the docs describe drag-trim-reorder only. Treat anything finer as not present.
+
+## preview_playback
+- Preview is browser playback of a server-side pipeline; no documented realtime engine, proxy workflow, GPU settings or scopes
+- Processing is queued, not interactive: queue speed is itself a paid feature (Free 'regular', Starter 'faster', Pro 'fastest', Business 'dedicated enterprise queue')
+- OpusClip 3.0 claimed one-hour videos processed '300% faster than before' (vendor claim, Feb 2024)
+- Live generating progress tracker added to the dashboard 3 Sep 2026
+- No preview/export parity guarantees are documented because there is no local render to compare against
+
+## audio
+- AI Voiceover (capped at 20/day on Starter)
+- AI dubbing / translation (Pro)
+- Background music, with audio fade on music and SFX up to 5 seconds per side, configurable in brand templates (2 Sep 2026)
+- Speech Enhancement (10 Sep 2026): lifts low or uneven audio, with separate noise-reduction and voice-enhancement sliders
+- Filler-word and pause removal
+- Brand Vocabulary (7 Sep 2026): proper nouns, brand and product names added to the Asset Library so transcription spells them consistently across clips
+
+## media_project_export
+- Import from local file (Free capped at 10GB) or by link: YouTube, Google Drive, Vimeo, Zoom, Rumble, StreamYard on Starter; plus Dropbox, Twitch, Facebook, LinkedIn, X, Loom, Riverside, Frame.io on Pro
+- Auto-import of new videos from a verified YouTube account
+- Aspect ratios 9:16, 1:1, 16:9 (multi-ratio gated above Free)
+- Bulk export (Pro)
+- Export an edit to Adobe Premiere Pro and DaVinci Resolve (Pro) — the documented route for real finishing
+- Direct publishing to YouTube Shorts, TikTok, Instagram; scheduling; Scheduler and Video APIs on Pro/Business
+- Cloud storage is the project store: 3-day expiry on Free, 100GB on Pro, unlimited on Business. No local project file, no relink, no proxies, no autosave-to-disk — concepts that do not apply to a cloud tool
+- Watermarked captions on Free and on downgraded plans
+- No documented codec/container choice or hardware-encoder selection — the render farm decides
+
+## effects_color_text
+- AI Captions: animated caption templates, emoji insertion, keyword highlighting — the headline text feature
+- Caption-only mode: add captions without clipping (since 3.0)
+- Brand templates: brand colours, fonts and logos applied automatically to every clip; AI recommends a template, layout and fonts; up to 4 templates on Pro, 1 on Free
+- Transitions and music (Pro)
+- Seven documented layouts: Fill, Fit, Split (two speakers), Three, Four, Screenshare (screen top / speaker bottom), Gameplay (30% speaker / 70% gameplay)
+- Auto-generated social post titles and descriptions in interesting, catchy, serious and question formats
+- No colour grading, scopes, LUTs, curves or keying documented. There is no colour pipeline to speak of.
+
+## ai_automation
+- AI Curation: picks clip-worthy moments. Free is spoken-word detection only; Starter and up add visual-object, sound and emotion detection
+- Virality Score, 0–99, over four named dimensions — Hook ('does the introduction grab attention and directly relate to the main topic'), Flow ('does the video flow logically from one part to the next, with a satisfying conclusion'), Value/Engagement ('does the …
+- ClipAnything: prompt-driven multimodal clipping from any video, including footage with little or no dialogue, using visual, audio and sentiment cues
+- AI Reframe with active-speaker detection and tracking — the crop follows whoever is talking and switches between guests; Manual Reframe via the Crop icon or double-click for override
+- Genre-specific curation models (Q&A, vlog, listicle, webinar…) and a mid-form generator for 3–5, 5–10 and 10–15 minute cuts
+- AI B-Roll: analyses the transcript, recommends the narrative moments that would benefit, generates clips in-editor, 'powered by Agent Opus'
+- AI Voiceover and AI dubbing
+- Motion Studio (18 Sep 2026, Opus Labs): plain-language brief plus up to 30 images, 10 videos and 10 audio files as references, choose model and style, review a 'Shot Plan', generate — explicitly no timeline and no keyframes
+- Quality tiers Standard / Standard+ / Premium / Ultra select the generation workflow and the credit burn rate
+- Agent Opus 'AI Ads': upload brand assets once, generate ad variants on demand
+
+## templates_library
+- Brand templates are the library primitive: colours, fonts, logos, caption style, clip layout settings and now audio-fade settings, applied in one click. 1 on Free, up to 4 on Pro, custom branding on Business
+- AI recommends the template, layout and fonts to match the brand
+- Asset Library holds brand assets and, since 7 Sep 2026, Brand Vocabulary
+- Viral caption template packs (added in 3.0); exact count of caption styles is not published
+- No published counts for stickers, transitions, effects packs, fonts or the music library — treat library size as not public
+- Templates are account-level configuration, not composable presets you can version or diff
+
+## backend
+ENGINE: Not public. OpusClip publishes no information about its render engine, GPU frameworks, codec stack or infrastructure. The help docs are explicitly user-facing: the Introduction article describes the pipeline (setup, upload, AI clipping, customisation, generation, editing, publishing) and names features, but gives no models, no architecture and no infrastructure detail. What is publicly documented on the generative side is only that quality presets map to different workflows and credit rates (Standard 1.0 / Standard+ 3.0 / Premium 7 / Ultra 12 credits per second) and that processing time 'depen…
+AI MODELS: Publicly stated by the vendor, for the GENERATIVE side only: Agent Opus aggregates third-party video models, named by OpusClip's own blog as Kling, Hailuo MiniMax, Veo, Runway, Seedance, Luma and Pika, with Gemini Omni listed as pending API access and Sora 2 listed as discontinued on 26 Apr 2026 with its API sunset 24 Sep 2026. The Agent Opus FAQ names Vidu Q3, Seedream 5.0 Pro and Seedance 1.5 as selectable custom models, and the changelog names Seedance 2.5 (edits billed 1.5x) and Seedance 2.0, ByteDance's multimodal video model. So the b-roll and Motion Studio output is generated by other v…
+ASR/TTS: ASR: OpusClip's own transcription is central (transcript-based editing, filler-word removal, caption timing, Brand Vocabulary as a custom-terms bias list, and 100+ caption languages reported for competitors). The ASR vendor or model is NOT PUBLIC. The Brand Vocabulary feature implies a recogniser that accepts a custom-terms hint — a capability Whisper-family, Deepgram and AssemblyAI all offer — bu…
+COMPUTE: Cloud only, and this is effectively documented rather than inferred: there is no desktop application; imports are by URL from a dozen third-party services; storage is server-side and metered (3-day expiry on Free, 100GB on Pro, unlimited on Business); queue priority is a paid tier; and the generative models named (Veo, Kling, Runway, Seedance, Pika, Luma, Vidu, Seedream) are all API-only services …
+CERTAINTY: PUBLIC DOCUMENTATION (vendor site, help centre, changelog): all plan names, prices, processing minutes, feature gating, watermarking, storage and NLE export; the 0–99 virality score and its four named dimensions; the seven layout names and Manual Reframe; ClipAnything's description; Agent Opus credit rates per quality tier and the 1.5x Seedance 2.5 edit multiplier; every changelog feature and date; the aggregated generative model list (Kling, Hailuo MiniMax, Veo, Runway, Seedance, Luma, Pika, Ge…
+
+## ad workflow
+Two distinct routes today, and a marketer building a 15–30 second product ad should know they are different products bolted together.
+
+ROUTE A — clipping an existing recording (the mature path). 1) Paste a link or upload the long video; on Free that is local files up to 10GB, on Starter YouTube/Drive/Vimeo/Zoom/Rumble/StreamYard, on Pro a dozen more. 2) Pick a brand template (colours, fonts, logo, caption style, layout, audio fade), a target ratio, and a clip-length bracket. 3) Wait in the queue — time depends on plan tier, and you are billed one credit per minute of the SOURCE, not per clip. 4) The service returns a ranked set of clips, each with a 0–99 virality score across Hook/Flow/Value/Trend. AUTOMATIC at this point: moment selection, the cut, reframe to 9:16 with active-speaker tracking, layout choice among the seven (Fill/Fit/Split/Three/Four/Screenshare/Gameplay), burned-in anim…
+
+## checker
+- [inference] Render engine, codec stack, GPU platform and hosting are not public; the cloud queue + GPU-worker architecture is an inference — Correctly labelled. I found no vendor engineering disclosure of any kind — the Agent Opus FAQ explicitly gives only 'Processing time depends on video length, the selected model, requested changes and workload' and no infrastructure. Everything that looks like …
+- [public] Agent Opus aggregates Kling, Hailuo MiniMax, Veo, Runway, Seedance, Luma, Pika; Gemini Omni pending API access; Sora 2 discontinued 26 Apr 2… — Verified on the vendor blog, including the Gemini Omni launch date (19 May 2026) and the 'as soon as the developer API opens' wording. Accurate as stated.
+- [wrong] The Agent Opus FAQ names Vidu Q3, Seedream 5.0 Pro and Seedance 1.5 as selectable custom models — Not at that URL. The FAQ describes Custom model selection generically — 'custom model selection uses its displayed rate', 'open Video model or Image model and compare the descriptions' — and does not enumerate any custom model names. The model names may come f…
+- [public] Quality presets map to credit rates: Standard 1.0, Standard+ 3.0, Premium 7, Ultra 12 credits per second — Confirmed verbatim in the FAQ, including the worked 30-second examples (30 / 90 / 210 / 360 credits). The tier switch itself is dated 26 Aug 2026 in the changelog.
+- [public] The ASR vendor/model and the TTS vendor are NOT PUBLIC; ElevenLabs is only a category assumption — Correct to withhold. I searched specifically for an OpusClip partnership with ElevenLabs, Deepgram, AssemblyAI or Whisper and found nothing from the vendor — only generic STT/TTS comparison articles. The restraint here is right; do not let a reviewer's guess h…
+- [public] One credit = one minute of SOURCE video regardless of clip count — filed under CREDIBLE REPORTING — Upgrade this. There is a dedicated help article: credits are consumed at '1 credit per minute of the original video imported', videos under a minute round up, partial minutes round down. It is vendor-documented, not merely widely reported. The rounding rules a…
+- [public] Monthly credits expire after 60 days; annual credits have a 12-month window — filed under CREDIBLE REPORTING — Also upgrade, and it is incomplete: the same help article states monthly plans expire in 60 days WITH a one-month rollover, yearly plans 12 months. The rollover changes the practical burn model for a lumpy ad workload and should be in the comparison.
+- [public] Storage: 3-day expiry on Free, 100GB on Pro, unlimited on Business — Correct but missing a tier: Starter storage expires after 29 days. That matters for an ad editor comparison — on Starter, nothing you made is still there a month later.
+- [public] Virality score 0–99 with four named dimensions, gated above Free — Confirmed: 0–99, Hook / Flow / Value / Trend, Starter and Pro only, 'advanced AI' with no model named. Note third-party reviews frequently say 0–100 — the vendor doc says 0–99, so the researcher is right and the reviews are wrong.
+- [public] Seven layout names plus Manual Reframe — Confirmed and worth naming in the comparison: Fill, Fit, Split, Three, Four, Screenshare, Gameplay; Manual Reframe via the Crop icon or double-click. Active-speaker detection drives Fill and Fit — consistent with the researcher's 'strongest on single-speaker f…
+MISSING:
+- Public REST API, and it is a first-class product, not a Business-only bolt-on: 'The OpusClip API is now publicly available — included on the free trial and the Pro plan, with no waitlist or sales call required.' The captions API takes one s…
+- Three separately gated API surfaces on the pricing table — Video Editing API (Pro+), Scheduler API (Pro+), MCP connector (Pro+), CMS integration (Business only), Zapier on Pro capped at 300 credits/month. The Zapier credit cap is a metering…
+- Output resolution IS partly public, contradicting 'codec stack not public' being read as 'nothing about output is known': 4K export is a Pro feature but only unlocks if the SOURCE is 4K, Enterprise gets 4K download and posting with no compr…
+- A metering line missing from the researcher's six: publishing to X costs 1 credit per post, with automatic refunds for failed or deleted scheduled posts. Distribution, not just processing, burns credits. https://help.opus.pro/docs/article/h…
+- Credit rounding rules: sub-one-minute videos round UP to 1 credit, partial minutes round DOWN. For an ad editor churning out many short source files this is materially worse than the flat 'one credit per minute' summary suggests. https://he…
+- What a brand template actually contains — the templates/slots axis the comparison needs: custom fonts, brand colors, logo graphic overlay, intro/outro cards and brand vocabulary, with auto-apply ('Set up your default video editing template …
+- NLE handoff is XML export to Adobe Premiere Pro and DaVinci Resolve specifically — the researcher wrote 'NLE export' without naming the format or targets. https://help.opus.pro/docs/article/introduction-to-opusclip
+- Motion Studio's documented input budget, which is the product-video/ad-asset surface: 'add up to 30 images, 10 videos, and 10 audio files as references', no timelines or keyframes, available to all users, for b-roll animations and brand vid…
+- Generative constraints that bite for product ads: Seedance 2.0 accepts up to 12 files (9 images, 3 videos totalling <=15s, 3 audio), outputs 4-15s extendable at up to 2K, and explicitly 'does not support uploading realistic human face image…
+- The one published statement that resembles an architecture claim: Agent Opus evaluates each scene for subject matter, motion complexity, visual style and consistency needs, routes it to the model it judges best, and assembles the results in…
+
+SOURCES (21): https://help.opus.pro/docs/article/plans-and-credits | https://www.opus.pro/pricing | https://help.opus.pro/docs/article/introduction-to-opusclip | https://help.opus.pro/docs/article/virality-score | https://help.opus.pro/docs/article/layout-and-reframing | https://help.opus.pro/agent-opus/article/ao-faq | https://opusclip.canny.io/changelog | https://www.opus.pro/blog/opusclip-clip-different
+
+
+# CAPTIONS — Captions (captions.ai) — the consumer/marketer app of Mirage (the company renamed itself Mirage in September 2025; the a…
+VERSION: No public semantic version number for the app. As of 22 September 2026 the latest publicly documented releases are, from the vendor changelog (captions.ai/help/whats-new): August 2026 — Clips Chat, Avatar Looks, AI Twin from video upload, "Faster Rendering" (rebuilt render engine for all project types); July 2026 — "Captions for macOS" relaunched as a wrapper of the web experience, new AI Edit sty…
+CATEGORY: Cloud AI video generator plus a light assistive editor — a short-form/UGC-ad generator (prompt-to-video, AI avatars, AI Edit auto-editing) with a simple single-track-feeling timeline bolted on. It is not an NLE; automation is the product, manual editing is the fallback.
+PLATFORMS: iOS (the lead platform, richest feature set, 4K, HDR in/out); Web at captions.ai (English-only UI per the vendor's own web-app doc, 4K, no HDR); Android ("Captions Lite" on Google Play, plus an Android entry in the Getting Started doc); macOS desktop…
+TARGET: Phone-first creators and solo marketers/SMBs who want a finished vertical talking-head or UGC-style ad without shooting or editing; secondarily agencies doing bulk localized variants (dubbing into 30+ languages, 39 languages for generation). Not for editors who want frame-level control — the vendor'…
+PRICING: Credit-metered subscription (vendor pricing page, read 22 Sep 2026): Free — trimming, transitions, media library, captions in 100+ languages, basic editing, no generative AI credits. Max $24.99/mo, 500 credits — AI Edit style library, digital twins / custom AI actors, chat-based editor, batch clip creation, custom B-roll/music/SFX/images. Frontier 1x $69.99/mo, 1,400 credits; Frontier 2x $139.99/mo, 2,800; Frontier 4x $279.99/mo, 5,600 — "everything in Max plus more sophisticated AI models". Enterprise: custom, with bulk credit discounts, custom seats, dedicated account management, training-data exclusion, priority support/beta access. Unused credits roll over, balance capped at 3x the monthly allowance. Third parties also list a Basic tier around $9.99/mo (200 credits) and report regional price variance (e.g. Max at $29.99 on some pages) — credible reporting, not confirmed on the page I…
+
+## timeline_editing
+- A single linear timeline of "sections" rather than multi-track NLE editing. Documented operations: add a section anywhere from the camera roll, Split, Insert after a split, delete an entire section or a trimmed portion, and add via the + button at either end o…
+- Split-then-delete is the documented way to remove part of a clip — there is no documented ripple/roll/slip/slide, no multi-select, no markers, no in/out points, no nesting, no link/unlink.
+- Keyframes exist on iOS only: the vendor's feature-availability table explicitly lists keyframes and custom text among the manual editing tools ABSENT on Web and Desktop (Legacy).
+- Caption-level timing editing is first-class where clip editing is not: per-word spelling edits, adjust timing, move/resize caption blocks, hide/delete captions.
+- No documented speed ramps, no documented keyboard-shortcut model, no documented project-level undo history. Independent reviews (Jan 2026) characterise the product as automation-over-control.
+- Chat-based "Co-Editor" is positioned as the advanced-editing path — you ask for a change instead of performing it. Billed at 2 credits per message + 1 per action.
+
+## preview_playback
+- Not publicly documented as a realtime engine with a spec. No published statement about GPU preview, proxies, scopes, or render/preview parity.
+- The one public datapoint is the August 2026 changelog entry "Faster Rendering: rebuilt engine powers all project types with improved export speed" — export, not preview.
+- Because generation is cloud-side, the heavy work is a job with a progress percentage, not a scrubbing preview: the API exposes status PROCESSING/COMPLETE/FAILED/CANCELLED and progress 0-100. Inference (clearly labelled): the in-app experience for generative st…
+- Not public: decode/playback stack, frame-accuracy guarantees, offline/local preview behaviour.
+
+## audio
+- Dubbing & Translation into 30+ languages (Arabic, Chinese simplified and traditional, English, French, German, Hindi, Japanese, Korean, Portuguese, Russian, Spanish, Turkish and more), with editable dubbed captions and per-segment volume; the marketing pages s…
+- Music: generate royalty-free AI music, or import your own audio.
+- Automatic ducking — music volume drops while someone is speaking.
+- Per-segment volume adjustment.
+- Denoise — remove background noise (listed on the product overview page, and absent from web/desktop in the feature-availability table).
+- Trim Pauses — removes silences and filler words (overview page).
+- AI Voiceover — listed on the overview/feature-availability pages as an iOS-only AI audio feature.
+- Sound effects — purchasable/generatable, priced 1–4 credits per use or per minute in the credits table.
+- No documented audio mixer, EQ, compression, loudness normalisation target, or multi-track audio lanes.
+
+## media_project_export
+- Export settings: resolution, frame rate, bitrate (Auto recommended), Smart HDR toggle (needs an HDR source), and captions exported separately as .srt.
+- Resolution ceiling by platform: 4K on iOS and Web, 2K on Desktop (Legacy). HDR video supported on iOS only; Web and Desktop are non-HDR MP4/MOV.
+- Direct publishing to TikTok, Instagram and YouTube from the app.
+- Aspect ratios: 9:16 and 16:9 (the API exposes exactly these two); the feature table flags that Desktop (Legacy) cannot do vertical 9:16 for AI Edit.
+- Native video uploads (July 2026) keep projects synced across devices — projects live in the cloud, so there is no local project file, no relink, no proxy workflow and no conform.
+- Free plan exports basic manual projects; AI Edit, caption styles, eye-contact correction and background music require a paid plan. Export volume is unlimited within your tier's project types.
+- Not public: container/codec details, hardware-encode use, bitrate ranges, colour management. Watermarking on free exports is asserted by third-party reviews (Jan 2026), not by the vendor pages I read.
+
+## effects_color_text
+- Captions are the flagship: auto-transcription with 100+ caption styles, translation into 100+ languages in one tap, Word Effects (per-word emphasis/animation), move & resize, hide & delete, spelling edits, timing adjustment.
+- AI Edit styles — named, swappable looks that drive the whole cut: Atrium, Aperture (web, July 2026), Pop, Orbit (iOS, July 2026), on top of an existing style library. Changing a clip's style costs 1 credit.
+- Correct Eye Contact — one-tap gaze redirection toward the camera, documented as handling script-reading, off-to-the-side glances and nervous blinks.
+- AI Zoom, AI Censor and custom text are listed in the feature table as iOS-only.
+- Transitions, images, stickers and sound effects are insertable on web and desktop.
+- Generative image and generative video inserts as B-roll.
+- No colour grading tools of any kind are documented — no wheels, curves, LUTs, scopes, or log handling. "Smart HDR" on export is the only colour-adjacent control.
+
+## ai_automation
+- AI Edit — upload raw footage, get back a cut, caption-ready video: automatic scene cuts, B-roll overlays, transitions, sound effects, music, zooms, in a chosen style. 10–40 credits.
+- Prompt to Video — script or prompt (up to 1,000 characters / 30 seconds) produces a Mirage actor delivering it to camera, plus generated B-roll, plus automatic edit decisions. 16 credits per 6 seconds. 39 languages, full commercial rights.
+- AI Creator / AI Ads — the ad path: paste a product or landing-page URL, the page is scraped to prefill product name, description and images, an avatar is chosen, a UGC-style script is generated, and you edit the hook/claims/CTA. (This step sequence comes from …
+- AI Avatars / AI Twin — 225 avatars in the library; a personal twin from a short recording, or (August 2026) from an uploaded video; Avatar Looks saves reusable outfits/backgrounds; text-prompted custom avatars; marketing claims a twin from as little as 10 seco…
+- Dubbing/translation with the speaker's voice preserved.
+- Co-Editor — chat-driven editing: describe a change, the system performs it.
+- Clips / Create Clips — long video into shorts, with Clips Chat (August 2026) to re-ask for different cuts from the same source without restarting.
+- Trim Pauses, Denoise, AI Zoom, AI Censor, AI Voiceover, eye contact correction.
+- AI music and SFX generation.
+- No auto-reframe (9:16 from 16:9 speaker tracking) is documented by name; no beat-sync feature is documented.
+
+## templates_library
+- 100+ caption styles, which are the real template layer — style presets that carry font, animation, colour and word effects; guides exist for choosing a style per platform and for highlighting keywords.
+- AI Edit styles (Atrium, Aperture, Pop, Orbit and others) — whole-edit templates covering cut rhythm, B-roll and motion, switchable per clip for 1 credit.
+- 225-avatar library, filterable by look and delivery style, plus saved Avatar Looks.
+- A stock media library (assets, transitions, images, sound effects) usable on the free plan.
+- AI-generated music (royalty-free) rather than a licensed track catalogue, plus third-party music models exposed by name.
+- No public count of fonts, transitions or stickers; no user-authorable template format and no template marketplace documented.
+
+## backend
+ENGINE: Not public as an engine spec. There is no published statement about the render/playback stack, codecs, container handling, GPU frameworks (no Metal/CUDA/Vulkan mention anywhere I could find), or whether ffmpeg is used. The only public engine statement is the August 2026 changelog line that rendering was rebuilt and now "powers all project types" with faster export — no detail on what was rebuilt. The public serving surface is an HTTP API at api.mirage.app with asynchronous jobs (status PROCESSING/COMPLETE/FAILED/CANCELLED, progress 0-100), which is a job queue, not a render engine description.…
+AI MODELS: PUBLICLY DOCUMENTED, first-party: (1) Mirage — an audio-to-video foundation model for avatar video, announced in the research report "Seeing Voices" (2 June 2025); the vendor describes it as generating full performance — lip-sync, eye gaze, emotional affect, paralinguistics — from image + text + audio rather than overlaying lip-sync. (2) Mirage audio — described in "Shaping Voices" (16 December 2025) as a latent audio diffusion model on the same multimodal Mochi Transformer architecture as the video model, using all-to-all self-attention with modality-specific MLPs as a Mixture-of-Experts bloc…
+ASR/TTS: ASR: NOT PUBLIC. Captions advertises transcription in 100+ languages and per-word timing accurate enough to drive word-level caption animation, but no ASR model or vendor is named anywhere in the vendor docs, blog or credits table — Whisper is not mentioned, and I am not assuming it. TTS: the first-party Mirage audio model described above is the documented speech generator — text + performance-des…
+COMPUTE: Cloud, effectively everything that matters. This is documented indirectly but unambiguously: every generative and AI-assist feature is metered in credits from a monthly server-side balance; projects sync across devices via cloud upload ("Native Video Uploads… keep projects synced"); the API is a hosted async job service at api.mirage.app billed per second of output; and the macOS "app" is a wrappe…
+CERTAINTY: PUBLICLY DOCUMENTED (vendor pages read directly): Mirage Avatar X exists and its release date; the Mirage audio model's architecture (Mochi Transformer, flow-matching latent diffusion, 44.1 kHz mono, no spectrograms, MoE-style modality MLPs) and its 16 Dec 2025 date; the Mirage audio-to-video avatar model and its 2 Jun 2025 date; the API model IDs, modes, aspect ratios and per-second/per-minute prices; the full credits table including the named third-party models (Flux 2, Ideogram V3 Turbo, Phot…
+
+## ad workflow
+Two routes today, both generative-first.
+
+ROUTE A — no footage, from a product URL (the ad path, "AI Creator → AI Ads"): 1) paste a product or landing-page URL; the page is scraped and product name, description and images are prefilled — AUTOMATIC. 2) Check and fix the prefilled fields, swap bad images — MANUAL. 3) Pick an avatar from the 225-avatar library or your own AI Twin — MANUAL choice, generation automatic. 4) A UGC-style script is generated — AUTOMATIC; you tighten the hook, claims and CTA — MANUAL. 5) Mirage Avatar X generates the performance: face, voice, micro-expressions, gaze and upper-body motion in one pass — AUTOMATIC. 6) B-roll, transitions, SFX, music, zooms and cuts are added in a chosen AI Edit style — AUTOMATIC. 7) Captions are auto-transcribed and styled from 100+ styles, with per-word effects — AUTOMATIC, with manual spelling/timing/position edits. 8) Refine by ch…
+
+## checker
+- [wrong] Free tier has "no generative AI credits" — The vendor's own subscriptions doc says Free includes 60–200 LIFETIME credits (not zero), and that you are prompted to upgrade only once those are used on non-basic features. The pricing page's silence on Free credits is what the researcher read; the help doc …
+- [wrong] Watermarks on free exports (listed as credibly reported, review sites, Jan 2026) — The vendor's subscriptions doc states 'No watermarks' explicitly for Free, Basic, Max and Frontier. The gate on Free is feature-based, not watermark-based: the export doc says projects using AI features (AI Edit, caption styles, eye contact, background music) …
+- [public] A ~$9.99 Basic tier (200 credits) is third-party reported, 'not confirmed on the page I read' — Basic is documented by the vendor: $9.99/mo, 200 monthly credits, 'formerly Pro'. It is absent from the marketing pricing page but present in the help docs, so it is first-party public, not third-party reporting.
+- [wrong] Tier list is Free / Max / Frontier 1x-2x-4x / Enterprise — Incomplete: the vendor also documents Lite at $4.99/mo, Android-only, covering dubbing, caption styles, eye contact, denoise and sound generation — and notes that desktop/iPhone need separate subscriptions. Per-platform billing separation is a material fact th…
+- [public] Third-party models resold: image Flux 2 → Nano Banana Pro; video Ray 2 Flash (8) → Kling 2.1 (140); music Soundraw (2) and ElevenLabs Music … — Endpoints of the ranges are right but the table is far larger and the omissions matter for a competitive read. Video also includes Google Veo 3 and Veo 3.1 (64 per 4s; Fast 36 per 6s), Veo 2 (100), Sora 2 (16), Seedance 2.0 (61) and 2.0 Fast (48), Minimax (56)…
+- [public] Frontier is 'everything in Max plus more sophisticated AI models' — That is the marketing pricing page's wording, so the quote is accurate, but the help doc gives the substantive difference: Frontier (formerly Scale) buys faster generation speeds, and Max is what unlocks Chat to Edit, AI Edit, Clips, Mirage actors, up to 30 AI…
+- [public] Engine (render/playback stack, codecs, GPU frameworks, ffmpeg) is not public; only the Aug 2026 'rebuilt rendering engine' changelog line — Confirmed. The changelog says only 'A rebuilt rendering engine now powers every project type, making exports faster and more reliable'. Nothing on codecs, containers, GPU or ffmpeg appears in the help docs, blog or API reference. The researcher's refusal to in…
+- [public] ASR model/vendor is not public; Whisper is not mentioned — Confirmed by absence across the help docs (captions/generate-captions, dubbing, styles) and by search: no ASR vendor is named anywhere. Correctly not assumed.
+- [public] Mirage audio: Mochi Transformer, flow-matching latent diffusion, 44.1 kHz mono, no spectrograms in VAE/base training, hard-coded modality ro… — Verified essentially verbatim against the blog post, including 'No spectrograms were harmed during variational autoencoder (VAE) or base model training', 'all-to-all self-attention and modality-specific multi-layer perceptrons', 'hard-coded, modality-specific …
+- [public] Mirage Avatar X (28 July 2026) generates expression, voice and motion in one integrated pass; 16:9 and 9:16; short and long form — Confirmed. The blog says it 'generates entire video avatar performances at once, from expressions to voice and motion', contrasts with models that 'assemble each element separately', offers horizontal or vertical, and claims strength for short and long form. O…
+MISSING:
+- Export controls are documented and directly comparable to a short-form ad editor: selectable resolution, frame rate and bitrate, Smart HDR passthrough when the source supports it, and SRT caption export as a separate sidecar file. The resea…
+- Export is gated by plan tier per project type, not just by feature: Free exports manual edits only; Basic exports basic-tier projects; Max exports Max projects; Frontier exports all project types. Any project touching AI Edit, caption style…
+- AI Ads is a first-party documented product-video workflow and the closest analogue to a short-form ad editor: paste a product URL, the system auto-extracts product info, you review and edit the title, product name, description and images, r…
+- Commercial licensing is stated outright: 'All videos made using AI Ads can be used for commercial use' — a decision-relevant fact for an ad tool that the researcher never surfaced. Source: https://captions.ai/help/docs/project/ai-ads
+- The caption template/slot system is far richer than 'captions in 100+ languages': over 30 preset templates, user-saved custom templates (rename/delete), active-word color and active-word background for karaoke highlighting, AI Emphasis that…
+- Free tier is capped at 1 caption template — the practical ceiling on 'free captions' that the researcher's summary omits. Source: https://captions.ai/pricing
+- Hard per-platform format ceilings: iOS handles 4K and HDR, Desktop is limited to 2K; AI Edit maxes at 2 minutes on iOS and 1 minute on Web/Desktop; AI Creator scripts are 10-800 characters. Source: https://captions.ai/help/docs/feature-avai…
+- The web app — which is now the default signup destination — lacks recording, all manual editing, and most AI enhancements (Trim, Voiceover, Zoom, Censor, Cutout, Eye Contact), plus project duplication and transcript copying. The researcher …
+- AI Edit's automatic edit set is documented: after analyzing the content it applies transitions, sound effects, music, zooms and cuts, alongside generated A-roll (AI actors) and B-roll. That is the specific automation surface a short-form ad…
+- Eye-contact correction is documented as available on mobile and web and described as automatically redirecting gaze toward the camera — the researcher listed it only as a feature whose model is unknown, without the platform availability. So…
+
+SOURCES (28): https://captions.ai/blog/mirage-avatar-x | https://en.wikipedia.org/wiki/Captions_(app) | https://captions.ai/pricing | https://captions.ai/help/docs/api/pricing | https://captions.ai/help | https://captions.ai/help/llms.txt | https://captions.ai/overview | https://captions.ai/help/docs/captions/timeline
+
+
+# AD-MAKERS — AI ad generators: Creatify, Pencil (The Brandtech Group), invideo, VEED, Predis.ai
+VERSION: As of 22 September 2026. Creatify: current app tiers Free/Starter/Pro/Enterprise; Creatify Labs launched the Boreal text-to-video/image-to-video model on 15 September 2026. invideo: "Agent Two" launched July 2026, with the "Slate" timeline editor inside it (supersedes Agent One / the older "invideo AI 4.0" line still described in third-party posts). VEED: AI model roster current as of this date in…
+CATEGORY: Cloud AI ad generators — "product info + (optionally) user footage → finished short-form ad". Four subtypes: URL/product-to-ad with avatar UGC (Creatify, Predis.ai); enterprise brief-to-ad with performance prediction and ad-platform launch (Pencil); agentic prompt-to-video with a real timeline behin…
+PLATFORMS: All five are browser-first SaaS. Creatify: web app (app.creatify.ai) + public REST API (api.creatify.ai) + mobile apps. invideo: web app + iOS/Android app. VEED: web app, plus desktop and mobile apps and a Chrome recorder extension. Predis.ai: web ap…
+TARGET: Creatify: performance marketers and DTC/e-commerce advertisers running UGC-style paid social at volume; also developers, via a real API. Pencil: in-house brand marketing and agency teams — Core/Growth for small teams, Pro for enterprises that need brand governance, audit trails and legal terms; the …
+PRICING: Creatify (vendor pricing page): Free $0, 10 credits/mo ("up to 2 video ads or 20 image ads"), watermarked; Starter $39/mo, 100 credits, 300 AI actors, 200+ ad templates, watermark removed, one generation at a time; Pro $99/mo, 300 credits, 1,500 AI actors + 3 custom avatars, 500+ templates, 5 parallel generations, 5 seats, competitor ad tracking; Enterprise custom. "Save up to 50% on annual." Vendor page does not publish per-second credit costs; the API docs do — standard avatar 5 credits/30s, aurora_v1 20 credits/15s, aurora_v1_fast 10 credits/15s (that per-model table is from third-party API documentation, not read on Creatify's own site). Boreal is billed per second, not per credit: $0.01/s at 720p, ~$0.05 for a 5s clip, via Creatify and fal. API access requires an active paid subscription.
+invideo (vendor pricing page, annual per-seat): Starter $20, 400 credits/mo/seat, 5 seats, Agen…
+
+## timeline_editing
+- invideo — the strongest timeline of the five, and the only one that credibly competes with an NLE. 'Slate' is the editor inside Agent Two: blade, transform, audio levels, LUTs, color controls, transitions and text supers; a source monitor for frame-by-frame wo…
+- VEED — a genuine browser NLE underneath the AI front door: multi-track timeline, split/trim, layered text and graphics, aspect-ratio reframing (9:16, 1:1, 16:9), transcript-based editing where cutting the words cuts the video. AI ad output drops into that edit…
+- Creatify — not a timeline product. Editing is scene/slot-level: swap the avatar, the voice, the script line, the background clip, the caption style, the aspect ratio. Batch and variation generation is the intended workflow instead of hand-editing one cut.
+- Predis.ai — scene-level editor only: swap or replace individual images, rewrite script lines, adjust colors and fonts, change the logo, regenerate one scene without redoing the whole video, choose aspect ratio before export. No multi-track timeline, no frame-a…
+- Pencil — deliberately not a timeline. The stated model is 'edit text, image, video and HTML, all in one place' with AI suggestions as you edit, over the asset and brand library. It is an ad-variant editor, not a cutting room; anything needing real editorial go…
+
+## preview_playback
+- All five render in the cloud; none offers a local realtime engine, GPU preview of the user's own hardware, proxies, or scopes. What the user sees before export is a web preview of a server-side composite.
+- Creatify — Pro allows up to 5 parallel generations, Starter one at a time; this is queue depth, not preview performance. Creatify Labs claims Boreal runs 1:1 with realtime (a 5-second clip in about five seconds), which is generation speed, not playback.
+- invideo — plans differ by 'level of thinking and cost' (Agent Two Lite/Pro/Ultra) rather than by render speed; Slate's source monitor gives frame-by-frame scrubbing in the browser.
+- Predis.ai — generation speed is an explicit paid tier feature: standard on Core, 'fast' on Rise, 'faster' on Enterprise+.
+- Pencil — states its video pipeline produces 10-20 variants in 5-15 minutes, each with a performance score; that is batch turnaround, not preview.
+- VEED — browser preview in its editor; premium third-party model generations are queued jobs that cost credits per second.
+
+## audio
+- Creatify — text-to-speech and voice cloning are in the API surface alongside a voice catalogue and a music library; ElevenLabs Music V1 and MiniMax Music 2.0 are named on the AI models page for text-to-music. Boreal generates audio jointly with video.
+- invideo — voice cloning with emotional inflection, AI voiceover, and music/audio drawn from a stated 16 million premium clips, images and music tracks via Shutterstock, iStock and other providers; Slate gives four audio layers and audio level control.
+- VEED — the deepest conventional audio toolset: AI voice generation, voice cloning, dubbing, background noise removal for video and audio, auto-subtitles with translation. VEED Fabric 1.0 takes a still image plus an audio track and produces lip-synced talking v…
+- Predis.ai — automatic AI voiceover in 19+ languages with selectable voice, gender and accent; background music added automatically; voiceover is metered per second like video.
+- Pencil — Google Chirp 3 HD and Gemini 2.5 TTS Pro are named on the platform page as the voice models; Veo 3.1 supplies 'cinematic video creation with native audio'. No conventional audio editing.
+
+## media_project_export
+- Creatify — outputs platform-formatted video ads; Ad Flow connects ad accounts to launch to platforms directly; Enterprise adds white-label. API returns rendered files.
+- invideo — Max includes 200 GB storage and 500 premium stock items; multiplayer editing and collaborative seats on every tier (5/10/20). Credits are not consumed by downloads.
+- VEED — export to standard social aspect ratios and formats; watermark removed on paid tiers (reported); browser download plus sharing links.
+- Predis.ai — auto-scheduling and auto-posting across up to 60 social channels (auto-posting on Rise and above), automatic ad copy resizing, API on Enterprise+.
+- Pencil — exports GIF, MP4, HTML5 and static; launches and tracks ads on Facebook, Instagram, TikTok, YouTube, Google and LinkedIn from inside the tool; bulk generation from product feeds on Pro. Earlier reporting on Pencil Pro also listed TikTok, YouTube, Goog…
+- None of the five documents proxy workflows, media relink, project-file portability, autosave semantics, hardware-encode choices or per-codec export presets — the whole category treats the project as a cloud object, not a file.
+
+## effects_color_text
+- invideo — LUTs, color controls, transitions, text supers, transform, and the three-dimensional/color/audio tools bundled on every plan.
+- VEED — logos, brand colors, layered graphics, AI transitions, background removal for video, background expansion, eye contact correction, auto-subtitles with translation and styled caption presets.
+- Creatify — caption styles, brand kit application, template-driven text and overlay slots; Asset Generator and IAB Images adapt product imagery and banner sizes.
+- Predis.ai — brand kit, editable colors and fonts, logo replacement, automatic ad copy resizing across formats.
+- Pencil — brand guidelines enforced automatically, brand safety guardrails, AI Auto Resize charged at 1 generation per format, HTML5 as a first-class output.
+
+## ai_automation
+- Creatify — URL to Video (paste a product page, get an ad), Creative Agent, Avatar Video, Ad Flow, Performance Agent, Model Playground, Image Ads, Product Ads, Ad Cloner (recreate an existing ad), Custom Avatar trained on uploaded video, Custom Templates. The A…
+- invideo — Agent Two: hand it videos, scripts, PDFs, links or rough cuts and give it a role; it decides script, shot selection, voice, captions and music, pulling from the 16M-asset library. Three thinking levels (Lite/Pro/Ultra) trade quality against credits. …
+- VEED — AI ad generator from a text prompt, product image, existing footage or a mix; AI script generation, TTS voiceover, auto-captions, AI avatars for testimonial-style ads, AI music, VEED Animate (video-to-video) and Animate Replace (subject swapping in foot…
+- Predis.ai — from a single text prompt, product URL or uploaded image it produces video ads, UGC-style videos, static image ads, carousels, Reels, TikToks and stories with captions and hashtags; the AI writes the script, picks b-roll, adds music, subtitles and …
+- Pencil — purpose-built agents for image generation, video generation, beauty shots, ad improvement, consumer insights, audience personas, campaign ideation, brand strategy and media planning. The distinguishing feature is predictive scoring: every creative is …
+
+## templates_library
+- Creatify — 200+ ad templates on Starter, 500+ on Pro; 300 AI actors on Starter, 1,500+ on Pro plus 3 custom avatars; 50+ premium models on Starter, 100+ on Pro. The unit of reuse is a template with avatar/script/product slots, and Ad Cloner turns an existing c…
+- invideo — 16 million premium clips, images and music tracks via Shutterstock, iStock and others; Playbooks are the reusable unit rather than rigid templates, and Max grants 500 premium stock items.
+- VEED — large template and stock library plus a library of lifelike AI characters, with custom avatar creation.
+- Predis.ai — template-driven post and ad formats across carousels, Reels, stories and static, with a brand kit applied across them; multi-slide posts are billed per slide.
+- Pencil — brand and asset library rather than a creative template gallery; the reusable unit is the brand guideline plus the winning ad structure, and variants are machine-generated rather than picked from a shelf.
+
+## backend
+ENGINE: Not public for any of the five. None of these vendors documents its render engine, codec stack or GPU framework — there is no published equivalent of 'we composite with ffmpeg/Metal/CUDA'. What IS public is the model layer sitting on top. Creatify Labs publishes the most: Boreal is post-trained on Lightricks' open LTX-2.5 base, 22B parameters, audio and video generated jointly, served through Creatify and fal at $0.01 per generated second at 720p, claimed to run roughly 1:1 with realtime; Creatify reports human reviewers preferred Boreal to the untouched LTX base in 81% of decisive comparisons…
+AI MODELS: PUBLICLY DOCUMENTED, from each vendor's own pages. Creatify: own models Aurora (avatar, with aurora_v1 and aurora_v1_fast variants) and Boreal (text/image-to-video on LTX-2.5); third-party video models listed on its AI models page include Sora 2 (OpenAI), Veo 3.1 / 3.1 Fast / 3.1 Lite / 3 / 3 Fast (Google), Kling (O3 Pro/Standard, 3.0, 2.6 Pro, Turbo 2.5, 2.1 Master, 1.6 Pro), Seedance 2.5 / 2.0 / 1.5 Pro / 1.0 Pro, Wan 3.0/2.7/2.6/2.5, MiniMax Hailuo (MH 2.3 and MH 02, Pro and Standard), Grok Video (xAI), PixVerse V5, Happy Horse 1.1/1.0, Longcat; image models GPT-image-2/1.5/1 and DALL-E 3 (…
+ASR/TTS: TTS, PUBLICLY DOCUMENTED: Pencil names Google Chirp 3 HD and Gemini 2.5 TTS Pro as its voice models — the only one of the five to name a TTS vendor outright on its own site. Creatify names ElevenLabs Music V1 and MiniMax Music 2.0 for text-to-music, and documents TTS plus voice cloning as API capabilities without naming the speech vendor. invideo documents voice cloning with emotional inflection a…
+COMPUTE: Cloud only, all five, with no local or on-device path — this is the single clearest structural difference from a local Electron editor and it is documented by the metering itself. What is metered, per vendor's own pricing: Creatify meters credits per generation with model-dependent cost (standard avatar 5 credits/30s, aurora_v1 20 credits/15s, aurora_v1_fast 10 credits/15s — from third-party API d…
+CERTAINTY: Claim by claim. PUBLIC DOCUMENTATION (read on the vendor's own site): all pricing and credit tables for Creatify, invideo, Pencil and Predis.ai; Predis.ai's per-second credit costs; Pencil's generation metering, its named models including Chirp 3 HD and Gemini 2.5 TTS Pro, its guardrails, predictive scoring and enterprise terms; invideo's Agent Two description, the Slate timeline specifics, the Lite/Pro/Ultra levels, the 16M-asset library and the Shutterstock/iStock partnerships; Creatify's prod…
+
+## ad workflow
+How a marketer makes a 15-30s product ad in each, today. CREATIFY (fewest steps of the five): paste the product page URL into URL to Video, pick industry/platform and choose 'authentic UGC' or 'polished cinematic', generate. AUTOMATIC: scraping the product page for images, copy and price; script; avatar selection from 300-1,500 personas; voice; scene cutting; captions; platform-specific aspect ratios; multiple variants in one batch. MANUAL: swap avatar, voice, individual script lines, background clips and caption style; regenerate a scene; upload your own footage or a custom avatar trained on your video; then Ad Flow pushes the winner to a connected ad account and Performance Agent reports back. Not possible: frame-accurate trimming, multi-track layering, real audio work. Realistic time to a first cut: minutes. INVIDEO: give Agent Two your footage, a script, a PDF or just the product lin…
+
+## checker
+- [public] No vendor of the five documents its render engine, codec stack or GPU framework — Confirmed by absence across every vendor page I read (Creatify pricing/api/ai-models, invideo pricing + Agent Two, Pencil platform + pricing, VEED /ai + ad-generator, Predis pricing + video generator). Not one names ffmpeg, a codec, or a GPU framework. The res…
+- [public] Boreal: 22B params, joint audio+video, $0.01/s, ~1:1 realtime, 81% preference over base in decisive comparisons, n=40 — All confirmed on Creatify Labs' own Boreal page, including the exact stat '81% of decisive comparisons (n=40, p<0.001)'. The researcher correctly flags these as vendor-reported and unaudited.
+- [reported] Boreal is post-trained on Lightricks' open LTX-2.5 base — The Labs page I fetched says only 'post-trained on an open base model' — it does not name LTX-2.5 in the rendered text. The LTX-2.5 attribution appears in the launch PR and coverage, so it is credible reporting, not something I could confirm on the model page …
+- [wrong] Boreal launched 15 September 2026 — Minor but worth fixing: the Labs page is dated 17 September 2026. Use that date, or say 'mid-September 2026'.
+- [public] Boreal is 'weaker on single-person talking clips' — Confirmed and now quantifiable: the page gives 60% preference on single-person talking clips, i.e. the narrowest margin over the base model, versus 81% overall. Worth citing the number rather than the adjective.
+- [wrong] Per-model credit costs at invideo are NOT public — invideo's own pricing page publishes worked per-model credit costs: Seedance 2.0 Fast ~30 credits per 5s clip, Seedance 2.5 ~50 credits per 5s, Nano Banana Pro ~2.5 credits per image, with the stated policy 'all models available at their original API pricing'.…
+- [inference] invideo credits are explicitly NOT charged against downloads — Slightly overstated. The page states that timeline editing consumes no credits and frames credits as a generation currency; I did not find an explicit 'downloads are free' statement. Safer wording: credits are spent on generation and AI features, and editing i…
+- [public] invideo tiers: Starter $20 / Plus $50 / Max $100 annual per seat, 400 / 2,000 / 5,000 credits, 5 / 10 / 20 seats, credits do not roll over — All confirmed on the vendor pricing page, including the no-rollover line. Storage confirmed at 60 GB (Plus) and 200 GB (Max). The researcher is right that the older Plus/Max/Generative/Elite ladder circulating on blogs is stale.
+- [wrong] Lite/Pro/Ultra are 'Agent Two levels' — Small precision error. On invideo's page, Ultra/Pro/Lite are the three intelligence tiers of Playbooks inside Agent Two — 'the level of thinking and cost every task gets' — not levels of Agent Two itself. Slate is separately described as the editor inside Agen…
+- [reported] Pencil runs an 'Open Garden' multi-model architecture with no proprietary generation model — Substantively right but the phrase is not on the platform page, which says 'Every AI Model, One System' and 'never held hostage by a vendor's roadmap'. 'Open Garden' is Brandtech/Pencil marketing language that appears in secondary coverage, where the roster is…
+MISSING:
+- invideo licenses the model layer wholesale and sells the indemnity: the Agent Two page claims '200+ model providers' with 'invideo signs with all 200+ model providers so your legal team signs once'. For a wedding/photography user this is th…
+- invideo's stock library is a first-class feature: 16 million premium clips, images and music tracks via Shutterstock and iStock, with Max including 500 premium stock items and 200 GB storage. A local editor competes against a licensed asset…
+- invideo's Slate is a real timeline inside the agent ('direct the agent to line up your approved shots, or add and remove them anytime') and timeline editing consumes zero credits. The only unmetered surface among the five is the manual edit…
+- Predis meters edits, not just generations: image edits cost 15 credits and faceless-video edits 5 credits per 10 seconds, the same rates as first generation. Iterating on an ad costs the same as making it — the sharpest per-use contrast wit…
+- Predis is a publish-side product, not only a generator: Content Scheduler, Auto Post direct to connected social accounts, per-platform aspect-ratio selection at export, and plan tiers gated on brands (1/4/unlimited) and connected accounts (…
+- Predis has explicit product/e-commerce ad features the researcher's 'product-video' axis needs: product-link input, dedicated e-commerce product video ads, a Shopify video ad maker, and a stated constraint that 'a product shot stays your pr…
+- Predis has scene-level regeneration inside a template editor — swap an image, rewrite a line, change colors and fonts, 'regenerate one scene without redoing the video'. That is slot-filling over a template, the closest analogue in this set …
+- Creatify's API surface is a product line in its own right: URL to Video, Boreal, Aurora Avatar, Stock AI Avatar, Custom Templates, Asset Generator, Ad Clone, IAB Images, Custom Avatar — with Product Video (studio-quality product video from …
+- Creatify gates concurrency by tier — 1 generation at a time on Starter versus 5 parallel generations on Pro — and gates template and actor counts (200+ vs 500+ templates, 300 vs 1,500 AI actors), plus Brand Spaces capped at 5 on Pro. Concur…
+- Creatify Enterprise offers custom model fine-tuning, white-label, a done-for-you studio service and an SLA — the model layer itself is a sold surface at the top tier. Source: https://creatify.ai/pricing
+
+SOURCES (35): https://creatify.ai/pricing | https://creatify.ai/ | https://creatify.ai/api | https://creatify.ai/ai-models | https://docs.creatify.ai/introduction | https://labs.creatify.ai/models/boreal | https://invideo.io/pricing/ | https://invideo.io/agent-two/
