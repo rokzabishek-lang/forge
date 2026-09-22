@@ -6,6 +6,13 @@ import type { PaperSpec } from './render/paper'
 import type { CarouselClipSpec } from './render/carousel'
 import type { Mask } from './render/mask'
 import type { Transcript } from './transcript'
+/*
+ * A value import, unlike every other one above, and safe: `render/speed.ts`
+ * takes only TYPES from this file, so the edge is one-way at runtime. It is
+ * worth the asymmetry — the alternative is a second copy of "how much source
+ * does a timeline frame eat", and the first copy of that already drifted.
+ */
+import { clipSpeed, maxDurationAtSpeed, sourceFrameAt } from './render/speed'
 
 /**
  * Everything on the timeline is measured in whole frames at the project frame
@@ -759,18 +766,23 @@ export function clipsAtFrame(project: Project, frame: Frames): Clip[] {
     .sort((a, b) => (trackOrder.get(a.trackId) ?? 0) - (trackOrder.get(b.trackId) ?? 0))
 }
 
-/** Source frame the clip is showing when the playhead is at `frame`. */
+/**
+ * Source frame the clip is showing when the playhead is at `frame`.
+ *
+ * Speed is part of this mapping, not a separate concern. The preview seeks with
+ * this, the caption timing reads from it, and `splitClip` and `trimStart` below
+ * now cut with it, so a slowed clip whose seek ignored speed would show the
+ * wrong frame, say the wrong word, and split in the wrong place — drifting
+ * further the deeper into the clip you went.
+ *
+ * It delegates rather than repeating the multiplication, because it used to
+ * repeat it and the two copies had already diverged: this one took `clip.speed`
+ * at face value while every render path clamps it to [MIN_SPEED, MAX_SPEED].
+ * A project file carrying `speed: 100` therefore previewed one frame and
+ * exported another. One formula cannot disagree with itself.
+ */
 export function sourceFrameFor(clip: Clip, frame: Frames): Frames {
-  /*
-   * Speed is part of this mapping, not a separate concern.
-   *
-   * The preview seeks with this and the caption timing reads from it, so a
-   * slowed clip whose seek ignored speed would show the wrong frame and say the
-   * wrong word — drifting further the deeper into the clip you scrubbed. One
-   * multiplication here keeps every caller right.
-   */
-  const rate = typeof clip.speed === 'number' && clip.speed > 0 ? clip.speed : 1
-  return Math.round(clip.inPoint + (frame - clip.start) * rate)
+  return sourceFrameAt(clip, frame)
 }
 
 export function assetById(project: Project, id: string): MediaAsset | null {
@@ -875,7 +887,18 @@ export function splitClip(clip: Clip, frame: Frames): [Clip, Clip] | null {
     id: `${clip.id}-b`,
     start: frame,
     duration: clip.duration - leftDuration,
-    inPoint: clip.inPoint + leftDuration
+    /*
+     * The right half opens on the frame the playhead was showing — which is
+     * the definition of an invisible cut, and at 2× is two source frames per
+     * timeline frame, not one.
+     *
+     * This was `inPoint + leftDuration`, which is the same number only at
+     * speed 1. Split a 2× clip two seconds in and the right half replayed the
+     * second second; at 0.5× it skipped one. Both halves then rendered the
+     * wrong footage, silently, from a gesture whose whole promise is that
+     * nothing moves.
+     */
+    inPoint: sourceFrameFor(clip, frame)
   }
   return [left, right]
 }
@@ -885,23 +908,46 @@ export function splitClip(clip: Clip, frame: Frames): [Clip, Clip] | null {
  * head in also moves the source in-point, so the visible frames do not slide.
  */
 export function trimStart(clip: Clip, newStart: Frames): Clip {
+  const rate = clipSpeed(clip)
   const maxStart = clipEnd(clip) - 1
   const delta = Math.min(newStart, maxStart) - clip.start
-  // Cannot pull the head earlier than the start of the source media.
-  const limited = Math.max(delta, -clip.inPoint)
+  /*
+   * Cannot pull the head earlier than the start of the source media — and at
+   * 2× the footage before `inPoint` buys only half as many timeline frames of
+   * reach, because each one of them eats two source frames.
+   *
+   * Floored, so the head lands on a frame. Flooring the reach can only ever
+   * stop short, never overshoot: `floor(inPoint / rate) × rate ≤ inPoint`, and
+   * rounding an integer-bounded value cannot cross the integer, so the new
+   * in-point is never negative.
+   */
+  const limited = Math.max(delta, -Math.floor(clip.inPoint / rate))
   return {
     ...clip,
     start: clip.start + limited,
     duration: clip.duration - limited,
-    inPoint: clip.inPoint + limited
+    inPoint: clip.inPoint + Math.round(limited * rate)
   }
 }
 
 /** Drag the right edge. Cannot run past the end of the source media. */
 export function trimEnd(clip: Clip, newEnd: Frames, sourceDuration: Frames): Clip {
   const minEnd = clip.start + 1
-  const maxEnd = clip.start + (sourceDuration - clip.inPoint)
-  const end = Math.max(minEnd, Math.min(newEnd, maxEnd))
+  /*
+   * At 2× the tail runs out of footage twice as fast, so the ceiling is the
+   * source that is left divided by the rate — which is exactly
+   * `maxDurationAtSpeed`, rather than a second copy of it here.
+   *
+   * It is handed a video-shaped asset because the caller has already decided
+   * there is a real source length to respect: the image branch returns
+   * "as long as you like" and would throw the caller's own limit away.
+   */
+  const room = maxDurationAtSpeed(
+    clip,
+    { kind: 'video', durationFrames: sourceDuration },
+    clipSpeed(clip)
+  )
+  const end = Math.max(minEnd, Math.min(newEnd, clip.start + room))
   return { ...clip, duration: end - clip.start }
 }
 

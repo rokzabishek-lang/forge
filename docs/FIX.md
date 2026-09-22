@@ -40,7 +40,7 @@ nudge three clips together.
 
 ## Phase A — the editing surface
 
-### A1. Split and trim honour clip speed — *bug*
+### A1. Split and trim honour clip speed — *bug* — **DONE**
 
 **Where.** `src/shared/timeline.ts` `splitClip` (:869-884), `trimStart`
 (:887-900), `trimEnd` (:901-907); callers `src/renderer/src/store.ts:964-1005`.
@@ -57,6 +57,32 @@ The correct maths already exists beside them: `sourceFrameFor` (:763) and
 0.5× → the right half's first source frame equals `sourceFrameFor(clip,
 frame)`; trim head at 2× keeps the frame under the cut still; trim tail at
 4× stops at the real end of the media. Mutation: remove the speed term.
+
+**What was actually built.** All three, as written, plus one thing the item did
+not anticipate.
+
+`splitClip` now takes its in-point straight from `sourceFrameFor(clip, frame)`
+rather than recomputing the multiplication — which makes the code say what the
+gesture means: *the right half opens on the frame the playhead was showing.*
+
+`trimStart`'s clamp was wrong in **both** directions, not one. At 2× it handed
+back ten timeline frames that five frames of footage could not fill; at 0.5× it
+refused ten frames the same footage could have covered twice over. Both are
+pinned.
+
+And `sourceFrameFor` itself was a second copy of `sourceFrameAt`
+(`render/speed.ts:73`) that had already drifted: it took `clip.speed` at face
+value while every render path clamps it to `[MIN_SPEED, MAX_SPEED]`. A project
+carrying `speed: 100` therefore previewed, captioned and split on one frame and
+exported another. It delegates now, so the two cannot disagree again — which is
+the same lesson as the rest of the item: the sum existed, in the right place,
+and the bug was code that did not call it.
+
+Five mutations, all killed, against a green 1610-test gate: the split's timeline
+advance, the trim's timeline advance, the head-reach clamp, the tail ceiling,
+and the unclamped local rate. Not migrated: a 2× clip split *before* this fix
+has a wrong in-point saved in the project file, and nothing can tell that apart
+from a deliberate one — re-trim it.
 
 ### A2. Transitions play in the preview
 

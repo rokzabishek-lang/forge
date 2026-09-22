@@ -23,6 +23,7 @@ import {
   sourceFrameFor,
   type Clip
 } from '@shared/timeline'
+import { sourceFrameAt } from '@shared/render/speed'
 
 function clip(over: Partial<Clip> = {}): Clip {
   return {
@@ -72,6 +73,29 @@ describe('splitClip', () => {
     expect(splitClip(clip(), 150)).toBeNull()
     expect(splitClip(clip(), 42)).toBeNull()
   })
+
+  /*
+   * A cut is invisible when the right half opens on the frame the playhead was
+   * showing. At 2x that frame is twenty source frames further in, not ten, and
+   * the old `inPoint + leftDuration` replayed footage the left half had just
+   * played — from a gesture that is supposed to change nothing at all.
+   */
+  it.each([
+    { speed: 2, inPoint: 50 },
+    { speed: 0.5, inPoint: 20 }
+  ])('opens the right half on the frame under the playhead at $speed x', ({ speed, inPoint }) => {
+    const c = clip({ speed })
+    const [left, right] = splitClip(c, 120)!
+
+    expect(right.inPoint).toBe(inPoint)
+    expect(right.inPoint).toBe(sourceFrameFor(c, 120))
+    // Not just at the cut: the halves show what the original showed, throughout.
+    expect(sourceFrameFor(left, 110)).toBe(sourceFrameFor(c, 110))
+    expect(sourceFrameFor(right, 140)).toBe(sourceFrameFor(c, 140))
+    // And the split is still a split — speed changes the source, not the timeline.
+    expect(left.duration + right.duration).toBe(c.duration)
+    expect(right.start).toBe(120)
+  })
 })
 
 describe('trimStart', () => {
@@ -96,6 +120,42 @@ describe('trimStart', () => {
     const t = trimStart(clip(), 999)
     expect(t.duration).toBeGreaterThanOrEqual(1)
   })
+
+  it('keeps content anchored at 2x too', () => {
+    const c = clip({ speed: 2 })
+    const t = trimStart(c, 110)
+    // Ten timeline frames of head means twenty source frames of head.
+    expect(t.inPoint).toBe(30)
+    expect(sourceFrameFor(t, 120)).toBe(sourceFrameFor(c, 120))
+  })
+
+  /*
+   * The head's reach is source frames DIVIDED by the rate, and the old clamp
+   * was wrong in both directions at once: at 2x it handed back ten timeline
+   * frames that only five frames of footage could fill, and at 0.5x it refused
+   * ten frames the same footage could have covered twice over.
+   */
+  it.each([
+    { speed: 2, start: 95 },
+    { speed: 0.5, start: 80 }
+  ])('reaches back as far as the source really allows at $speed x', ({ speed, start }) => {
+    const c = clip({ speed })
+    const t = trimStart(c, 50)
+
+    expect(t.start).toBe(start)
+    expect(t.inPoint).toBe(0)
+    // The head now sits exactly on the first frame of the media, not past it.
+    expect(sourceFrameFor(t, t.start)).toBe(0)
+  })
+
+  it('never pulls the in-point below the start of the media', () => {
+    // An awkward rate, where the reach does not divide evenly.
+    for (const speed of [0.3, 0.7, 1.5, 2.9, 7]) {
+      const t = trimStart(clip({ speed, inPoint: 11 }), -500)
+      expect(t.inPoint, `at ${speed}x`).toBeGreaterThanOrEqual(0)
+      expect(t.start, `at ${speed}x`).toBeGreaterThanOrEqual(0)
+    }
+  })
 })
 
 describe('trimEnd', () => {
@@ -108,6 +168,45 @@ describe('trimEnd', () => {
   it('always leaves at least one frame', () => {
     expect(trimEnd(clip(), 0, 100).duration).toBe(1)
   })
+
+  /*
+   * The same ninety frames of remaining source are a shorter clip when it plays
+   * fast and a longer one when it plays slow. Dragging the tail of a 4x clip
+   * used to offer ninety timeline frames — three hundred and sixty source
+   * frames out of a hundred-frame file.
+   */
+  it.each([
+    { speed: 4, duration: 22 },
+    { speed: 0.5, duration: 180 }
+  ])('stops at the real end of the media at $speed x', ({ speed, duration }) => {
+    const t = trimEnd(clip({ speed }), 999, 100)
+
+    expect(t.duration).toBe(duration)
+    // The last frame it asks for exists.
+    expect(t.inPoint + t.duration * speed).toBeLessThanOrEqual(100)
+    // And it is not leaving usable footage behind: one more frame would not fit.
+    expect(t.inPoint + (t.duration + 1) * speed).toBeGreaterThan(100)
+  })
+})
+
+describe('sourceFrameFor', () => {
+  /*
+   * This function and `sourceFrameAt` are the same mapping under two names, one
+   * on each side of the shared layer — and they had already drifted: this one
+   * took `clip.speed` at face value while every render path clamps it. A
+   * project file carrying an out-of-range speed previewed, captioned and split
+   * on one frame and exported another. They are one function now; this is the
+   * guard that says so.
+   */
+  it.each([0.25, 1, 2, 8, 0, -3, 100, Number.NaN])(
+    'agrees with the render\'s own mapping at speed %s',
+    (speed) => {
+      const c = clip({ speed })
+      for (const frame of [100, 117, 149]) {
+        expect(sourceFrameFor(c, frame)).toBe(sourceFrameAt(c, frame))
+      }
+    }
+  )
 })
 
 describe('overlap handling', () => {
