@@ -9,6 +9,8 @@ import {
   nearestTransitionTarget,
   MAX_TRACKS
 } from '@shared/timeline'
+import { gapAt } from '@shared/edit/recipes'
+import { ClipMenu, type ClipMenuTarget } from './ClipMenu'
 import { useEditor } from '../store'
 import { useCatalog } from '../catalog'
 import { VolumeEnvelope } from './VolumeEnvelope'
@@ -40,6 +42,12 @@ export function Timeline(): ReactNode {
   const selectedClipId = useEditor((s) => s.selectedClipId)
   const setPlayhead = useEditor((s) => s.setPlayhead)
   const select = useEditor((s) => s.select)
+  const selectMore = useEditor((s) => s.selectMore)
+  const selectMany = useEditor((s) => s.selectMany)
+  const selectGapAt = useEditor((s) => s.selectGapAt)
+  const selectedClipIds = useEditor((s) => s.selectedClipIds)
+  const selectedGap = useEditor((s) => s.selectedGap)
+  const moveSelectionTo = useEditor((s) => s.moveSelectionTo)
   const moveClip = useEditor((s) => s.moveClip)
   const placePoolAsset = useEditor((s) => s.placePoolAsset)
   const trimClipStart = useEditor((s) => s.trimClipStart)
@@ -69,7 +77,27 @@ export function Timeline(): ReactNode {
     clipId: string
     startX: number
     origin: Clip
+    /** Every clip travelling with this one, when several are selected. */
+    group: string[] | null
+    /** Where each of them started, so the move is applied to the ORIGIN. */
+    groupOrigins: Map<string, number> | null
   } | null>(null)
+
+  /**
+   * A marquee in progress: where it started and where the pointer is now.
+   *
+   * In state rather than a ref because it is drawn — a rubber band nobody can
+   * see is indistinguishable from a drag that did nothing.
+   */
+  const [marquee, setMarquee] = useState<{
+    x0: number
+    y0: number
+    x1: number
+    y1: number
+  } | null>(null)
+
+  /** The right-click menu's target, or null when it is closed. */
+  const [clipMenu, setClipMenu] = useState<ClipMenuTarget | null>(null)
 
   /**
    * Which lane the pointer is over, or null when it is off the stack.
@@ -210,11 +238,50 @@ export function Timeline(): ReactNode {
       event.preventDefault()
       event.stopPropagation()
       ;(event.target as HTMLElement).setPointerCapture(event.pointerId)
-      drag.current = { mode, clipId: clip.id, startX: event.clientX, origin: { ...clip } }
-      select(clip.id)
+
+      /*
+       * Modified clicks change the selection and start no drag.
+       *
+       * Shift or cmd on a clip means "also this one" — beginning a move on the
+       * same gesture would slide whatever was just added by however far the
+       * hand wobbled before the button came up.
+       */
+      if (event.shiftKey || event.metaKey || event.ctrlKey) {
+        selectMore(clip.id, event.shiftKey ? 'range' : 'toggle')
+        return
+      }
+
+      /*
+       * Dragging one of several moves ALL of them.
+       *
+       * Clicking a clip that is already part of the selection keeps that
+       * selection — otherwise picking four clips and then grabbing one of them
+       * to move the group would silently drop the other three, which is the
+       * single most surprising thing a multi-select can do.
+       */
+      const selection = useEditor.getState().selectedClipIds
+      const group = selection.includes(clip.id) ? selection : [clip.id]
+      if (!selection.includes(clip.id)) select(clip.id)
+
+      drag.current = {
+        mode,
+        clipId: clip.id,
+        startX: event.clientX,
+        origin: { ...clip },
+        group: mode === 'move' && group.length > 1 ? group : null,
+        groupOrigins:
+          mode === 'move' && group.length > 1
+            ? new Map(
+                useEditor
+                  .getState()
+                  .project.clips.filter((c) => group.includes(c.id))
+                  .map((c) => [c.id, c.start])
+              )
+            : null
+      }
       begin()
     },
-    [select, begin]
+    [select, selectMore, begin]
   )
 
   const onClipMove = useCallback(
@@ -225,7 +292,24 @@ export function Timeline(): ReactNode {
       const origin = state.origin
       const ownEdges = [origin.start, clipEnd(origin)]
 
-      if (state.mode === 'move') {
+      if (state.mode === 'move' && state.group && state.groupOrigins) {
+        /*
+         * Several at once: one offset, applied to where each STARTED.
+         *
+         * Against the origins rather than against current positions, for the
+         * same reason a single drag is: accumulating a delta each frame lets
+         * rounding and any clamp drift, and a group drifting is a group that
+         * no longer holds its shape. No track change while several are
+         * selected — moving four clips between lanes has no single obvious
+         * answer, and guessing one would rearrange the timeline silently.
+         */
+        const origins = state.groupOrigins
+        const earliest = Math.min(...origins.values())
+        const wanted = Math.round(snap(origins.get(state.clipId)! + deltaFrames, ownEdges)) -
+          origins.get(state.clipId)!
+        const shift = Math.max(wanted, -earliest)
+        moveSelectionTo(origins, shift)
+      } else if (state.mode === 'move') {
         /*
          * Sideways in time, upwards in layers — one gesture, both axes.
          *
@@ -245,8 +329,45 @@ export function Timeline(): ReactNode {
         trimClipEnd(state.clipId, snap(clipEnd(origin) + deltaFrames, ownEdges))
       }
     },
-    [zoom, snap, moveClip, trimClipStart, trimClipEnd, laneAt]
+    [zoom, snap, moveClip, moveSelectionTo, trimClipStart, trimClipEnd, laneAt]
   )
+
+  /** Which lane the marquee began in, for reporting only. */
+  const marqueeTrack = useRef<string | null>(null)
+
+  /**
+   * Every clip the rubber band touches.
+   *
+   * Touches, not encloses: a band dragged across the middle of a row of shots
+   * is unambiguously meant to take them, and requiring full containment means
+   * the band has to be dragged past both ends of every clip — which on a zoomed
+   * timeline is off-screen in both directions.
+   */
+  const clipsInBand = useCallback(
+    (band: { x0: number; y0: number; x1: number; y1: number }): string[] => {
+      const from = frameFromEvent(Math.min(band.x0, band.x1))
+      const to = frameFromEvent(Math.max(band.x0, band.x1))
+      const top = Math.min(band.y0, band.y1)
+      const bottom = Math.max(band.y0, band.y1)
+
+      const lanesTouched = new Set<string>()
+      for (const track of lanesRef.current) {
+        const row = laneBoxes.current.get(track.id)
+        if (row && row.top < bottom && row.bottom > top) lanesTouched.add(track.id)
+      }
+
+      return useEditor
+        .getState()
+        .project.clips.filter(
+          (c) => lanesTouched.has(c.trackId) && c.start < to && clipEnd(c) > from
+        )
+        .map((c) => c.id)
+    },
+    [frameFromEvent]
+  )
+
+  /** Where each lane sits on screen, so a band can be tested against them. */
+  const laneBoxes = useRef(new Map<string, { top: number; bottom: number }>())
 
   const endDrag = useCallback(() => {
     if (!drag.current) return
@@ -267,7 +388,22 @@ export function Timeline(): ReactNode {
   lanesRef.current = lanes
 
   return (
-    <div className="flex h-full flex-col border-t border-ink-800 bg-ink-900">
+    /*
+     * `select-none` on the whole timeline.
+     *
+     * Reported: dragging a clip highlighted the text under the pointer — the
+     * clip's own name, the track labels, the timecodes — in browser blue, and
+     * it stayed highlighted after the drop. Every drag gesture here is a drag
+     * of an OBJECT, and none of this text is meant to be selectable, so the
+     * browser's default is simply wrong for this surface. It gets worse with a
+     * marquee, which drags across the labels by definition.
+     *
+     * Here rather than on each draggable thing: a drag that starts on a clip
+     * can end anywhere in the lane, and the selection follows the pointer
+     * rather than staying with the element it began on.
+     */
+    <div className="flex h-full select-none flex-col border-t border-ink-800 bg-ink-900">
+      {clipMenu && <ClipMenu target={clipMenu} onClose={() => setClipMenu(null)} />}
       <div className="flex flex-1 overflow-hidden">
         {/* Track headers stay put while the lane scrolls. */}
         <div className="w-[128px] shrink-0 overflow-y-auto border-r border-ink-800 bg-ink-850">
@@ -351,6 +487,22 @@ export function Timeline(): ReactNode {
         </div>
 
         <div ref={laneRef} className="relative flex-1 overflow-x-auto overflow-y-hidden">
+          {/*
+            The rubber band, in viewport coordinates and outside the scrolling
+            content: it follows the POINTER, which does not scroll with the
+            lane underneath it.
+          */}
+          {marquee && (
+            <div
+              className="pointer-events-none fixed z-40 rounded-sm border border-flame-400 bg-flame-500/15"
+              style={{
+                left: Math.min(marquee.x0, marquee.x1),
+                top: Math.min(marquee.y0, marquee.y1),
+                width: Math.abs(marquee.x1 - marquee.x0),
+                height: Math.abs(marquee.y1 - marquee.y0)
+              }}
+            />
+          )}
           <div style={{ width: laneWidth }} className="relative">
             <div
               className="sticky top-0 z-20 h-7 cursor-ew-resize select-none border-b border-ink-800 bg-ink-850"
@@ -371,11 +523,56 @@ export function Timeline(): ReactNode {
             {lanes.map((track) => (
               <div
                 key={track.id}
+                ref={(node) => {
+                  // Measured, not computed from an index: lanes are a fixed
+                  // height today and a band that assumed so would silently
+                  // select the wrong row the day one of them is not.
+                  if (node) {
+                    const box = node.getBoundingClientRect()
+                    laneBoxes.current.set(track.id, { top: box.top, bottom: box.bottom })
+                  } else laneBoxes.current.delete(track.id)
+                }}
                 className={`relative border-b border-ink-800 ${
                   track.hidden || track.muted ? 'opacity-40' : ''
                 } ${dropTarget?.trackId === track.id ? 'bg-flame-500/10' : ''}`}
                 style={{ height: TRACK_HEIGHT }}
-                onPointerDown={() => select(null)}
+                onPointerDown={(e) => {
+                  /*
+                   * Empty lane: either pick the gap under the pointer, or drag
+                   * out a marquee. Both start the same way, so the decision is
+                   * made on the way UP — a click that never moved is a click.
+                   */
+                  if (e.button !== 0) return
+                  const box = laneRef.current?.getBoundingClientRect()
+                  if (!box) return
+                  ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+                  setMarquee({
+                    x0: e.clientX, y0: e.clientY, x1: e.clientX, y1: e.clientY
+                  })
+                  marqueeTrack.current = track.id
+                }}
+                onPointerMove={(e) => {
+                  if (!marquee) return
+                  setMarquee((m) => (m ? { ...m, x1: e.clientX, y1: e.clientY } : m))
+                }}
+                onPointerUp={(e) => {
+                  const band = marquee
+                  setMarquee(null)
+                  if (!band) return
+                  const moved =
+                    Math.abs(band.x1 - band.x0) > 3 || Math.abs(band.y1 - band.y0) > 3
+                  if (!moved) {
+                    // A plain click on emptiness: take the gap if there is one,
+                    // and otherwise drop the selection.
+                    const frame = frameFromEvent(e.clientX)
+                    const gap = gapAt(useEditor.getState().project, track.id, frame)
+                    if (gap) selectGapAt(track.id, frame)
+                    else select(null)
+                    return
+                  }
+                  selectMany(clipsInBand(band))
+                }}
+                onPointerCancel={() => setMarquee(null)}
                 onDragOver={(e) => {
                   if (!isAssetDrag(e)) return
                   e.preventDefault()
@@ -407,6 +604,21 @@ export function Timeline(): ReactNode {
                   void handleDrop(payload, track.id, track.kind, frameFromEvent(e.clientX))
                 }}
               >
+                {/*
+                  A selected gap, shown as a thing rather than as absence.
+                  Clicking a hole has to give some feedback or it reads as the
+                  click having missed; Delete then closes it.
+                */}
+                {selectedGap?.trackId === track.id && (
+                  <div
+                    className="pointer-events-none absolute top-1.5 bottom-1.5 rounded border border-dashed border-flame-400 bg-flame-500/15"
+                    style={{
+                      left: selectedGap.start * zoom,
+                      width: Math.max(2, selectedGap.duration * zoom)
+                    }}
+                  />
+                )}
+
                 {project.clips
                   .filter((c) => c.trackId === track.id && c.transitionIn)
                   .map((clip) => {
@@ -456,7 +668,7 @@ export function Timeline(): ReactNode {
                   .filter((c) => c.trackId === track.id)
                   .map((clip) => {
                     const asset = project.assets.find((a) => a.id === clip.assetId)
-                    const selected = clip.id === selectedClipId
+                    const selected = selectedClipIds.includes(clip.id)
                     return (
                       <div
                         key={clip.id}
@@ -466,6 +678,17 @@ export function Timeline(): ReactNode {
                             : 'border-ink-600 bg-ink-700/70 hover:bg-ink-700'
                         }`}
                         style={{ left: clip.start * zoom, width: Math.max(6, clip.duration * zoom) }}
+                        onContextMenu={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          // Right-clicking OUTSIDE the selection makes this the
+                          // selection first, so the menu always acts on what
+                          // was clicked. Inside it, the group is kept.
+                          if (!useEditor.getState().selectedClipIds.includes(clip.id)) {
+                            select(clip.id)
+                          }
+                          setClipMenu({ clipId: clip.id, x: e.clientX, y: e.clientY })
+                        }}
                         onPointerDown={startDrag('move', clip)}
                         onPointerMove={onClipMove}
                         onPointerUp={endDrag}

@@ -20,6 +20,18 @@ import { DEFAULT_COLOR, DEFAULT_TEXT, clipCoversFrame } from '@shared/timeline'
 import type { Mask, MaskShape } from '@shared/render/mask'
 import { clipSpeed, maxDurationAtSpeed, withClipSpeed } from '@shared/render/speed'
 import { defaultFadeFrames } from '@shared/render/audioFade'
+import { collapsesIntoBurst } from '@shared/edit/coalesce'
+import {
+  closeGap,
+  gapAt,
+  moveMany,
+  removeMany,
+  rippleDelete,
+  copySelection as clipsToClipboard,
+  pasteClipboard as placeClipboard,
+  type Clipboard,
+  type PasteResult
+} from '@shared/edit/recipes'
 import { isLoudnessTarget } from '@shared/render/loudness'
 import { normalisePath, pathAt } from '@shared/render/path'
 import { normaliseKeys, type Ease, type Keyframe, type KeyedProperty } from '@shared/render/keyframes'
@@ -175,7 +187,18 @@ export interface IngestForm {
  * or a mouse-move each doing one is far more work than anybody can see.
  */
 const TEXT_COALESCE_MS = 160
-const pendingText = new Map<string, { spec: TextSpec; timer: ReturnType<typeof setTimeout> }>()
+/**
+ * Text bursts in flight, with the history depth each one left behind.
+ *
+ * `depth` is what makes a burst END when something else is edited: a keystroke
+ * only collapses into the previous one when the history has grown by exactly
+ * its own entry since then. Without it, moving a clip between two keystrokes
+ * was swallowed by the burst and lost its undo point.
+ */
+const pendingText = new Map<
+  string,
+  { spec: TextSpec; timer: ReturnType<typeof setTimeout>; depth: number }
+>()
 
 /**
  * The largest rectangle of the target aspect that fits inside the source,
@@ -299,7 +322,24 @@ interface EditorState {
 
   playhead: number
   playing: boolean
+  /**
+   * Everything selected, in the order it was chosen.
+   *
+   * `selectedClipId` below is the FIRST of these, kept in step on every change
+   * so the two can never disagree. It stays because a dozen places ask "which
+   * one clip is selected" and mean it — the Inspector edits one clip, the
+   * curve panel draws one envelope — and converting all of them at once would
+   * be a much larger change than the feature is.
+   */
+  selectedClipIds: string[]
   selectedClipId: string | null
+  /** Cut or copied clips, waiting to be pasted. Not part of the project. */
+  clipboard: Clipboard | null
+  /**
+   * A selected gap, which is not a clip and so cannot live in the selection.
+   * Clicking an empty run between two clips picks it; Delete closes it.
+   */
+  selectedGap: { trackId: string; start: number; duration: number } | null
   /** Timeline horizontal scale, in pixels per frame. */
   zoom: number
   aspect: AspectKey
@@ -678,6 +718,44 @@ interface EditorState {
   setScrubAudio: (on: boolean) => void
   select: (clipId: string | null) => void
   /**
+   * Add to, remove from, or extend the selection — shift/cmd-click.
+   *
+   * `toggle` is cmd-click: this clip joins or leaves, and everything else
+   * stays. `range` is shift-click: everything on the same track between the
+   * primary selection and this one comes too, which is how a run of shots is
+   * picked without dragging a marquee across them.
+   */
+  selectMore: (clipId: string, how: 'toggle' | 'range') => void
+  /** Replace the whole selection, e.g. from a marquee. */
+  selectMany: (clipIds: string[]) => void
+  selectAll: () => void
+  /** Pick the empty run at this point on a track, if there is one. */
+  selectGapAt: (trackId: string, frame: number) => void
+
+  /** Move every selected clip together, as one undo entry. */
+  nudgeSelection: (deltaFrames: number) => void
+  /** Delete the selection. Gaps stay — see rippleDeleteSelection. */
+  deleteSelection: () => void
+  /** Delete and close the hole on each clip's own track (shift-Delete). */
+  rippleDeleteSelection: () => void
+  copySelection: () => void
+  cutSelection: () => void
+  /** Paste at the playhead, keeping the arrangement. */
+  pasteClipboard: () => Promise<void>
+  /** One more of each selected clip, directly after it. */
+  duplicateSelection: () => Promise<void>
+  /** Shared by paste and duplicate; not called directly from the interface. */
+  placeCopies: (board: Clipboard, frame: number) => Promise<void>
+  /**
+   * Put a group of clips at `origin + shift`, for a multi-clip drag.
+   *
+   * Takes the ORIGINS rather than a delta so every intermediate frame of the
+   * drag is computed from where the clips started — accumulating a delta lets
+   * rounding drift, and a group that drifts stops holding its shape.
+   */
+  moveSelectionTo: (origins: Map<string, number>, shift: number) => void
+
+  /**
    * Select a clip AND make sure it is on screen.
    *
    * What every "add" should call. Selecting alone is not enough: a clip that
@@ -737,7 +815,10 @@ export const useEditor = create<EditorState>((set, get) => ({
   playing: false,
   loop: false,
   scrubAudio: true,
+  selectedClipIds: [],
   selectedClipId: null,
+  clipboard: null,
+  selectedGap: null,
   zoom: 0.6,
   aspect: '16:9',
   previewMode: 'source',
@@ -2356,9 +2437,29 @@ export const useEditor = create<EditorState>((set, get) => ({
      * The burst is still one undo entry: a transaction opens on the first
      * keystroke and closes when the typing stops.
      */
+    /*
+     * Coalesced by COLLAPSING entries, not by holding a transaction open.
+     *
+     * It used to call `begin()` on the first keystroke and `commit()` from a
+     * timer — and `pendingSnapshot` is one module-level variable, so for those
+     * 160ms every OTHER edit in the app silently joined the same transaction
+     * and got no history entry of its own. Type a caption and drag a clip
+     * straight afterwards and one undo took back both; type into two clips in
+     * a row and the second `begin()` overwrote the first's snapshot, so undo
+     * jumped back past work it had no business touching. Found by nudging a
+     * selection right after setting some text and watching a clip disappear.
+     *
+     * So: every keystroke is an ordinary update that pushes its own entry, and
+     * a continuing burst removes the entry IT just pushed. The burst still
+     * collapses to one undo step, and nothing else in the app can be caught in
+     * it — an unrelated edit landing mid-burst keeps its own entry and ENDS the
+     * run, because the history is no longer the depth this burst left it at.
+     */
     const pending = pendingText.get(clipId)
-    if (!pending) get().begin()
-    else clearTimeout(pending.timer)
+    if (pending) clearTimeout(pending.timer)
+
+    const priorProject = get().project
+    const priorDepth = get().past.length
 
     const spec: TextSpec = { ...clip.text, ...patch }
     get().update((p) => ({
@@ -2366,12 +2467,28 @@ export const useEditor = create<EditorState>((set, get) => ({
       clips: p.clips.map((c) => (c.id === clipId ? { ...c, text: spec } : c))
     }))
 
-    const timer = setTimeout(() => {
-      pendingText.delete(clipId)
-      get().commit()
-    }, TEXT_COALESCE_MS)
+    /*
+     * Only ever pops the entry this call created.
+     *
+     * Checked by identity rather than by depth alone: if anything else pushed
+     * in between, the top of the stack is not ours and removing it would
+     * silently drop somebody else's undo step.
+     */
+    const past = get().past
+    if (
+      collapsesIntoBurst({
+        burstDepth: pending?.depth,
+        depthBefore: priorDepth,
+        depthAfter: past.length,
+        topEntry: past[past.length - 1],
+        stateBefore: priorProject
+      })
+    ) {
+      set((s) => ({ past: s.past.slice(0, -1) }))
+    }
 
-    pendingText.set(clipId, { spec, timer })
+    const timer = setTimeout(() => pendingText.delete(clipId), TEXT_COALESCE_MS)
+    pendingText.set(clipId, { spec, timer, depth: get().past.length })
   },
 
   /**
@@ -3630,7 +3747,171 @@ export const useEditor = create<EditorState>((set, get) => ({
   setPlaying: (playing) => set({ playing }),
   setLoop: (loop) => set({ loop }),
   setScrubAudio: (scrubAudio) => set({ scrubAudio }),
-  select: (clipId) => set({ selectedClipId: clipId }),
+  select: (clipId) =>
+    set({
+      selectedClipIds: clipId ? [clipId] : [],
+      selectedClipId: clipId,
+      selectedGap: null
+    }),
+
+  selectMore: (clipId, how) => {
+    const { project, selectedClipIds } = get()
+    if (how === 'toggle') {
+      const next = selectedClipIds.includes(clipId)
+        ? selectedClipIds.filter((id) => id !== clipId)
+        : [...selectedClipIds, clipId]
+      set({ selectedClipIds: next, selectedClipId: next[0] ?? null, selectedGap: null })
+      return
+    }
+
+    /*
+     * Shift-click: everything between, on the same track.
+     *
+     * Anchored on the PRIMARY selection rather than the most recent, so
+     * extending twice grows one range from a fixed end instead of walking the
+     * anchor along behind the pointer.
+     */
+    const anchor = project.clips.find((c) => c.id === selectedClipIds[0])
+    const target = project.clips.find((c) => c.id === clipId)
+    if (!anchor || !target || anchor.trackId !== target.trackId) {
+      get().selectMore(clipId, 'toggle')
+      return
+    }
+    const from = Math.min(anchor.start, target.start)
+    const to = Math.max(clipEnd(anchor), clipEnd(target))
+    const covered = project.clips
+      .filter((c) => c.trackId === anchor.trackId && c.start >= from && clipEnd(c) <= to)
+      .sort((a, b) => a.start - b.start)
+      .map((c) => c.id)
+    // The anchor stays first, so the primary selection does not jump.
+    const next = [anchor.id, ...covered.filter((id) => id !== anchor.id)]
+    set({ selectedClipIds: next, selectedClipId: next[0] ?? null, selectedGap: null })
+  },
+
+  selectMany: (clipIds) =>
+    set({
+      selectedClipIds: clipIds,
+      selectedClipId: clipIds[0] ?? null,
+      selectedGap: null
+    }),
+
+  selectAll: () => {
+    const ids = get()
+      .project.clips.filter(
+        (c) => !get().project.tracks.find((t) => t.id === c.trackId)?.locked
+      )
+      .map((c) => c.id)
+    get().selectMany(ids)
+  },
+
+  selectGapAt: (trackId, frame) => {
+    const gap = gapAt(get().project, trackId, Math.round(frame))
+    set({
+      selectedGap: gap,
+      ...(gap ? { selectedClipIds: [], selectedClipId: null } : {})
+    })
+  },
+
+  moveSelectionTo: (origins, shift) => {
+    get().update((p) => ({
+      ...p,
+      clips: p.clips.map((c) => {
+        const from = origins.get(c.id)
+        return from === undefined ? c : { ...c, start: Math.max(0, from + shift) }
+      })
+    }))
+  },
+
+  nudgeSelection: (deltaFrames) => {
+    const { selectedClipIds } = get()
+    if (selectedClipIds.length === 0) return
+    get().update((p) => moveMany(p, selectedClipIds, Math.round(deltaFrames)))
+  },
+
+  deleteSelection: () => {
+    const { selectedClipIds, selectedGap } = get()
+    // A selected gap is the thing to remove when there is one: clicking a hole
+    // and pressing Delete means close the hole.
+    if (selectedGap) {
+      get().update((p) => closeGap(p, selectedGap))
+      set({ selectedGap: null })
+      return
+    }
+    if (selectedClipIds.length === 0) return
+    get().update((p) => removeMany(p, selectedClipIds))
+    set({ selectedClipIds: [], selectedClipId: null })
+  },
+
+  rippleDeleteSelection: () => {
+    const { selectedClipIds, selectedGap } = get()
+    if (selectedGap) {
+      get().update((p) => closeGap(p, selectedGap))
+      set({ selectedGap: null })
+      return
+    }
+    if (selectedClipIds.length === 0) return
+    get().update((p) => rippleDelete(p, selectedClipIds))
+    set({ selectedClipIds: [], selectedClipId: null })
+  },
+
+  copySelection: () => {
+    const { project, selectedClipIds, notify } = get()
+    const board = clipsToClipboard(project, selectedClipIds)
+    if (!board) return
+    set({ clipboard: board })
+    notify(`Copied ${board.clips.length} clip${board.clips.length === 1 ? '' : 's'}`, 'info')
+  },
+
+  cutSelection: () => {
+    const { project, selectedClipIds } = get()
+    const board = clipsToClipboard(project, selectedClipIds)
+    if (!board) return
+    set({ clipboard: board })
+    get().update((p) => removeMany(p, selectedClipIds))
+    set({ selectedClipIds: [], selectedClipId: null })
+  },
+
+  pasteClipboard: async () => {
+    const { clipboard, playhead } = get()
+    if (!clipboard) return
+    await get().placeCopies(clipboard, playhead)
+  },
+
+  duplicateSelection: async () => {
+    const { project, selectedClipIds } = get()
+    const board = clipsToClipboard(project, selectedClipIds)
+    if (!board) return
+    const after = Math.max(...board.clips.map((c) => c.start + c.duration))
+    await get().placeCopies(board, after)
+  },
+
+  /**
+   * The shared half of paste and duplicate.
+   *
+   * One `update()` puts every copy on the timeline, so the whole gesture is one
+   * undo entry however many clips it moved. The self-drawing ones then get
+   * their own asset written in the BACKGROUND, through the history-less setter
+   * — a bake is a file, not an edit, and one undo must not be needed per baked
+   * card. Until each file exists the clip still draws, because text, clippings
+   * and rings all paint from their spec in the preview.
+   */
+  placeCopies: async (board, frame) => {
+    let result: PasteResult | null = null
+    get().update((p) => {
+      result = placeClipboard(p, board, frame)
+      return result.project
+    })
+    if (!result) return
+    const { ids, toBake } = result as PasteResult
+    get().selectMany(ids)
+
+    for (const { clipId, from } of toBake) {
+      if (from.text) await get().setText(clipId, {})
+      else if (from.solid) await get().setSolid(clipId, {})
+      else if (from.paper) await get().rebakePaper(clipId)
+      else if (from.carousel) await get().rebakeCarousel(clipId)
+    }
+  },
 
   revealClip: (clipId) => {
     const { project, playhead } = get()

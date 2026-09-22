@@ -1779,7 +1779,11 @@ export function Preview(): ReactNode {
     <div className="flex h-full flex-col bg-ink-950">
       <div
         ref={boxRef}
-        className="relative flex-1 overflow-hidden"
+        // `select-none` for the same reason the timeline has it: every gesture
+        // on the picture — moving a clip, dragging a corner, pulling a crop
+        // edge — is a drag of an object, and the browser's default is to paint
+        // the labels it passes over in selection blue and leave them that way.
+        className="relative flex-1 select-none overflow-hidden"
         onDragOver={(e) => {
           if (!isAssetDrag(e)) return
           e.preventDefault()

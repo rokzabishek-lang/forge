@@ -168,13 +168,54 @@ export default function App(): ReactNode {
         e.preventDefault()
         state().redo()
       },
-      Delete: () => {
-        const id = state().selectedClipId
-        if (id) state().removeClip(id)
+      /*
+       * Delete leaves the gap; SHIFT-Delete closes it.
+       *
+       * Premiere's split, and the right way round for this app: everything the
+       * automations place sits on a beat, so rippling by default would drag the
+       * rest of a reel off the music. Rippling is the deliberate gesture.
+       */
+      Delete: () => state().deleteSelection(),
+      Backspace: () => state().deleteSelection(),
+      'Shift+Delete': () => state().rippleDeleteSelection(),
+      'Shift+Backspace': () => state().rippleDeleteSelection(),
+
+      '$mod+a': (e) => {
+        e.preventDefault()
+        state().selectAll()
       },
-      Backspace: () => {
-        const id = state().selectedClipId
-        if (id) state().removeClip(id)
+      '$mod+c': () => state().copySelection(),
+      '$mod+x': () => state().cutSelection(),
+      '$mod+v': () => void state().pasteClipboard(),
+      '$mod+d': (e) => {
+        e.preventDefault()
+        void state().duplicateSelection()
+      },
+
+      /*
+       * Nudge on ALT-arrow, not on the bare arrows.
+       *
+       * FIX.md asked for the bare arrows, and they were already taken: they
+       * step the PLAYHEAD one frame, which is the more fundamental gesture and
+       * has been there since the beginning. Alt-arrow is what Premiere nudges
+       * with, so this is the convention rather than a compromise. One frame,
+       * ten with shift, the whole selection, one undo entry.
+       */
+      'Alt+ArrowLeft': (e) => {
+        e.preventDefault()
+        state().nudgeSelection(-1)
+      },
+      'Alt+ArrowRight': (e) => {
+        e.preventDefault()
+        state().nudgeSelection(1)
+      },
+      'Alt+Shift+ArrowLeft': (e) => {
+        e.preventDefault()
+        state().nudgeSelection(-10)
+      },
+      'Alt+Shift+ArrowRight': (e) => {
+        e.preventDefault()
+        state().nudgeSelection(10)
       },
       '$mod+s': (e) => {
         e.preventDefault()

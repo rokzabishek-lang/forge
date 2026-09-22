@@ -234,7 +234,7 @@ a drag starting at frame 0 still counts as a move.
 
 Five mutations, all killed.
 
-### A5. Multi-select, clipboard, ripple delete, right-click
+### A5. Multi-select, clipboard, ripple delete, right-click — **DONE**
 
 **Where.** `store.ts:302` `selectedClipId: string | null`; every consumer is
 listed in the audit — `Timeline.tsx:40,415,459`, `Transport.tsx:37,85`,
@@ -269,6 +269,43 @@ delete, Split here, Detach audio (B1), Reveal in pool.
 **Tests.** Pure store recipes: move many keeps relative offsets; paste at
 the playhead; ripple shifts only same-track later clips and never a layered
 clip; duplicate gets fresh ids and a fresh text asset. Mutation each.
+
+**What was actually built.** All of it, as pure recipes in
+`src/shared/edit/recipes.ts` that the store calls and hands to `update()`, so
+each gesture is one undo entry however many clips it touched. Marquee selects
+what it TOUCHES rather than what it encloses — on a zoomed timeline, enclosing
+means dragging past both ends of every clip, which is off-screen in both
+directions. Lane boxes are measured rather than computed from an index.
+
+**Two deviations, both deliberate.** Nudge is on **Alt+arrow**, not the bare
+arrows: those already step the playhead one frame, which is the more
+fundamental gesture and predates this. Alt+arrow is Premiere's nudge, so it is
+the convention rather than a compromise. And the right-click menu leaves out
+*Reveal in pool* and *Detach audio*: the pool has no selection state for
+anything to be revealed into (a feature of its own, not a menu item) and
+detaching audio is B1. A menu item that does nothing is worse than an absent one.
+
+**And a shipped undo bug, found by driving it in the harness.** Text editing
+coalesced a burst of keystrokes by holding a transaction open — `begin()` on
+the first keystroke, `commit()` from a 160 ms timer — and `pendingSnapshot` is
+a single module-level variable. So for those 160 ms **every other edit in the
+app silently joined that transaction and got no undo entry of its own**: type a
+caption, drag a clip straight after, and one undo took back both. Type into two
+clips in a row and the second `begin()` overwrote the first's snapshot, so undo
+jumped back past unrelated work. Found by nudging a selection right after
+setting some text and watching a clip disappear.
+
+Bursts now collapse by REMOVING the entry each keystroke pushed, under three
+conditions extracted to `src/shared/edit/coalesce.ts`: a burst is open, nothing
+else has edited since (checked by history depth), and the top of the stack is
+the entry this edit made (checked by identity). Measured in the harness
+afterwards: a five-keystroke burst is one entry, typing-move-typing is three,
+and one undo after the move takes back only the keystroke.
+
+Thirteen mutations, all killed, against a green 1689-test gate — including the
+shipped one. One survived the first run: the `duplicate` fixture was a
+contiguous row, where "after the selection" and "the first free frame" are the
+same place, so the test passed with the anchor deleted entirely.
 
 ### A6. The timeline follows the playhead; zoom to fit
 
