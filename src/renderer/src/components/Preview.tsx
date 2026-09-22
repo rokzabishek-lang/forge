@@ -25,6 +25,8 @@ import {
   type TransitionPreview
 } from '@shared/transitions/registry'
 import { forgetWipe, wipedSource } from '../wipe'
+import { PreviewMixer } from '../audioGraph'
+import { fadeGainAt, fadesWithNeighbours } from '@shared/render/audioFade'
 import { motionSourceRect } from '@shared/render/motion'
 import { clipBox, parallaxBakeFor, planeShare } from '@shared/render/plan'
 import { pathAt } from '@shared/render/path'
@@ -316,6 +318,13 @@ export function Preview(): ReactNode {
    */
   const pool = useRef(new Map<string, MediaElement>())
   const audioRefs = useRef(new Map<string, HTMLAudioElement>())
+  /*
+   * The mix, as a graph rather than as one number per element.
+   *
+   * A ref and not state: nothing about it renders, and rebuilding an
+   * AudioContext on a re-render would cut the sound every time a panel moved.
+   */
+  const mixer = useRef(new PreviewMixer())
   /**
    * The timeline's clock: when playback was anchored, and the last frame the
    * clock itself wrote. `wrote` is what tells a scrub apart from our own
@@ -640,6 +649,7 @@ export function Preview(): ReactNode {
   useEffect(() => {
     const elements = pool.current
     const audio = audioRefs.current
+    const graph = mixer.current
     return () => {
       for (const [, element] of elements) {
         if (element instanceof HTMLVideoElement) element.pause()
@@ -648,6 +658,9 @@ export function Preview(): ReactNode {
       elements.clear()
       for (const [, element] of audio) element.pause()
       audio.clear()
+      // An AudioContext is a real device handle; browsers allow only a handful,
+      // so leaking one per mount is a preview that eventually falls silent.
+      graph.close()
     }
   }, [])
 
@@ -668,6 +681,9 @@ export function Preview(): ReactNode {
       if (!element) {
         element = new Audio(mediaUrl(asset.path))
         element.preload = 'auto'
+        // Needed before `createMediaElementSource`: a graph that reads from a
+        // tainted element is refused, and the refusal is silent.
+        element.crossOrigin = 'anonymous'
         /*
          * Attach it, hidden.
          *
@@ -680,7 +696,17 @@ export function Preview(): ReactNode {
         holderRef.current?.appendChild(element)
         elements.set(clip.id, element)
       }
-      element.volume = Math.max(0, Math.min(1, clip.volume ?? 1))
+      /*
+       * Through the graph if it will take it, and at its own volume if not.
+       *
+       * The fallback is not decoration: `createMediaElementSource` refuses a
+       * cross-origin element, and a refusal that silently left the gain at its
+       * default would mute the whole timeline. Losing the envelope is a much
+       * smaller loss than losing the sound.
+       */
+      if (!mixer.current.attach(clip.id, element, clip.trackId)) {
+        element.volume = Math.max(0, Math.min(1, clip.volume ?? 1))
+      }
     }
 
     for (const [id, element] of elements) {
@@ -689,8 +715,56 @@ export function Preview(): ReactNode {
       element.removeAttribute('src')
       element.remove()
       elements.delete(id)
+      mixer.current.forget(id)
     }
   }, [project.clips, project.tracks, project.assets])
+
+  /*
+   * Which bus each track feeds: music is ducked, dialogue is what ducks it.
+   *
+   * The same rule the render uses (`plan.ts`): a video clip's own sound is
+   * dialogue, and an audio track is music when it is marked to duck and plain
+   * accompaniment otherwise. Mute is a track gain rather than a skipped
+   * element, so unmuting is instant and does not re-decode anything.
+   */
+  useEffect(() => {
+    for (const track of project.tracks) {
+      if (track.kind === 'video') mixer.current.routeTrack(track.id, 'dialogue')
+      else mixer.current.routeTrack(track.id, track.duck ? 'music' : 'other')
+      // Solo joins this expression in B1; until then a track is audible unless
+      // it is muted.
+      mixer.current.setTrackGain(track.id, track.muted ? 0 : 1)
+    }
+  }, [project.tracks])
+
+  /**
+   * What one clip's sound should be worth at this frame.
+   *
+   * Three things multiplied, each from the function the EXPORT uses:
+   * `clip.volume` is the fader, `valueAt` reads the drawn envelope — the same
+   * curve the renderer compiles into an expression — and `fadeGainAt` walks the
+   * same `qsin` that `afade` walks, over the same fades `fadesWithNeighbours`
+   * derives. An overlap on one track is a crossfade in both, without either
+   * side being told about it.
+   */
+  const clipGainAt = useCallback(
+    (clip: Clip, frame: number): number => {
+      const into = frame - clip.start
+      const fader = Math.max(0, Math.min(1, clip.volume ?? 1))
+      const envelope = valueAt(clip.keyframes?.volume ?? [], into, clip.duration, 1)
+
+      // Neighbours on the SAME track, because an overlap is only a crossfade
+      // between clips that are actually fighting for the same moment.
+      const lane = project.clips
+        .filter((c) => c.trackId === clip.trackId)
+        .sort((a, b) => a.start - b.start)
+      const at = lane.findIndex((c) => c.id === clip.id)
+      const fades = fadesWithNeighbours(clip, lane[at - 1] ?? null, lane[at + 1] ?? null)
+
+      return fader * Math.max(0, envelope) * fadeGainAt(fades, into)
+    },
+    [project.clips]
+  )
 
   /** Keep every live media element at the right time, playing or paused. */
   const syncMedia = useCallback(
@@ -746,7 +820,11 @@ export function Preview(): ReactNode {
          * export, which has always applied it, disagreed. Clip stickers made
          * that visible: they land muted and would have talked anyway.
          */
-        video.volume = Math.max(0, Math.min(1, clip.volume ?? 1))
+        if (asset.hasAudio && mixer.current.attach(clip.id, video, clip.trackId)) {
+          mixer.current.setClipGain(clip.id, clipGainAt(clip, frame))
+        } else {
+          video.volume = Math.max(0, Math.min(1, clip.volume ?? 1))
+        }
         if (isPlaying && video.paused) void video.play().catch(() => undefined)
         if (!isPlaying && !video.paused) video.pause()
       }
@@ -764,6 +842,8 @@ export function Preview(): ReactNode {
           if (!element.paused) element.pause()
           continue
         }
+        if (mixer.current.has(clip.id)) mixer.current.setClipGain(clip.id, clipGainAt(clip, frame))
+
         const target = framesToSeconds(sourceFrameFor(clip, frame), fps)
         // The sound is stretched to match, the same way the export stretches it.
         const audioRate = clipSpeed(clip)
@@ -818,6 +898,10 @@ export function Preview(): ReactNode {
     clockRef.current = playing
       ? { anchor: { at: performance.now(), frame: playhead }, wrote: playhead }
       : null
+    // A browser keeps an AudioContext suspended until a gesture, and pressing
+    // play is the gesture. Asked on every play rather than once, because the
+    // context can be suspended again by the tab going to the background.
+    if (playing) mixer.current.resume()
     if (!playing) syncMedia(playhead, false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing])
@@ -1529,6 +1613,14 @@ export function Preview(): ReactNode {
 
       if (playing) {
         const now = performance.now()
+        /*
+         * The ducker, advanced once per frame.
+         *
+         * Here rather than on a timer of its own so it steps with the clock it
+         * is mixing against — and only while playing, because a compressor
+         * following silence is a compressor doing nothing sixty times a second.
+         */
+        mixer.current.step(now)
 
         /*
          * Re-anchor whenever something else moved the playhead.

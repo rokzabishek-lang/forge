@@ -57,3 +57,11 @@ __pycache__/
 # Per-machine tool permissions. The name says local; it differs on every
 # machine and blocks a rebase every time it changes.
 .claude/settings.local.json
+
+# What the render checks rendered.
+#
+# The integration tests put their mp4s, their sampled frames and a README
+# explaining each check into tests/output/<check>/ and LEAVE them there, so a
+# failure can be looked at rather than only read about. It is rebuilt on every
+# run and it is video, so it is evidence rather than source.
+/tests/output/

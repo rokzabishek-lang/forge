@@ -22,6 +22,14 @@ cold on either machine.
    on the floor blocklist (`tests/oldestFfmpeg.test.ts`).
 3. **Every regression test is mutation-checked** — write it, put the bug
    back, watch it fail (`CLAUDE.md`).
+4. **Anything that touches the render gets RENDERED, not just planned.** An
+   assertion about a filter string proves the string; it does not prove ffmpeg
+   accepts it. A3's very first render check found two fatal bugs in the duck
+   that had been shipping under a passing string assertion. Render checks live
+   in `tests/integration/*.int.test.ts`, use the helpers in
+   `tests/integration/output.ts`, and leave what they rendered in
+   **`tests/output/<check>/`** with a README — gitignored, rebuilt each run, so
+   a failure can be looked at and played rather than only read about.
 
 | phase | what | days | model? | new component? | Windows-floor risk |
 |---|---|---|---|---|---|
@@ -144,7 +152,7 @@ a wipe, where a fade would have been 100 % partial. The harness entry now also
 exposes `useCatalog`, because the 405 library wipes are otherwise unreachable
 in the one place they can be watched running.
 
-### A3. The mix is heard: envelope, fades, crossfades, ducking
+### A3. The mix is heard: envelope, fades, crossfades, ducking — **DONE**
 
 **Where.** `Preview.tsx:576-730` (an `HTMLAudioElement` pool with flat
 `element.volume`), `src/shared/render/audioFade.ts` (`clipFades`,
@@ -171,6 +179,37 @@ in the one place they can be watched running.
 power: the two gains squared sum to 1 within 1 %). Duck follower as a pure
 state machine over a level series. Graph wiring is checked in the harness
 by ear and by the meters (B1).
+
+**What was actually built.** All of it — `PreviewMixer`
+(`src/renderer/src/audioGraph.ts`) with a gain per clip, a gain per track and a
+ducked bus, fed by `clip.volume × valueAt(envelope) × fadeGainAt(fades)` where
+every one of those three is the function the export uses. Ducking settings moved
+to `src/shared/render/duck.ts` so the filter string and the preview's follower
+are built from one set of numbers.
+
+**And the render check found two shipped bugs in the export, both fatal.**
+
+1. **Ducking crashed every export that used it.** `sidechaincompress` will not
+   negotiate its two inputs, and the graph refused to initialise: *"The
+   following filters could not choose their formats"*. The clip chains end in
+   `aformat=…,aresample=48000`, which looks sufficient and is not — `aresample`
+   converts without pinning the rate for negotiation. Both inputs now carry an
+   explicit `aformat=…:sample_rates=…` immediately before the filter.
+2. **With that fixed, the music went silent at the last word.**
+   `sidechaincompress` ends when its sidechain ends, so a voiceover finishing
+   before the music took the music with it — measured at **−23.4 dB while the
+   voice ran and −91 dB, digital silence, for every second after**. The key is
+   padded to the full duration now; silence is below the threshold, so the music
+   simply returns.
+
+Neither was reachable by any existing test, because the duck was only ever
+checked as a string. **The Director sets `duck: true` on the music track of
+every ad it builds** (`director/apply.ts:363`), so every one of those exports
+was failing.
+
+Eleven mutations, all killed, against a green 1657-test gate — including both
+shipped bugs, put back and caught by the render check. Rendered evidence in
+`tests/output/mix/` (see A-note below).
 
 ### A4. Audio while scrubbing
 

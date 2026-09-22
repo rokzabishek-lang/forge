@@ -153,6 +153,44 @@ export function audioFadeFilters(clip: FadedClip, fps: number): string[] {
 }
 
 /**
+ * The gain a fade applies at one frame inside the clip — the preview's half of
+ * `audioFadeFilters`.
+ *
+ * `qsin` is a quarter sine: gain rises as `sin(x·π/2)` across the fade-in and
+ * falls as the same curve reversed across the fade-out. Writing it this way is
+ * what makes an overlap equal power for free — `sin²(x·π/2) + cos²(x·π/2) = 1`
+ * — so two clips crossfading sum to exactly the level either one had, which is
+ * the measured behaviour the comment on FADE_CURVE records against ffmpeg's own
+ * `acrossfade`.
+ *
+ * Takes the same shape `audioFadeFilters` takes, and calls the same
+ * `clipFades`, so a fade that has been squeezed to fit sounds squeezed in the
+ * preview too rather than only in the export.
+ */
+export function fadeGainAt(clip: FadedClip, frame: Frames): number {
+  const duration = Math.max(0, Math.round(clip.duration))
+  if (duration === 0) return 0
+  const { in: fadeIn, out: fadeOut } = clipFades(clip)
+
+  /*
+   * The clamp is INSIDE the curve, and it is the only one.
+   *
+   * A frame before the clip or past its end gives a negative argument, and
+   * `sin()` of a negative comes back as a negative GAIN — a phase flip rather
+   * than silence, which is audible and exactly the wrong thing. Clamping the
+   * frame first as well would be a second guard on the same edge, and a guard
+   * that can be removed without any test noticing is not a guard.
+   */
+  const qsin = (x: number): number => Math.sin(Math.max(0, Math.min(1, x)) * (Math.PI / 2))
+
+  let gain = 1
+  if (fadeIn > 0 && frame < fadeIn) gain *= qsin(frame / fadeIn)
+  const outStart = duration - fadeOut
+  if (fadeOut > 0 && frame > outStart) gain *= qsin(1 - (frame - outStart) / fadeOut)
+  return gain
+}
+
+/**
  * A sensible fade to apply when someone asks for one without saying how long.
  *
  * Half a second: long enough to stop a click, short enough that it never

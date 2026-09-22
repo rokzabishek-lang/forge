@@ -18,6 +18,7 @@ import { isFullFrameMask, maskExpression } from './mask'
 import { safeCrop, type Size } from './crop'
 import { atempoChain, clipSpeed, sourceFramesFor, speedVideoFilter } from './speed'
 import { audioFadeFilters, fadesWithNeighbours } from './audioFade'
+import { duckFilter } from './duck'
 import { loudnessFilters } from './loudness'
 import {
   DEFAULT_SHAKE_DECAY,
@@ -1452,10 +1453,52 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
     // natural attack and release, and a piecewise expression over hundreds of
     // speech spans becomes unreadable and slow.
     filters.push(`${dialogue}asplit=2[dia_out][dia_key]`)
-    filters.push(
-      `${music}[dia_key]sidechaincompress=` +
-        `threshold=0.03:ratio=12:attack=25:release=400:makeup=1[ducked]`
-    )
+    /*
+     * Both inputs pinned to one format, immediately before the filter.
+     *
+     * `sidechaincompress` will not negotiate its two inputs on its own, and
+     * without this it does not merely sound wrong — the graph refuses to
+     * initialise and the ENTIRE EXPORT fails:
+     *
+     *     The following filters could not choose their formats:
+     *     Parsed_sidechaincompress_18
+     *     Error reinitializing filters!
+     *
+     * Every clip chain already ends in `aformat=sample_fmts=fltp:
+     * channel_layouts=stereo` followed by `aresample=48000`, which looks like
+     * enough and is not: `aresample` converts the samples without pinning the
+     * rate for the negotiation, so the two branches arrive with rates the
+     * filter cannot reconcile. Naming `sample_rates` here is what fixes it.
+     *
+     * This shipped. Ducking is set by the Director on every ad it builds
+     * (`director/apply.ts`), so every one of those exports died at the
+     * filtergraph — and no test caught it because the duck was only ever
+     * checked as a STRING. It is rendered now: tests/integration/mix.int.test.ts.
+     */
+    const pinned =
+      `aformat=sample_fmts=fltp:channel_layouts=stereo:` +
+      `sample_rates=${project.settings.sampleRate}`
+    /*
+     * And the key runs to the END, not to the last word.
+     *
+     * `sidechaincompress` stops when its sidechain stops, so a voiceover that
+     * finishes before the music did took the music with it: rendered and
+     * measured, the mix held -23.4 dB while the voice ran and dropped to -91 —
+     * digital silence — for every second after it. A thirty-second ad with a
+     * twenty-second read came out with ten seconds of nothing.
+     *
+     * Padding the key with silence keeps the compressor running, and silence
+     * is below the threshold, so the music simply comes back up. `apad` bounded
+     * by `atrim` rather than `apad:whole_dur`, which is 4.2 and dies on the
+     * Windows build (docs/EFFECTS.md §25).
+     */
+    const full = seconds(totalFrames, fps)
+    filters.push(`[dia_key]${pinned},apad,atrim=end=${full}[dia_keyf]`)
+    filters.push(`${music}${pinned}[musf]`)
+    // The settings live in render/duck.ts, because the preview's own ducker
+    // reads the same ones — two sets of numbers is how a preview comes to teach
+    // a balance the export does not deliver.
+    filters.push(`[musf][dia_keyf]${duckFilter()}[ducked]`)
     finalLabels.push('[dia_out]', '[ducked]')
   } else {
     if (dialogue) finalLabels.push(dialogue)
