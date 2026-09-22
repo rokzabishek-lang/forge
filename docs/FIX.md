@@ -307,7 +307,7 @@ shipped one. One survived the first run: the `duplicate` fixture was a
 contiguous row, where "after the selection" and "the first free frame" are the
 same place, so the test passed with the anchor deleted entirely.
 
-### A6. The timeline follows the playhead; zoom to fit
+### A6. The timeline follows the playhead; zoom to fit — **DONE**
 
 **Where.** `Timeline.tsx:186` is the only `scrollLeft`, a read; `:353` is the
 scroll container; `store.ts:3624` `revealClip` only moves the playhead.
@@ -317,6 +317,20 @@ playhead's pixel leaves the visible lane, page the lane so the playhead sits
 at 10 % from the left (Premiere's page mode — no per-frame scroll jitter);
 when paused and the playhead is set off-screen (seek, `revealClip`), centre it.
 `⇧Z` fits the whole project. `revealClip` also scrolls the clip into view.
+
+**What was actually built.** Exactly that, with the rule as a pure function
+(`src/shared/edit/follow.ts`) so it can be tested without a DOM. It returns
+**null** rather than a position when there is nothing to do, which is the
+load-bearing part: assigning `scrollLeft` every frame — even to the value it
+already holds — fights anyone dragging the scrollbar.
+
+`revealClip` needed nothing extra: it already moves the playhead onto the clip,
+and the follow effect reacts to that.
+
+Eight mutations, all killed. One survived the first run because the fit test
+said "less than or EQUAL to the width", which passes with the margin deleted —
+it now pins the spare room as a range, since a project fitted flush ends with
+its last clip against the edge and its trim handle half off-screen.
 
 ### A7. Nothing is lost: autosave, close guard, recovery, a File menu
 

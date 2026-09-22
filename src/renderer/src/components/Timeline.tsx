@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import type { Clip, Track } from '@shared/timeline'
 import { Eye, EyeOff, Plus, Trash2, Volume2, VolumeX } from 'lucide-react'
 import {
@@ -11,6 +11,7 @@ import {
 } from '@shared/timeline'
 import { gapAt } from '@shared/edit/recipes'
 import { clipKind, kindsPresent, styleFor } from '@shared/edit/clipKind'
+import { followScroll, zoomToFit } from '@shared/edit/follow'
 import { ClipMenu, type ClipMenuTarget } from './ClipMenu'
 import { useEditor } from '../store'
 import { useCatalog } from '../catalog'
@@ -42,6 +43,8 @@ export function Timeline(): ReactNode {
   const playhead = useEditor((s) => s.playhead)
   const selectedClipId = useEditor((s) => s.selectedClipId)
   const setPlayhead = useEditor((s) => s.setPlayhead)
+  const playing = useEditor((s) => s.playing)
+  const setZoom = useEditor((s) => s.setZoom)
   const select = useEditor((s) => s.select)
   const selectMore = useEditor((s) => s.selectMore)
   const selectMany = useEditor((s) => s.selectMany)
@@ -378,6 +381,53 @@ export function Timeline(): ReactNode {
 
   /** Where each lane sits on screen, so a band can be tested against them. */
   const laneBoxes = useRef(new Map<string, { top: number; bottom: number }>())
+
+  /*
+   * Keep the playhead on screen.
+   *
+   * Runs on every playhead change, playing or not, and does nothing at all
+   * while the playhead is already in view — which is most of the time. That
+   * matters: assigning `scrollLeft` unconditionally would fight anyone dragging
+   * the scrollbar, so `followScroll` returns null rather than "where you
+   * already are".
+   *
+   * `revealClip` needs nothing extra from here: it moves the playhead onto the
+   * clip, and this reacts to that.
+   */
+  useEffect(() => {
+    const lane = laneRef.current
+    if (!lane) return
+    const next = followScroll({
+      playheadPx: playhead * zoom,
+      scrollLeft: lane.scrollLeft,
+      viewWidth: lane.clientWidth,
+      contentWidth: lane.scrollWidth,
+      playing
+    })
+    if (next !== null) lane.scrollLeft = next
+  }, [playhead, playing, zoom])
+
+  /** ⇧Z — the whole project, in the width there is. */
+  const fitToWindow = useCallback(() => {
+    const lane = laneRef.current
+    if (!lane) return
+    setZoom(zoomToFit(projectDuration(useEditor.getState().project), lane.clientWidth))
+    lane.scrollLeft = 0
+  }, [setZoom])
+
+  useEffect(() => {
+    const key = (e: KeyboardEvent): void => {
+      const typing = e.target instanceof HTMLElement &&
+        (e.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName))
+      if (typing) return
+      if (e.key === 'Z' && e.shiftKey && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        fitToWindow()
+      }
+    }
+    window.addEventListener('keydown', key)
+    return () => window.removeEventListener('keydown', key)
+  }, [fitToWindow])
 
   const endDrag = useCallback(() => {
     if (!drag.current) return
