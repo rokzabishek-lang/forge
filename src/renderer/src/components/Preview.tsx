@@ -304,6 +304,7 @@ export function Preview(): ReactNode {
   const setPlaying = useEditor((s) => s.setPlaying)
   const loop = useEditor((s) => s.loop)
   const scrubAudio = useEditor((s) => s.scrubAudio)
+  const dropExternal = useEditor((s) => s.dropExternal)
   const rangeIn = useEditor((s) => s.rangeIn)
   const rangeOut = useEditor((s) => s.rangeOut)
   const showThirds = useEditor((s) => s.showThirds)
@@ -1608,6 +1609,29 @@ export function Preview(): ReactNode {
       flushGradesBelow(Number.POSITIVE_INFINITY)
       ctx.globalAlpha = 1
 
+      /*
+       * An empty project says what to do with itself.
+       *
+       * A black rectangle is indistinguishable from a broken preview, from a
+       * clip that is genuinely black, and from an app that has not finished
+       * loading. Two sentences here are the difference between someone
+       * starting and someone closing the window.
+       */
+      if (project.clips.length === 0) {
+        ctx.save()
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        const cx = frame.x + frame.width / 2
+        const cy = frame.y + frame.height / 2
+        ctx.fillStyle = 'rgba(226,232,240,0.72)'
+        ctx.font = '600 14px ui-sans-serif, system-ui, sans-serif'
+        ctx.fillText('Drop pictures or a clip here', cx, cy - 10)
+        ctx.font = '12px ui-sans-serif, system-ui, sans-serif'
+        ctx.fillStyle = 'rgba(148,163,184,0.7)'
+        ctx.fillText('or open Create and press Direct', cx, cy + 10)
+        ctx.restore()
+      }
+
       drawGuides(ctx, frame, showThirds, showSafe)
 
       // Captions are drawn here rather than only at export: judging a style by
@@ -1829,11 +1853,35 @@ export function Preview(): ReactNode {
         // the labels it passes over in selection blue and leave them that way.
         className="relative flex-1 select-none overflow-hidden"
         onDragOver={(e) => {
-          if (!isAssetDrag(e)) return
+          // `types` includes 'Files' during a desktop drag; the files
+          // themselves are only readable on drop.
+          if (!isAssetDrag(e) && !e.dataTransfer.types.includes('Files')) return
           e.preventDefault()
           e.dataTransfer.dropEffect = 'copy'
         }}
         onDrop={(e) => {
+          /*
+           * Files from the desktop, imported and placed.
+           *
+           * Only the Media grid took an external drop, so dropping a photo on
+           * the PICTURE — the obvious target, and the one every editor accepts
+           * — did nothing at all. It lands at the playhead on the top lane,
+           * which is what dropping something on the frame means.
+           */
+          const files = Array.from(e.dataTransfer.files)
+          if (files.length > 0) {
+            e.preventDefault()
+            const paths = files
+              .map((file) => window.forge.getPathForFile(file))
+              .filter((path) => path.length > 0)
+            if (paths.length === 0) {
+              notify('Those items have no file on disk — use Import instead', 'info')
+              return
+            }
+            const tracks = useEditor.getState().project.tracks.filter((t) => t.kind === 'video')
+            void dropExternal(paths, tracks[tracks.length - 1]?.id ?? null, playhead)
+            return
+          }
           if (!isAssetDrag(e)) return
           e.preventDefault()
           void onCanvasDrop(readDragPayload(e))

@@ -52,6 +52,7 @@ export function Timeline(): ReactNode {
   const selectedClipIds = useEditor((s) => s.selectedClipIds)
   const selectedGap = useEditor((s) => s.selectedGap)
   const moveSelectionTo = useEditor((s) => s.moveSelectionTo)
+  const dropExternal = useEditor((s) => s.dropExternal)
   const rangeIn = useEditor((s) => s.rangeIn)
   const rangeOut = useEditor((s) => s.rangeOut)
   const setRangeIn = useEditor((s) => s.setRangeIn)
@@ -557,6 +558,20 @@ export function Timeline(): ReactNode {
             </div>
           </div>
 
+          {/*
+            An empty timeline says what to do, over the lanes rather than
+            instead of them: the tracks are the drop target, so hiding them
+            would remove the thing the message is pointing at.
+          */}
+          {project.clips.length === 0 && (
+            <div className="pointer-events-none absolute inset-x-0 top-7 z-10 flex flex-col items-center justify-center gap-1 py-8">
+              <div className="text-[12px] text-ink-400">Drag media onto a track</div>
+              <div className="text-[11px] text-ink-600">
+                or drop files here — they land where you drop them
+              </div>
+            </div>
+          )}
+
           {lanes.map((track) => {
             const isOnlyVideo =
               track.kind === 'video' && project.tracks.filter((t) => t.kind === 'video').length === 1
@@ -730,7 +745,7 @@ export function Timeline(): ReactNode {
                 }}
                 onPointerCancel={() => setMarquee(null)}
                 onDragOver={(e) => {
-                  if (!isAssetDrag(e)) return
+                  if (!isAssetDrag(e) && !e.dataTransfer.types.includes('Files')) return
                   e.preventDefault()
                   e.dataTransfer.dropEffect = 'copy'
                   const frame = frameFromEvent(e.clientX)
@@ -755,6 +770,23 @@ export function Timeline(): ReactNode {
                 onDrop={(e) => {
                   e.preventDefault()
                   setDropTarget(null)
+                  /*
+                   * Files from the desktop land on the lane they were dropped
+                   * on, at the frame they were dropped at. Only the Media grid
+                   * took an external drop before, so the obvious gesture —
+                   * drag a clip straight onto the track you want it on — did
+                   * nothing.
+                   */
+                  const files = Array.from(e.dataTransfer.files)
+                  if (files.length > 0) {
+                    const paths = files
+                      .map((file) => window.forge.getPathForFile(file))
+                      .filter((path) => path.length > 0)
+                    if (paths.length > 0) {
+                      void dropExternal(paths, track.id, frameFromEvent(e.clientX))
+                    }
+                    return
+                  }
                   const payload = readDragPayload(e)
                   if (!payload) return
                   void handleDrop(payload, track.id, track.kind, frameFromEvent(e.clientX))

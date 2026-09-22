@@ -425,7 +425,7 @@ and a zero-size guard my fixture could not reach — it takes exactly ONE
 zero-byte file among several to show that a drawn asset would otherwise relink
 itself to a truncated file and clear its own offline mark.
 
-### A9. The first hour
+### A9. The first hour — **DONE**
 
 **Where.** `DEFAULT_SETTINGS` 1920×1080 (`timeline.ts:656`); empty states
 (`MediaPool.tsx:138`, `Preview.tsx:1503`, `Timeline.tsx:371`); external drops
@@ -439,6 +439,39 @@ what to do: the preview — *Drop pictures or a clip here, or press Direct*.
 The Director shows Product and Direct with everything else under *More*. The
 tab is renamed **Create** (templates and automations live there). A `?`
 sheet lists the shortcuts.
+
+**What was actually built.** All of it. The shortcuts sheet arrived with A7 on
+`⌘/`, which is where a menu can also point at it.
+
+`DEFAULT_SETTINGS` is still 1920×1080 — everything that does not ask keeps the
+behaviour it had — and the New Project screen is the thing that asks, with 9:16
+first and the shapes drawn rather than named, because a label alone makes
+someone do the arithmetic to picture it. `newProject` sets `aspect` alongside
+the project, which is the trap `loadProject` already documents: every reframe
+decision reads `ASPECTS[aspect]`, not `project.settings`.
+
+Drops land where they are dropped — the lane and the frame under the pointer —
+and a sound dropped on a video lane goes to an audio lane rather than being
+refused: the drop said WHEN, and the kind decides where.
+
+Seven mutations, all killed. One survived the first run because the test for
+"uses the chosen shape" chose **9:16**, which is also the default — so it could
+not tell "uses what was chosen" from "always uses the default". It loops over
+every shape now.
+
+---
+
+## Phase A is complete.
+
+All nine done, in order, each mutation-checked behind a green gate. Four bugs
+were found that the list did not know about, three of them shipped:
+
+| | found by |
+|---|---|
+| ducking crashed **every** export that used it — and the Director sets it on every ad | the first render check (A3) |
+| with that fixed, the music went silent at the last word | the same check |
+| a text burst held a global transaction open, so any edit within 160 ms got no undo entry | driving A5 in the harness |
+| a slide transition teleported a picture-in-picture to the canvas corner | building A2 |
 
 ---
 

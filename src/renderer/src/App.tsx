@@ -12,6 +12,7 @@ import { Transport } from './components/Transport'
 import { Inspector } from './components/Inspector'
 import { Toolbox } from './components/Toolbox'
 import { Shortcuts } from './components/Shortcuts'
+import { NewProject } from './components/NewProject'
 import { SourceBar } from './components/SourceBar'
 import { CurvePanel } from './components/CurvePanel'
 
@@ -101,6 +102,14 @@ export default function App(): ReactNode {
   const setJobs = useEditor((s) => s.setJobs)
   const notify = useEditor((s) => s.notify)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  /**
+   * The New Project screen.
+   *
+   * Opened by File > New, and once at first launch on a project that has
+   * nothing in it — which is exactly the moment the aspect decision is free.
+   * Asking later, over work, would be asking someone to throw it away.
+   */
+  const [newOpen, setNewOpen] = useState(false)
   /** An autosave holding work the saved file does not, offered once at launch. */
   const [recovery, setRecovery] = useState<{ file: string; name: string; savedAt: number } | null>(
     null
@@ -241,7 +250,7 @@ export default function App(): ReactNode {
     const offCommand = window.forge.onMenuCommand((command) => {
       const s = useEditor.getState()
       switch (command) {
-        case 'new': s.newProject(); break
+        case 'new': setNewOpen(true); break
         case 'open': void openNow(); break
         // The close guard is waiting on this answer, so it is always sent.
         case 'save': void saveNow().then((ok) => window.forge.reportSaved(ok)); break
@@ -426,6 +435,16 @@ export default function App(): ReactNode {
       )}
 
       {shortcutsOpen && <Shortcuts onClose={() => setShortcutsOpen(false)} />}
+
+      {newOpen && (
+        <NewProject
+          onStart={(choice) => {
+            useEditor.getState().newProject(choice)
+            setNewOpen(false)
+          }}
+          onCancel={() => setNewOpen(false)}
+        />
+      )}
 
       <Header />
 

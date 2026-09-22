@@ -22,7 +22,15 @@ const TABS: { id: Tab; label: string }[] = [
    * makes a text card.
    */
   { id: 'transcript', label: 'Transcript' },
-  { id: 'auto', label: 'Auto' }
+  /*
+   * "Create", not "Auto".
+   *
+   * `Auto` named the mechanism rather than what it is for, and it read as a
+   * settings toggle — something that happens TO your edit — rather than as the
+   * place you go to make one. Templates live here later too, which "Auto"
+   * would have had nothing to do with.
+   */
+  { id: 'auto', label: 'Create' }
 ]
 
 /**

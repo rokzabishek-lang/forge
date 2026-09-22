@@ -22,6 +22,7 @@ import { clipSpeed, maxDurationAtSpeed, withClipSpeed } from '@shared/render/spe
 import type { VoiceId } from '@shared/render/voice'
 import type { ClipKind } from '@shared/edit/clipKind'
 import { applyRelink } from '@shared/project/relink'
+import { projectFromChoice, type NewProjectChoice } from '@shared/project/newProject'
 import {
   BUILT_IN_PRESETS,
   isBuiltIn,
@@ -774,6 +775,14 @@ interface EditorState {
    * are one undo entry.
    */
   relinkMedia: (assetId?: string) => Promise<void>
+  /**
+   * Files dropped from outside, onto the picture or onto a lane.
+   *
+   * Imports them and puts them straight on the timeline, because that is what
+   * the gesture means: dropping a clip on the preview is "put this in the
+   * edit", not "file this away". Returns the ids it placed.
+   */
+  dropExternal: (paths: string[], trackId: string | null, frame: number) => Promise<void>
   exportPresets: ExportPreset[]
   loadPresets: () => Promise<void>
   savePreset: (preset: ExportPreset) => Promise<void>
@@ -836,7 +845,7 @@ interface EditorState {
   cancelTranscribe: (assetId: string) => void
   setTranscribeProgress: (assetId: string, progress: number | null, message?: string) => void
   setSidecar: (ready: boolean, error?: string | null) => void
-  newProject: () => void
+  newProject: (choice?: NewProjectChoice) => void
   loadProject: (project: Project, path: string, decisions: DecisionRecord[]) => void
   markSaved: (path: string) => void
 }
@@ -3825,6 +3834,38 @@ export const useEditor = create<EditorState>((set, get) => ({
   setScrubAudio: (scrubAudio) => set({ scrubAudio }),
   requestExport: () => set((s) => ({ exportRequests: s.exportRequests + 1 })),
 
+  dropExternal: async (paths, trackId, frame) => {
+    if (paths.length === 0) return
+    const before = new Set(get().project.assets.map((a) => a.id))
+    await get().importAssets(paths)
+
+    const fresh = get().project.assets.filter((a) => !before.has(a.id))
+    if (fresh.length === 0) return
+
+    /*
+     * Placed end to end from where they landed, on the lane they were dropped
+     * on. One `update()` per clip through `placePoolAsset`, which is already
+     * how a drag out of the pool works — so a multi-file drop is several undo
+     * steps, matching what dragging them in one at a time would have been.
+     */
+    const lane =
+      trackId ?? get().project.tracks.find((t) => t.kind === 'video' && !t.locked)?.id
+    if (!lane) return
+
+    let at = Math.max(0, Math.round(frame))
+    for (const asset of fresh) {
+      const kind = get().project.tracks.find((t) => t.id === lane)?.kind
+      // A sound dropped on a video lane goes to an audio lane rather than
+      // being refused: the drop said WHEN, and the kind decides where.
+      const target =
+        asset.kind === 'audio' && kind !== 'audio'
+          ? (get().project.tracks.find((t) => t.kind === 'audio' && !t.locked)?.id ?? lane)
+          : lane
+      get().placePoolAsset(asset.id, target, at)
+      at += asset.durationFrames
+    }
+  },
+
   relinkMedia: async (assetId) => {
     const { project, notify } = get()
     const missing = project.assets.filter((a) => a.offline)
@@ -4332,17 +4373,32 @@ export const useEditor = create<EditorState>((set, get) => ({
     void window.forge.cancelTranscribe(assetId)
   },
 
-  newProject: () =>
+  newProject: (choice) => {
+    /*
+     * The aspect has to move with the project.
+     *
+     * `aspect` is a slice of its own, and every reframe decision in the
+     * renderer reads `ASPECTS[aspect]` rather than `project.settings` — the
+     * same trap `loadProject` already documents. A new 9:16 project into a
+     * session that was showing 16:9 would look vertical and crop horizontal.
+     */
+    const project = choice ? projectFromChoice(choice) : emptyProject()
     set({
-      project: emptyProject(),
+      project,
       projectPath: null,
       decisions: [],
       dirty: false,
       playhead: 0,
+      selectedClipIds: [],
       selectedClipId: null,
+      selectedGap: null,
+      rangeIn: null,
+      rangeOut: null,
+      aspect: aspectOf(project.settings),
       past: [],
       future: []
-    }),
+    })
+  },
 
   loadProject: (project, path, decisions) =>
     set({

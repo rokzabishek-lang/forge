@@ -37,6 +37,8 @@ function Field({ label, children }: { label: string; children: ReactNode }): Rea
 }
 
 export function Director(): ReactNode {
+  /** The six refinements, closed until someone wants them. */
+  const [moreOpen, setMoreOpen] = useState(false)
   const project = useEditor((s) => s.project)
   const brief = useEditor((s) => s.directBrief)
   const setBrief = useEditor((s) => s.setDirectBrief)
@@ -86,6 +88,19 @@ export function Director(): ReactNode {
   const modelName =
     chosen?.id === 'ollama' ? config?.ollama.model : chosen?.id === 'openai' ? config?.openai.model : ''
   const canDirect = !directing && brief.product.trim().length > 0 && slots.length > 0
+
+  /*
+   * How many refinements are filled in, for the collapsed header.
+   *
+   * Without it, a brief carefully written and then collapsed looks like an
+   * empty brief — and someone would fill it in twice.
+   */
+  const filledExtras = [
+    brief.benefit,
+    brief.audience,
+    brief.cta,
+    brief.language
+  ].filter((v) => v.trim().length > 0).length + (brief.seconds === null ? 0 : 1)
 
   const ollama = status?.find((p) => p.id === 'ollama')
   const openai = status?.find((p) => p.id === 'openai')
@@ -152,6 +167,28 @@ export function Director(): ReactNode {
           onChange={(e) => setBrief({ product: e.target.value })}
         />
       </Field>
+      {/*
+        Everything except Product, folded away.
+        
+        Product is the only required field and Direct is the only button that
+        matters; the other six are refinements, and six empty boxes above the
+        button read as six things you have to fill in before anything will
+        happen. Closed by default, and it says how many are in there so it does
+        not look like the panel is missing something.
+      */}
+      <button
+        onClick={() => setMoreOpen((v) => !v)}
+        className="mb-1 flex w-full items-center justify-between rounded px-1 py-1 text-[10px] uppercase tracking-wide text-ink-500 transition-colors hover:bg-ink-850 hover:text-ink-300"
+      >
+        <span>More {filledExtras > 0 && `· ${filledExtras} set`}</span>
+        <ChevronDown
+          size={12}
+          className={`transition-transform ${moreOpen ? 'rotate-180' : ''}`}
+        />
+      </button>
+
+      {moreOpen && (
+        <>
       <Field label="Benefit">
         <input
           className={input}
@@ -211,6 +248,8 @@ export function Director(): ReactNode {
           onChange={(e) => setBrief({ language: e.target.value })}
         />
       </Field>
+        </>
+      )}
 
       {/* The slots: the media pool in order, with a line about each. */}
       <button

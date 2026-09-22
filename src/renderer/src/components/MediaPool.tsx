@@ -175,8 +175,10 @@ export function MediaPool(): ReactNode {
       <div className="flex-1 overflow-y-auto">
         {project.assets.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-1 px-4 text-center">
-            <div className="text-xs text-ink-400">Drop media here</div>
-            <div className="text-[11px] text-ink-600">video, audio or images</div>
+            <div className="text-xs text-ink-400">Drop your photos and clips here</div>
+            <div className="text-[11px] leading-relaxed text-ink-600">
+              or drop them straight onto the picture or a track
+            </div>
           </div>
         ) : (
           <div className="grid grid-cols-3 gap-1.5 p-2">
