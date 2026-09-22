@@ -1,4 +1,4 @@
-import { BrowserWindow, dialog, ipcMain, shell, app } from 'electron'
+import { BrowserWindow, dialog, ipcMain, shell, app, systemPreferences } from 'electron'
 import { access, mkdir, readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import type { Job } from '@shared/types'
@@ -11,6 +11,8 @@ import {
   type AutosaveRecord
 } from '@shared/project/recovery'
 import { candidatePaths, dirNameOf, matchByName } from '@shared/project/relink'
+import { voiceOverArgs } from '@shared/render/voiceover'
+import { execFile } from 'node:child_process'
 import { probeMany } from './ffmpeg/probe'
 import { getSidecar } from './sidecar/service'
 import { SIDECAR_METHODS } from '@shared/sidecar/protocol'
@@ -385,6 +387,62 @@ export function registerIpc(getWindow: () => BrowserWindow | null): JobQueue {
       throw new Error('Writing a title image needs its pixels')
     }
     return writeTitleImage(clipId, Buffer.from(bytes as ArrayBuffer))
+  })
+
+  /*
+   * A recorded voice-over, from the renderer's MediaRecorder.
+   *
+   * Written as it arrived and then converted to WAV with the bundled ffmpeg,
+   * and the WAV is what is kept — see render/voiceover.ts for why. The WebM is
+   * removed after a successful conversion and KEPT after a failed one: it is
+   * the only copy of what someone just said, and a failed conversion must not
+   * be the thing that deletes it.
+   */
+  /*
+   * May the microphone be opened?
+   *
+   * On macOS the answer lives with the system, and asking before
+   * `getUserMedia` is what turns a refusal into a sentence. Without it a
+   * denied microphone does not throw — Chromium hands back a stream of
+   * silence, and the first sign is a take with nothing on it.
+   */
+  ipcMain.handle('voiceover:permission', async () => {
+    if (process.platform !== 'darwin') return true
+    const status = systemPreferences.getMediaAccessStatus('microphone')
+    if (status === 'granted') return true
+    if (status === 'denied' || status === 'restricted') return false
+    return systemPreferences.askForMediaAccess('microphone')
+  })
+
+  ipcMain.handle('voiceover:save', async (_e, payload: unknown) => {
+    const { bytes, name, sampleRate } = (payload ?? {}) as {
+      bytes?: unknown
+      name?: unknown
+      sampleRate?: unknown
+    }
+    if (!(bytes instanceof ArrayBuffer) && !ArrayBuffer.isView(bytes)) {
+      throw new Error('A voice-over needs its recording')
+    }
+    const dir = join(app.getPath('userData'), 'voiceover')
+    await mkdir(dir, { recursive: true })
+    const base = typeof name === 'string' && name.trim() ? name.trim() : `Voice-over ${Date.now()}`
+    const raw = join(dir, `${base}.webm`)
+    const wav = join(dir, `${base}.wav`)
+    await writeFile(raw, Buffer.from(bytes as ArrayBuffer))
+
+    await new Promise<void>((resolve, reject) => {
+      execFile(
+        FFMPEG_PATH,
+        voiceOverArgs(raw, wav, typeof sampleRate === 'number' ? sampleRate : 48000),
+        { windowsHide: true },
+        (err, _out, stderr) => {
+          if (err) reject(new Error(`The recording could not be converted: ${String(stderr).trim() || err.message}`))
+          else resolve()
+        }
+      )
+    })
+    await unlink(raw).catch(() => undefined)
+    return wav
   })
 
   ipcMain.handle('titles:solid', async (_e, payload: unknown) => {

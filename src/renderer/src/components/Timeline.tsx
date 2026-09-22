@@ -13,6 +13,8 @@ import { gapAt } from '@shared/edit/recipes'
 import { clipKind, kindsPresent, styleFor } from '@shared/edit/clipKind'
 import { followScroll, zoomToFit } from '@shared/edit/follow'
 import { ClipMenu, type ClipMenuTarget } from './ClipMenu'
+import { Meter } from './Meter'
+import { startVoiceOver, stopVoiceOver } from '../recorder'
 import { useEditor } from '../store'
 import { useCatalog } from '../catalog'
 import { VolumeEnvelope } from './VolumeEnvelope'
@@ -69,6 +71,9 @@ export function Timeline(): ReactNode {
   const addTrack = useEditor((s) => s.addTrack)
   const removeTrack = useEditor((s) => s.removeTrack)
   const toggleTrackMuted = useEditor((s) => s.toggleTrackMuted)
+  const toggleTrackSolo = useEditor((s) => s.toggleTrackSolo)
+  const toggleTrackDialogue = useEditor((s) => s.toggleTrackDialogue)
+  const recording = useEditor((s) => s.recording)
   const toggleTrackHidden = useEditor((s) => s.toggleTrackHidden)
   const placeLibraryAsset = useEditor((s) => s.placeLibraryAsset)
   const placeTitle = useEditor((s) => s.placeTitle)
@@ -558,20 +563,6 @@ export function Timeline(): ReactNode {
             </div>
           </div>
 
-          {/*
-            An empty timeline says what to do, over the lanes rather than
-            instead of them: the tracks are the drop target, so hiding them
-            would remove the thing the message is pointing at.
-          */}
-          {project.clips.length === 0 && (
-            <div className="pointer-events-none absolute inset-x-0 top-7 z-10 flex flex-col items-center justify-center gap-1 py-8">
-              <div className="text-[12px] text-ink-400">Drag media onto a track</div>
-              <div className="text-[11px] text-ink-600">
-                or drop files here — they land where you drop them
-              </div>
-            </div>
-          )}
-
           {lanes.map((track) => {
             const isOnlyVideo =
               track.kind === 'video' && project.tracks.filter((t) => t.kind === 'video').length === 1
@@ -589,27 +580,119 @@ export function Timeline(): ReactNode {
                   {track.name}
                 </span>
 
-                {track.kind === 'video' ? (
+                {/*
+                  Picture and sound are separate toggles now, on every track
+                  that has both. A video track had only the eye, so its own
+                  sound could never be muted from here — and the export ignored
+                  the flag anyway. The tooltips say exactly what each drops,
+                  because "excluded from export" on both was no longer true of
+                  either.
+                */}
+                {track.kind === 'video' && (
                   <button
                     onClick={() => toggleTrackHidden(track.id)}
-                    title={track.hidden ? 'Hidden — excluded from export' : 'Visible'}
+                    title={
+                      track.hidden
+                        ? 'Hidden — picture AND sound left out of the preview and export'
+                        : 'Visible — click to hide this track, picture and sound'
+                    }
                     className={`rounded p-0.5 hover:bg-ink-800 ${
                       track.hidden ? 'text-amber-500' : 'text-ink-600 hover:text-ink-200'
                     }`}
                   >
                     {track.hidden ? <EyeOff size={11} /> : <Eye size={11} />}
                   </button>
-                ) : (
+                )}
+                <button
+                  onClick={() => toggleTrackMuted(track.id)}
+                  title={
+                    track.muted
+                      ? track.kind === 'video'
+                        ? 'Muted — the picture plays, its own sound does not'
+                        : 'Muted — left out of the preview and export'
+                      : 'Audible — click to mute'
+                  }
+                  className={`rounded p-0.5 hover:bg-ink-800 ${
+                    track.muted ? 'text-amber-500' : 'text-ink-600 hover:text-ink-200'
+                  }`}
+                >
+                  {track.muted ? <VolumeX size={11} /> : <Volume2 size={11} />}
+                </button>
+                <button
+                  onClick={() => toggleTrackSolo(track.id)}
+                  title={
+                    track.solo
+                      ? 'Soloed — only soloed tracks are heard'
+                      : 'Solo — hear only this track (and any others soloed)'
+                  }
+                  className={`rounded px-0.5 text-[9px] font-bold leading-none hover:bg-ink-800 ${
+                    track.solo ? 'text-emerald-400' : 'text-ink-600 hover:text-ink-200'
+                  }`}
+                >
+                  S
+                </button>
+                {/*
+                  Record a voice-over onto this track. One button through the
+                  whole cycle — arm and count in, stop, saving — so what it will
+                  do next is always what it shows, and pressing it during the
+                  count-in cancels with nothing recorded.
+                */}
+                {track.kind === 'audio' && (
                   <button
-                    onClick={() => toggleTrackMuted(track.id)}
-                    title={track.muted ? 'Muted — excluded from export' : 'Audible'}
-                    className={`rounded p-0.5 hover:bg-ink-800 ${
-                      track.muted ? 'text-amber-500' : 'text-ink-600 hover:text-ink-200'
+                    onClick={() => {
+                      if (recording?.trackId === track.id) void stopVoiceOver()
+                      else if (!recording) void startVoiceOver(track.id)
+                    }}
+                    disabled={
+                      track.locked ||
+                      (recording !== null && recording.trackId !== track.id) ||
+                      recording?.phase === 'saving'
+                    }
+                    title={
+                      recording?.trackId === track.id
+                        ? recording.phase === 'counting'
+                          ? `Starting in ${recording.count} — click to cancel`
+                          : recording.phase === 'recording'
+                            ? 'Recording — click to stop and keep the take'
+                            : 'Saving the take…'
+                        : 'Record a voice-over here, over the edit as it plays (headphones stop the mic hearing it)'
+                    }
+                    className={`flex size-3.5 shrink-0 items-center justify-center rounded-full text-[8px] font-bold leading-none transition-colors disabled:opacity-30 ${
+                      recording?.trackId === track.id
+                        ? recording.phase === 'recording'
+                          ? 'animate-pulse bg-red-500 text-white'
+                          : 'bg-red-500/30 text-red-200'
+                        : 'text-red-500/70 hover:text-red-400'
                     }`}
                   >
-                    {track.muted ? <VolumeX size={11} /> : <Volume2 size={11} />}
+                    {recording?.trackId === track.id && recording.phase === 'counting' ? (
+                      recording.count
+                    ) : (
+                      <span className="block size-2 rounded-full bg-current" />
+                    )}
                   </button>
                 )}
+                {track.kind === 'audio' && (
+                  <button
+                    onClick={() => toggleTrackDialogue(track.id)}
+                    title={
+                      track.dialogue
+                        ? 'Speech — music marked to duck steps back under this track'
+                        : 'Mark as speech, so music ducks under it (a voice-over, an interview)'
+                    }
+                    className={`rounded px-0.5 text-[9px] font-bold leading-none hover:bg-ink-800 ${
+                      track.dialogue ? 'text-teal-400' : 'text-ink-600 hover:text-ink-200'
+                    }`}
+                  >
+                    VO
+                  </button>
+                )}
+
+                {/*
+                  This track's own level, measured after its gain — so a
+                  muted or un-soloed track reads silent, as it sounds.
+                */}
+                <Meter source={track.id} width={18} height={4} title={`${track.name} peak`} />
 
                 {/* The track above composites over the one below, as in Resolve. */}
                 <span className="ml-auto shrink-0 text-[9px] text-ink-700">
@@ -647,6 +730,27 @@ export function Timeline(): ReactNode {
             />
           )}
           <div style={{ width: laneWidth }} className="relative">
+            {/*
+              An empty timeline says what to do, over the lanes rather than
+              instead of them: the tracks are the drop target, so hiding them
+              would remove the thing the message is pointing at.
+
+              Inside the lane area, which is what is `relative` here. It first
+              shipped one level up, in the track-header column, where the
+              nearest positioned ancestor was the whole window — so the words
+              "drag media onto a track" were painted over the preview. Absolute
+              and anchored left: in flow it would push the lanes down while
+              empty and jump them back up when the first clip lands, and
+              centred on a lane wider than the view it can end up off-screen.
+            */}
+            {project.clips.length === 0 && (
+              <div className="pointer-events-none absolute left-4 top-9 z-10 flex flex-col gap-0.5">
+                <div className="text-[12px] text-ink-400">Drag media onto a track</div>
+                <div className="text-[11px] text-ink-600">
+                  or drop files here — they land where you drop them
+                </div>
+              </div>
+            )}
             <div
               className="sticky top-0 z-20 h-7 cursor-ew-resize select-none border-b border-ink-800 bg-ink-850"
               onPointerDown={onRulerPointer}

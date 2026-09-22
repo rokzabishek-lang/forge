@@ -26,7 +26,9 @@ import {
 } from '@shared/transitions/registry'
 import { forgetWipe, wipedSource } from '../wipe'
 import { PreviewMixer } from '../audioGraph'
+import { publishLevels } from '../levels'
 import { fadeGainAt, fadesWithNeighbours } from '@shared/render/audioFade'
+import { audioRole, clampGain, isAudible } from '@shared/render/audibility'
 import { NO_SCRUB, SCRUB_BURST_MS, scrubStep, type ScrubState } from '@shared/render/scrub'
 import { motionSourceRect } from '@shared/render/motion'
 import { clipBox, parallaxBakeFor, planeShare } from '@shared/render/plan'
@@ -713,7 +715,12 @@ export function Preview(): ReactNode {
        * smaller loss than losing the sound.
        */
       if (!mixer.current.attach(clip.id, element, clip.trackId)) {
-        element.volume = Math.max(0, Math.min(1, clip.volume ?? 1))
+        // element.volume cannot exceed 1; the graph is what gives +6 dB. And
+        // with no graph there is no track gain, so solo is applied here or not
+        // at all.
+        element.volume = isAudible(track, project.tracks)
+          ? Math.min(1, clampGain(clip.volume ?? 1))
+          : 0
       }
     }
 
@@ -728,20 +735,18 @@ export function Preview(): ReactNode {
   }, [project.clips, project.tracks, project.assets])
 
   /*
-   * Which bus each track feeds: music is ducked, dialogue is what ducks it.
+   * Which bus each track feeds, and whether it is heard at all.
    *
-   * The same rule the render uses (`plan.ts`): a video clip's own sound is
-   * dialogue, and an audio track is music when it is marked to duck and plain
-   * accompaniment otherwise. Mute is a track gain rather than a skipped
-   * element, so unmuting is instant and does not re-decode anything.
+   * Both answers come from render/audibility.ts, which the export calls too —
+   * so a muted video track, a soloed voice-over and a dialogue-marked audio
+   * track sound the same here as they do in the file. Mute and solo are track
+   * GAINS rather than skipped elements, so toggling either is instant and
+   * re-decodes nothing.
    */
   useEffect(() => {
     for (const track of project.tracks) {
-      if (track.kind === 'video') mixer.current.routeTrack(track.id, 'dialogue')
-      else mixer.current.routeTrack(track.id, track.duck ? 'music' : 'other')
-      // Solo joins this expression in B1; until then a track is audible unless
-      // it is muted.
-      mixer.current.setTrackGain(track.id, track.muted ? 0 : 1)
+      mixer.current.routeTrack(track.id, audioRole(track))
+      mixer.current.setTrackGain(track.id, isAudible(track, project.tracks) ? 1 : 0)
     }
   }, [project.tracks])
 
@@ -758,7 +763,9 @@ export function Preview(): ReactNode {
   const clipGainAt = useCallback(
     (clip: Clip, frame: number): number => {
       const into = frame - clip.start
-      const fader = Math.max(0, Math.min(1, clip.volume ?? 1))
+      // A detached clip's sound lives on the audio clip lifted off it.
+      if (clip.audioDetached) return 0
+      const fader = clampGain(clip.volume ?? 1)
       const envelope = valueAt(clip.keyframes?.volume ?? [], into, clip.duration, 1)
 
       // Neighbours on the SAME track, because an overlap is only a crossfade
@@ -865,7 +872,11 @@ export function Preview(): ReactNode {
         if (asset.hasAudio && mixer.current.attach(clip.id, video, clip.trackId)) {
           mixer.current.setClipGain(clip.id, clipGainAt(clip, frame))
         } else {
-          video.volume = Math.max(0, Math.min(1, clip.volume ?? 1))
+          const heard = project.tracks.find((t) => t.id === clip.trackId)
+          video.volume =
+            clip.audioDetached || !heard || !isAudible(heard, project.tracks)
+              ? 0
+              : Math.min(1, clampGain(clip.volume ?? 1))
         }
         if (isPlaying && video.paused) void video.play().catch(() => undefined)
         if (!isPlaying && !video.paused && !scrubbing) video.pause()
@@ -1727,7 +1738,10 @@ export function Preview(): ReactNode {
          * is mixing against — and only while playing, because a compressor
          * following silence is a compressor doing nothing sixty times a second.
          */
-        mixer.current.step(now)
+        const levels = mixer.current.step(now)
+        // Published, not stored: meters read this in their own loop so nothing
+        // in React re-renders sixty times a second to move a bar.
+        publishLevels(levels.peak, levels.tracks, now)
 
         /*
          * Re-anchor whenever something else moved the playhead.
@@ -1991,7 +2005,13 @@ export function Preview(): ReactNode {
           </>
         )}
 
-        {topLayer === null && (
+        {/*
+          Only when there IS an edit and the playhead is off it. An empty
+          project draws its own two lines on the canvas — "drop pictures here" —
+          and this line on top of those was two messages printed over each
+          other, which is what A9's empty state first shipped as.
+        */}
+        {topLayer === null && project.clips.length > 0 && (
           <div className="absolute inset-0 flex items-center justify-center text-xs text-ink-600">
             No clip under the playhead
           </div>

@@ -33,6 +33,11 @@ export interface Levels {
   peak: number
   /** The ducker's current gain, 1 when nothing is being pushed down. */
   duck: number
+  /**
+   * Each track's own peak, measured AFTER its gain — so a muted or un-soloed
+   * track reads silent, which is what its meter should say.
+   */
+  tracks: Record<string, number>
 }
 
 interface ClipNodes {
@@ -51,6 +56,8 @@ export class PreviewMixer {
 
   private readonly clips = new Map<string, ClipNodes>()
   private readonly tracks = new Map<string, GainNode>()
+  /** One analyser per track, tapped off its gain, for the track meters. */
+  private readonly taps = new Map<string, AnalyserNode>()
 
   private duckGain = 1
   private lastStep = 0
@@ -152,6 +159,18 @@ export class PreviewMixer {
     const context = this.ensure()!
     const gain = context.createGain()
     gain.connect(this.master!)
+    /*
+     * A meter tap per track, made with the track.
+     *
+     * A dead end, like the key bus: nothing downstream listens, so it costs
+     * nothing audible. Chromium processes an AnalyserNode that has live inputs
+     * whether or not its output goes anywhere, which is what makes a tap like
+     * this possible at all.
+     */
+    const tap = context.createAnalyser()
+    tap.fftSize = 1024
+    gain.connect(tap)
+    this.taps.set(trackId, tap)
     this.tracks.set(trackId, gain)
     return gain
   }
@@ -167,6 +186,13 @@ export class PreviewMixer {
     if (!this.ensure()) return
     const gain = this.trackGain(trackId)
     gain.disconnect()
+    /*
+     * `disconnect()` takes the meter tap down with every other output, so it
+     * goes back first. Forgetting this is a meter that works until the first
+     * time a track is re-routed — which is every project load.
+     */
+    const tap = this.taps.get(trackId)
+    if (tap) gain.connect(tap)
     if (role === 'music') gain.connect(this.duckBus!)
     else gain.connect(this.master!)
     // Dialogue additionally feeds the silent key bus, so the follower can hear
@@ -222,7 +248,7 @@ export class PreviewMixer {
    */
   step(nowMs: number): Levels {
     if (!this.context || !this.analyser || !this.keyAnalyser || !this.samples) {
-      return { peak: 0, duck: 1 }
+      return { peak: 0, duck: 1, tracks: {} }
     }
     const elapsed = this.lastStep === 0 ? 16 : Math.max(0, Math.min(250, nowMs - this.lastStep))
     this.lastStep = nowMs
@@ -240,12 +266,16 @@ export class PreviewMixer {
     this.duckGain = duckStep(this.duckGain, peakOf(this.keyAnalyser), elapsed, DUCK)
     this.duckBus?.gain.setTargetAtTime(this.duckGain, this.context.currentTime, 0.01)
 
-    return { peak: peakOf(this.analyser), duck: this.duckGain }
+    const tracks: Record<string, number> = {}
+    for (const [trackId, tap] of this.taps) tracks[trackId] = peakOf(tap)
+
+    return { peak: peakOf(this.analyser), duck: this.duckGain, tracks }
   }
 
   close(): void {
     for (const id of [...this.clips.keys()]) this.forget(id)
     this.tracks.clear()
+    this.taps.clear()
     void this.context?.close().catch(() => undefined)
     this.context = null
   }

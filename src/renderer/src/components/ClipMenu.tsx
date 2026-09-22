@@ -277,6 +277,23 @@ export function ClipMenu({
       <div className="my-1 h-px bg-ink-700" />
 
       <Item label="Split here" keys="S" onClick={run(() => store.getState().splitAtPlayhead())} />
+      {/*
+        Detach audio — the other half of what A5 left out of this menu until
+        it existed. Offered only where it means something: a picture that has
+        sound of its own, on a video track.
+      */}
+      {hasPicture && hasSound && !clip.audioDetached && (
+        <Item
+          label="Detach audio"
+          onClick={run(() => store.getState().detachAudio(target.clipId))}
+        />
+      )}
+      {clip.audioDetached && (
+        <Item
+          label="Restore its own sound"
+          onClick={run(() => store.getState().reattachAudio(target.clipId))}
+        />
+      )}
       <Item label="Select all" keys={`${mod}A`} onClick={run(() => store.getState().selectAll())} />
 
       <div className="my-1 h-px bg-ink-700" />

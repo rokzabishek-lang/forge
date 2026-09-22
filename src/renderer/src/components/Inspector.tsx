@@ -40,6 +40,7 @@ import {
   type ExportPreset
 } from '@shared/render/presets'
 import { offlineAssets } from '@shared/project/relink'
+import { faderPosition, formatDb, gainAtPosition } from '@shared/render/audibility'
 import { useEffect, useMemo, useMemo as useMemoLocal, useState as useLocalState } from 'react'
 
 function Field({ label, value }: { label: string; value: string }): ReactNode {
@@ -885,13 +886,21 @@ export function Inspector(): ReactNode {
                       {(clip.volume ?? 1) > 0 ? 'Mute' : 'Muted'}
                     </button>
                   </div>
+                  {/*
+                    A fader, read in dB and moving in a dB curve — to +6 dB,
+                    because quiet footage is the commonest audio problem there
+                    is and a fader that stopped at 100 % had no answer for it.
+                    The position is `faderPosition` x 1000; the same curve the
+                    envelope on the clip is drawn in.
+                  */}
                   <Slider
                     label="Level"
-                    value={Math.round((clip.volume ?? 1) * 100)}
+                    value={Math.round(faderPosition(clip.volume ?? 1) * 1000)}
                     min={0}
-                    max={100}
-                    suffix="%"
-                    onChange={(v) => setClipVolume(clip.id, v / 100)}
+                    max={1000}
+                    suffix=""
+                    display={formatDb(clip.volume ?? 1)}
+                    onChange={(v) => setClipVolume(clip.id, gainAtPosition(v / 1000))}
                   />
 
                   {/*

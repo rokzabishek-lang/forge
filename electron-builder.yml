@@ -99,6 +99,14 @@ mac:
   # Unsigned for now. macOS will refuse to open it without right-click > Open;
   # signing needs a paid Developer ID and is a separate decision.
   identity: null
+  # The microphone, for voice-over (FIX.md B1). macOS TERMINATES an app that
+  # asks for a privacy-protected device without saying why in its Info.plist —
+  # not a denied prompt, a crash — and it cannot happen in development, where
+  # the process is Electron's own and carries Electron's plist. So this line is
+  # invisible until someone installs the app and presses record.
+  # tests/packaging.test.ts pins it.
+  extendInfo:
+    NSMicrophoneUsageDescription: Forge records voice-overs from your microphone into your edit.
 
 # Nothing is published from here. Releases are a deliberate act, not a
 # side effect of a build.

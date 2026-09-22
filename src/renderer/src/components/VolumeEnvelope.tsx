@@ -1,3 +1,4 @@
+import { faderPosition, gainAtPosition } from '@shared/render/audibility'
 import { useCallback, useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import type { Clip } from '@shared/timeline'
 import { normaliseKeys, valueAt, type Keyframe } from '@shared/render/keyframes'
@@ -42,8 +43,14 @@ export function VolumeEnvelope({
   const flat = clip.volume ?? 1
 
   const usable = Math.max(1, height - PADDING * 2)
-  /** A level, 0 at the bottom of the lane and 1 at the top. */
-  const yOf = (value: number): number => PADDING + (1 - Math.max(0, Math.min(1, value))) * usable
+  /*
+   * A level's height, on the SAME dB curve as the Inspector's fader.
+   *
+   * It was linear in gain from 0 to 1. With a ceiling of +6 dB a linear line
+   * would put unity half-way up and make every existing envelope look turned
+   * down by half — so it is drawn the way it is heard, in decibels.
+   */
+  const yOf = (value: number): number => PADDING + (1 - faderPosition(value)) * usable
   /** Where in the clip, and how loud, a pointer is. */
   const at = useCallback(
     (event: { clientX: number; clientY: number }): { frame: number; value: number } | null => {
@@ -51,7 +58,7 @@ export function VolumeEnvelope({
       if (!box) return null
       return {
         frame: Math.max(0, Math.min(clip.duration, Math.round((event.clientX - box.left) / zoom))),
-        value: Math.max(0, Math.min(1, 1 - (event.clientY - box.top - PADDING) / usable))
+        value: gainAtPosition(1 - (event.clientY - box.top - PADDING) / usable)
       }
     },
     [clip.duration, zoom, usable]

@@ -22,6 +22,8 @@
  * Two mechanisms for one property would be two things to disagree.
  */
 
+import { MAX_GAIN } from './audibility'
+
 /**
  * `volume` is the only one of these that is not a picture.
  *
@@ -54,7 +56,12 @@ export const PROPERTY_INFO: Record<
   zoom: { label: 'Zoom', neutral: 1, min: 1, max: 4, step: 0.01, suffix: '×' },
   rotation: { label: 'Rotate', neutral: 0, min: -180, max: 180, step: 1, suffix: '°' },
   opacity: { label: 'Opacity', neutral: 1, min: 0, max: 1, step: 0.01, suffix: '' },
-  volume: { label: 'Volume', neutral: 1, min: 0, max: 1, step: 0.01, suffix: '' }
+  /*
+   * To +6 dB, the same ceiling as the fader — see render/audibility.ts. The
+   * curve editor, the keyframe lane and the curve panel all read their range
+   * from here, so this one number is what lets an envelope lift a quiet clip.
+   */
+  volume: { label: 'Volume', neutral: 1, min: 0, max: MAX_GAIN, step: 0.01, suffix: '' }
 }
 
 /** Which of these describe sound rather than picture. */

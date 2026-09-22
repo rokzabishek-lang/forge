@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Check, Pause, Play, Repeat, Scissors, SkipBack, SkipForward, Trash2, Volume2, ZoomIn, ZoomOut } from 'lucide-react'
 import { formatTimecode, projectDuration } from '@shared/timeline'
 import { useEditor } from '../store'
+import { Meter } from './Meter'
 
 function Button({
   onClick,
@@ -120,6 +121,9 @@ export function Transport(): ReactNode {
       >
         <Trash2 size={14} />
       </button>
+
+      {/* The master meter, where the eye already is while playing. */}
+      <Meter source="master" width={72} height={6} title="Master peak — red within 1 dB of full scale" />
 
       <div className="mx-3 font-mono text-[12px] tabular-nums text-ink-200">
         {formatTimecode(playhead, fps)}

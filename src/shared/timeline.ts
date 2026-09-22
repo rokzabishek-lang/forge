@@ -422,6 +422,17 @@ export interface Clip {
    */
   adjustment?: boolean
   /**
+   * This clip's sound has been lifted onto an audio track of its own.
+   *
+   * The picture stays; the render and the preview skip this clip's audio
+   * entirely, and the audio clip beside it carries the level, the envelope and
+   * the fades. A FLAG rather than `volume: 0`, deliberately: the render keeps a
+   * zero-volume clip that has a volume envelope — `volume === 0 && !hasEnvelope`
+   * is the guard — so zeroing the fader would have left a drawn envelope still
+   * speaking in the file.
+   */
+  audioDetached?: boolean
+  /**
    * Which depth planes this clip draws.
    *
    * Text behind a person needs the background and the subject to sit on either
@@ -667,6 +678,24 @@ export interface Track {
    * so music drops while someone is speaking and recovers when they stop.
    */
   duck?: boolean
+  /**
+   * Only soloed tracks are heard while any track is soloed.
+   *
+   * A mixing aid, not an edit: it changes what reaches the speakers and the
+   * export, and nothing about the clips. Video tracks' own sound obeys it too,
+   * or a solo would let the dialogue through and isolate nothing. The rule
+   * lives in render/audibility.ts, which both the preview and the export call.
+   */
+  solo?: boolean
+  /**
+   * This audio track is SPEECH — the thing music ducks under.
+   *
+   * A video clip's own sound always counts as dialogue; an audio track did
+   * not, which left a voice-over recorded into the app mixed at full level
+   * against a bed that did not move for it. Set by default on a track a
+   * voice-over is recorded into. See `audioRole`.
+   */
+  dialogue?: boolean
 }
 
 export interface Project {

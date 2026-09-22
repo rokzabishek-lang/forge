@@ -47,7 +47,9 @@ function installFallbackBridge(): void {
     rememberRecent: () => undefined,
     reportSaved: () => undefined,
     onMenuCommand: () => () => undefined,
-    onMenuOpen: () => () => undefined
+    onMenuOpen: () => () => undefined,
+    microphonePermission: async () => false,
+    saveVoiceOver: unavailable
   } as unknown as Window['forge']
 
   queueMicrotask(() => {

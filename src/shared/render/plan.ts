@@ -20,6 +20,7 @@ import { atempoChain, clipSpeed, sourceFramesFor, speedVideoFilter } from './spe
 import { audioFadeFilters, fadesWithNeighbours } from './audioFade'
 import { duckFilter } from './duck'
 import { voiceFilters } from './voice'
+import { audioRole, clampGain, isAudible, type AudioRole } from './audibility'
 import { loudnessFilters } from './loudness'
 import {
   DEFAULT_SHAKE_DECAY,
@@ -595,7 +596,11 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
   }
   if (videoClips.length === 0) throw new RenderError('The timeline has no clips to render')
 
-  const audioTracks = project.tracks.filter((t) => t.kind === 'audio' && !t.muted)
+  // Mute, solo and hidden all decide who is heard, in one place both the
+  // preview and this file ask — see render/audibility.ts.
+  const audioTracks = project.tracks.filter(
+    (t) => t.kind === 'audio' && isAudible(t, project.tracks)
+  )
   const audioClips = audioTracks.flatMap((t) => clipsOnTrack(project, t.id))
 
   const args: string[] = ['-hide_banner', '-nostdin', '-loglevel', 'error', '-y']
@@ -1330,7 +1335,9 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
   }
 
   const addAudio = (index: number, clip: Clip, label: string, into: string[]): void => {
-    const volume = clip.volume ?? 1
+    // Clamped to the same +6 dB ceiling the fader stops at: a hand-edited
+    // project asking for 50x would otherwise reach the speakers as asked.
+    const volume = clampGain(clip.volume ?? 1)
     /*
      * A drawn envelope beats the flat level.
      *
@@ -1440,13 +1447,33 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
     into.push(label)
   }
 
-  // The picture's own audio is the dialogue: it is what music ducks under.
+  /*
+   * Every clip's sound, onto the bus its TRACK plays in.
+   *
+   * A video clip's own sound used to go into the dialogue mix on `hasAudio`
+   * alone — no mute check — so muting a video track silenced it in the editor
+   * and left it talking in the file. And an audio track could only ever be
+   * music or accompaniment, never speech, so a voice-over had nothing ducking
+   * for it. Both questions are `isAudible` and `audioRole` now, the same two
+   * the preview's mixer asks.
+   *
+   * A detached clip's sound is skipped outright rather than zeroed: its audio
+   * lives on the clip that was lifted off it, and a zero fader would still let
+   * a drawn envelope through the `volume === 0 && !hasEnvelope` guard.
+   */
+  const busFor = (role: AudioRole): string[] =>
+    role === 'dialogue' ? dialogueLabels : role === 'music' ? musicLabels : otherLabels
+
   videoInputs.forEach(({ clip, index, hasAudio }, i) => {
-    if (hasAudio) addAudio(index, clip, `[va${i}]`, dialogueLabels)
+    if (!hasAudio || clip.audioDetached) return
+    const track = project.tracks.find((t) => t.id === clip.trackId)
+    if (!track || !isAudible(track, project.tracks)) return
+    addAudio(index, clip, `[va${i}]`, busFor(audioRole(track)))
   })
   audioInputs.forEach(({ clip, index }, i) => {
     const track = project.tracks.find((t) => t.id === clip.trackId)
-    addAudio(index, clip, `[aa${i}]`, track?.duck ? musicLabels : otherLabels)
+    if (!track) return
+    addAudio(index, clip, `[aa${i}]`, busFor(audioRole(track)))
   })
 
   /** Combine a set of labels into one stream, or null when there are none. */

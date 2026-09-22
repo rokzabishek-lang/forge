@@ -14,7 +14,7 @@
 
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, rm, writeFile } from 'node:fs/promises'
 import { resolve, join } from 'node:path'
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg'
 
@@ -32,8 +32,19 @@ export const OUTPUT_ROOT = resolve(__dirname, '..', 'output')
  */
 export async function outputDir(name: string): Promise<string> {
   const dir = join(OUTPUT_ROOT, name)
-  await rm(dir, { recursive: true, force: true })
   await mkdir(dir, { recursive: true })
+  /*
+   * Emptied, not removed and remade.
+   *
+   * Removing the folder itself fails whenever something is holding it open —
+   * on Windows, an Explorer window showing it or a terminal sitting in it,
+   * which is exactly what someone does to look at these files. Its CONTENTS
+   * can still be cleared. Found when a render check failed with EPERM on
+   * `rmdir` because a shell had been left in the folder.
+   */
+  for (const entry of await readdir(dir)) {
+    await rm(join(dir, entry), { recursive: true, force: true })
+  }
   return dir
 }
 

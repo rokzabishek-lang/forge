@@ -477,7 +477,7 @@ were found that the list did not know about, three of them shipped:
 
 ## Phase B — the other three
 
-### B1. The audio surface: gain, solo, meters, detach, video-track mute, voice-over
+### B1. The audio surface: gain, solo, meters, detach, video-track mute, voice-over — **DONE**
 
 **Where.** Level clamps at `store.ts:3411`, `Inspector.tsx:768-775`,
 `keyframes.ts:57`, `VolumeEnvelope.tsx:54`; `Track` has no `solo`
@@ -506,6 +506,49 @@ with its picture; no `getUserMedia` anywhere.
   meters. Ducking today keys off *video-track* sound, so `Track.dialogue?:
   boolean` marks an audio track as speech that ducks the music — on by
   default for a voice-over track.
+
+**What was actually built.** All six, with every rule in ONE module both the
+preview and the export call: `src/shared/render/audibility.ts` owns the +6 dB
+ceiling, the dB fader curve, who is heard (`isAudible`) and which bus a track
+plays on (`audioRole`). Before this each of those was answered twice and the
+answers had drifted.
+
+- **A shipped bug, closed:** a muted *video* track was silenced by the preview
+  and ignored by the export — `plan.ts` fed every video clip's sound into the
+  dialogue mix on `hasAudio` alone. It played silently in the editor and spoke
+  in the file. Rendered and measured now: −24.1 dB unmuted, −91 dB muted.
+- **Five independent `[0,1]` clamps** moved together, including the one where
+  the preview actually consumes the level (`Preview.tsx` `clipGainAt`) — raising
+  only the UI ones would have exported 150 % and previewed 100 %. The export
+  clamps too now: a hand-edited project asking for 50× reached the speakers as
+  asked. Measured: a clip at 200 % comes out **+6.0 dB**.
+- **The fader and the envelope move in dB**, not in gain. With a ceiling of 2,
+  a gain-linear line would have put unity half-way up and made every existing
+  envelope look turned down by half.
+- **Detach audio is a FLAG, not `volume: 0`** — the render keeps a zero-volume
+  clip that has an envelope (`volume === 0 && !hasEnvelope`), so zeroing the
+  fader would have left a drawn envelope speaking from the picture. Measured:
+  the detached pair is heard once, at the original level, not doubled.
+- **Meters** read the A3 analysers through a publisher outside the store
+  (`levels.ts`), so a dozen of them cost no React renders; the ballistics are
+  a pure, tested `meterStep`. They read SAMPLE peak, not true peak, which is
+  why red starts at −1 dBFS rather than 0 — stated in the code.
+- **Voice-over** records over the playing edit with a three-count, converts
+  WebM/Opus to mono WAV with the bundled ffmpeg, and lands the take where it
+  was spoken — on a new track rather than sliding if the armed one is busy.
+  `electron-builder.yml` gained `NSMicrophoneUsageDescription`: macOS
+  TERMINATES an app that opens the microphone without one, and it cannot fail
+  in development. `tests/packaging.test.ts` pins it. Latency between recording
+  and playback is not compensated yet, and the code says so.
+
+FIX.md's own line citations for this item were stale (store.ts ~3411 was an
+unrelated notify, Inspector ~768 the Start/End rows, plan.ts ~583 the fps line);
+the survey in the session found the real ones.
+
+Twenty-seven mutations, all killed against a green gate — two only after the
+tests were extended: the export's audio-track solo filter was deletable while
+the test had one audio clip, and a released peak-hold could sink below its bar
+without a steady signal held just under it.
 
 ### B2. Export has a shape: frame rate, size, codec, quality, hardware, range
 

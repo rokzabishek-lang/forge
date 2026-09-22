@@ -20,6 +20,7 @@ import { DEFAULT_COLOR, DEFAULT_TEXT, clipCoversFrame } from '@shared/timeline'
 import type { Mask, MaskShape } from '@shared/render/mask'
 import { clipSpeed, maxDurationAtSpeed, withClipSpeed } from '@shared/render/speed'
 import type { VoiceId } from '@shared/render/voice'
+import { clampGain } from '@shared/render/audibility'
 import type { ClipKind } from '@shared/edit/clipKind'
 import { applyRelink } from '@shared/project/relink'
 import { projectFromChoice, type NewProjectChoice } from '@shared/project/newProject'
@@ -38,6 +39,9 @@ import {
   removeMany,
   rippleDelete,
   copySelection as clipsToClipboard,
+  detachAudio as detachAudioFrom,
+  reattachAudio as reattachAudioTo,
+  placeTake as placeTakeOn,
   pasteClipboard as placeClipboard,
   type Clipboard,
   type PasteResult
@@ -706,6 +710,25 @@ interface EditorState {
   addTrack: (kind: 'video' | 'audio') => void
   removeTrack: (trackId: string) => void
   toggleTrackMuted: (trackId: string) => void
+  /** Hear only soloed tracks while any is soloed. See render/audibility.ts. */
+  toggleTrackSolo: (trackId: string) => void
+  /** Mark an audio track as speech, so music ducks under it. */
+  toggleTrackDialogue: (trackId: string) => void
+  /**
+   * A voice-over in progress, for the interface to draw: the armed track, and
+   * whether it is counting in, recording or saving. The microphone itself lives
+   * in recorder.ts, because a MediaStream is not state an editor can own.
+   */
+  recording: { trackId: string; phase: 'counting' | 'recording' | 'saving'; count: number } | null
+  setRecording: (
+    recording: { trackId: string; phase: 'counting' | 'recording' | 'saving'; count: number } | null
+  ) => void
+  /** A finished take onto the timeline where it was spoken. One undo. */
+  placeVoiceOver: (trackId: string, path: string, startFrame: number) => Promise<void>
+  /** Lift a video clip's sound onto an audio track of its own. One undo. */
+  detachAudio: (clipId: string) => void
+  /** Give a detached clip its own sound back; the lifted audio clip stays. */
+  reattachAudio: (clipId: string) => void
   toggleTrackHidden: (trackId: string) => void
   setCaptionStyle: (styleId: string) => void
   setCaptionsEnabled: (enabled: boolean) => void
@@ -887,6 +910,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   loop: false,
   scrubAudio: true,
   exportRequests: 0,
+  recording: null,
   exportPresets: BUILT_IN_PRESETS,
   rangeIn: null,
   rangeOut: null,
@@ -3621,7 +3645,8 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
 
   setClipVolume: (clipId, volume) => {
-    const clamped = Math.max(0, Math.min(1, volume))
+    // The one ceiling, shared with the export and the preview's mixer.
+    const clamped = clampGain(volume)
     get().update((p) => ({
       ...p,
       clips: p.clips.map((c) => (c.id === clipId ? { ...c, volume: clamped } : c))
@@ -3773,6 +3798,63 @@ export const useEditor = create<EditorState>((set, get) => ({
       ...p,
       tracks: p.tracks.map((t) => (t.id === trackId ? { ...t, muted: !t.muted } : t))
     })),
+
+  toggleTrackSolo: (trackId) =>
+    get().update((p) => ({
+      ...p,
+      tracks: p.tracks.map((t) => {
+        if (t.id !== trackId) return t
+        // Absent rather than false when off, so an untouched project
+        // serialises exactly as it did before solo existed.
+        if (t.solo) {
+          const { solo: _off, ...rest } = t
+          return rest
+        }
+        return { ...t, solo: true }
+      })
+    })),
+
+  toggleTrackDialogue: (trackId) =>
+    get().update((p) => ({
+      ...p,
+      tracks: p.tracks.map((t) => {
+        if (t.id !== trackId || t.kind !== 'audio') return t
+        if (t.dialogue) {
+          const { dialogue: _off, ...rest } = t
+          return rest
+        }
+        return { ...t, dialogue: true }
+      })
+    })),
+
+  detachAudio: (clipId) => {
+    const result = detachAudioFrom(get().project, clipId)
+    if (!result) {
+      get().notify('That clip has no sound of its own to detach', 'info')
+      return
+    }
+    get().update(() => result.project)
+    // Selected, so the next thing done — dragging it, trimming it — is to the
+    // sound that was just made rather than to the picture it came off.
+    get().select(result.audioClipId)
+  },
+
+  reattachAudio: (clipId) => get().update((p) => reattachAudioTo(p, clipId)),
+
+  setRecording: (recording) => set({ recording }),
+
+  placeVoiceOver: async (trackId, path, startFrame) => {
+    const { project, notify } = get()
+    const asset = await window.forge.placeAsset(path, project.settings.fps)
+    const result = placeTakeOn(get().project, trackId, asset, startFrame)
+    if (!result) {
+      notify('There is no room for another audio track — the take is saved in the media pool')
+      get().update((p) => ({ ...p, assets: [...p.assets, asset] }))
+      return
+    }
+    get().update(() => result.project)
+    get().select(result.clipId)
+  },
 
   toggleTrackHidden: (trackId) =>
     get().update((p) => ({

@@ -31,7 +31,7 @@ interface BuilderConfig {
   asarUnpack?: string[]
   extraResources?: { from: string; to: string; filter?: string[] }[]
   win?: { target?: unknown }
-  mac?: { target?: unknown }
+  mac?: { target?: unknown; extendInfo?: Record<string, unknown> }
   nsis?: { oneClick?: boolean }
   publish?: unknown
 }
@@ -141,5 +141,23 @@ describe('what the installer is', () => {
      */
     expect(pkg.scripts['pack:win']).toContain('--win')
     expect(pkg.scripts['pack:mac']).toContain('--mac')
+  })
+})
+
+
+describe('privacy strings macOS demands before a device opens', () => {
+  it('says why it wants the microphone, or recording a voice-over crashes the app', () => {
+    /*
+     * macOS terminates — does not merely deny — an app that opens a privacy-
+     * protected device without a usage description in its Info.plist. It cannot
+     * be caught in development, where the process is Electron's own and carries
+     * Electron's plist; the first sign would be a user pressing record on an
+     * installed app and watching it vanish.
+     */
+    const reason = config.mac?.extendInfo?.NSMicrophoneUsageDescription
+    expect(typeof reason).toBe('string')
+    // A reason a person can read in the system prompt, not a placeholder.
+    expect(String(reason).length).toBeGreaterThan(20)
+    expect(String(reason).toLowerCase()).toContain('voice')
   })
 })

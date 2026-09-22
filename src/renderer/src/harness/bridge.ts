@@ -599,7 +599,12 @@ export function installHarnessBridge(): void {
     rememberRecent: () => undefined,
     reportSaved: () => undefined,
     onMenuCommand: () => () => undefined,
-    onMenuOpen: () => () => undefined
+    onMenuOpen: () => () => undefined,
+
+    // The browser can open a microphone; only the main process can turn a
+    // recording into a WAV, so saving a take is refused with a reason.
+    microphonePermission: async () => true,
+    saveVoiceOver: unsupported('Saving a voice-over')
   }
 
   window.forge = bridge as unknown as Window['forge']

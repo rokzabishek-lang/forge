@@ -15,12 +15,14 @@
  */
 
 import {
+  addTrack,
   clipEnd,
   findFreeSlot,
   overlapsOn,
   stackedSlot,
   type Clip,
   type Frames,
+  type MediaAsset,
   type Project
 } from '../timeline'
 
@@ -291,4 +293,190 @@ export function duplicateSelection(project: Project, ids: readonly string[]): Pa
   if (!clipboard) return { project, ids: [], toBake: [] }
   const last = Math.max(...clipboard.clips.map(clipEnd))
   return pasteClipboard(project, clipboard, last)
+}
+
+/* --------------------------------------------------------- detach audio */
+
+export interface DetachResult {
+  project: Project
+  /** The audio clip that now carries the sound. */
+  audioClipId: string
+}
+
+/**
+ * Lift a video clip's sound onto an audio track of its own.
+ *
+ * The gesture every editor has and this one did not: the picture and the sound
+ * of a shot are two things once you want to cut them differently — the audio
+ * running under the next shot (a J- or L-cut), or the voice kept while the
+ * picture is replaced by b-roll. Until now a clip's sound was welded to its
+ * picture.
+ *
+ * The new clip takes everything that describes the SOUND — asset, in-point,
+ * length, speed, fader, envelope, fades, voice effect — and nothing that
+ * describes the picture. It lands at exactly the same frame, because audio one
+ * frame off its picture is lip-sync drift; so a lane with room for it at
+ * exactly that span is used if there is one, and otherwise a new audio track
+ * is made rather than sliding the sound later to find room.
+ *
+ * The original keeps its fader and envelope untouched and is marked
+ * `audioDetached`, which the render and the preview both treat as "skip this
+ * clip's sound". Not `volume: 0`: the render keeps a zero-volume clip that has
+ * an envelope (`volume === 0 && !hasEnvelope` is the guard), so zeroing the
+ * fader would leave a drawn envelope still speaking in the file. And leaving
+ * the original's level alone is what lets it be reattached exactly as it was.
+ *
+ * Returns null when there is nothing to detach: a still, a clip with no sound,
+ * a clip on an audio track already, or one whose sound is already detached.
+ */
+export function detachAudio(project: Project, clipId: string): DetachResult | null {
+  const clip = project.clips.find((c) => c.id === clipId)
+  if (!clip || clip.audioDetached) return null
+  const track = project.tracks.find((t) => t.id === clip.trackId)
+  if (!track || track.kind !== 'video') return null
+  const asset = project.assets.find((a) => a.id === clip.assetId)
+  if (!asset?.hasAudio || asset.kind === 'image') return null
+
+  /*
+   * A lane free for EXACTLY this span, or a new one.
+   *
+   * `findFreeSlot` would slide the sound later until it fitted, which is the
+   * one thing this must never do.
+   */
+  let next = project
+  let lane = next.tracks.find(
+    (t) =>
+      t.kind === 'audio' &&
+      !t.locked &&
+      overlapsOn(next, t.id, clip.start, clip.duration).length === 0
+  )
+  if (!lane) {
+    const grown = addTrack(next, 'audio')
+    // At the track limit there is nowhere to put it, and a detach that quietly
+    // stacked the sound onto a busy lane would be worse than refusing.
+    if (grown === next) return null
+    next = grown
+    lane = next.tracks[next.tracks.length - 1]
+  }
+
+  const audioClipId = freshId('audio')
+  const envelope = clip.keyframes?.volume
+  const sound: Clip = {
+    id: audioClipId,
+    assetId: clip.assetId,
+    trackId: lane.id,
+    start: clip.start,
+    duration: clip.duration,
+    inPoint: clip.inPoint,
+    volume: clip.volume,
+    transform: { x: 0, y: 0, scale: 1, rotation: 0, opacity: 1 },
+    color: { brightness: 0, contrast: 1, saturation: 1 },
+    ...(clip.speed !== undefined ? { speed: clip.speed } : {}),
+    ...(envelope && envelope.length > 0 ? { keyframes: { volume: envelope } } : {}),
+    ...(clip.fadeIn !== undefined ? { fadeIn: clip.fadeIn } : {}),
+    ...(clip.fadeOut !== undefined ? { fadeOut: clip.fadeOut } : {}),
+    ...(clip.voice ? { voice: clip.voice } : {})
+  }
+
+  return {
+    audioClipId,
+    project: {
+      ...next,
+      clips: [
+        ...next.clips.map((c) => (c.id === clipId ? { ...c, audioDetached: true } : c)),
+        sound
+      ]
+    }
+  }
+}
+
+/**
+ * Give a clip its own sound back.
+ *
+ * Only the flag is cleared; the detached audio clip is left where it is, since
+ * it may have been cut or moved on purpose and deleting someone's edit to undo
+ * a different one is not a thing to do silently. If both are then heard, the
+ * clip menu says so and deleting the spare is one keypress.
+ */
+export function reattachAudio(project: Project, clipId: string): Project {
+  const clip = project.clips.find((c) => c.id === clipId)
+  if (!clip?.audioDetached) return project
+  return {
+    ...project,
+    clips: project.clips.map((c) => {
+      if (c.id !== clipId) return c
+      const { audioDetached: _gone, ...rest } = c
+      return rest
+    })
+  }
+}
+
+/* ------------------------------------------------------------ voice-over */
+
+export interface TakeResult {
+  project: Project
+  clipId: string
+  trackId: string
+}
+
+/**
+ * Put a recorded take on the timeline exactly where it was spoken.
+ *
+ * At the frame recording began, on the track that was armed — the whole point
+ * of recording into the edit is that what you said lands under the picture you
+ * said it to. If that track is busy for the take's span, a new audio track is
+ * made rather than sliding the take along to find room: a voice-over a second
+ * late is a voice-over talking about the wrong shot.
+ *
+ * The track it lands on is marked as speech, so music marked to duck steps
+ * back for it — which is what a voice-over is for, and what nobody should have
+ * to remember to switch on.
+ */
+export function placeTake(
+  project: Project,
+  armedTrackId: string,
+  asset: MediaAsset,
+  startFrame: Frames
+): TakeResult | null {
+  const start = Math.max(0, Math.round(startFrame))
+  const duration = Math.max(1, Math.round(asset.durationFrames))
+
+  let next: Project = project.assets.some((a) => a.id === asset.id)
+    ? project
+    : { ...project, assets: [...project.assets, asset] }
+
+  const armed = next.tracks.find((t) => t.id === armedTrackId && t.kind === 'audio' && !t.locked)
+  let lane =
+    armed && overlapsOn(next, armed.id, start, duration).length === 0 ? armed : undefined
+
+  if (!lane) {
+    const grown = addTrack(next, 'audio')
+    if (grown === next) return null
+    next = grown
+    lane = next.tracks[next.tracks.length - 1]
+  }
+
+  const trackId = lane.id
+  const clipId = freshId('vo')
+  const clip: Clip = {
+    id: clipId,
+    assetId: asset.id,
+    trackId,
+    start,
+    duration,
+    inPoint: 0,
+    volume: 1,
+    transform: { x: 0, y: 0, scale: 1, rotation: 0, opacity: 1 },
+    color: { brightness: 0, contrast: 1, saturation: 1 }
+  }
+
+  return {
+    clipId,
+    trackId,
+    project: {
+      ...next,
+      tracks: next.tracks.map((t) => (t.id === trackId ? { ...t, dialogue: true } : t)),
+      clips: [...next.clips, clip]
+    }
+  }
 }

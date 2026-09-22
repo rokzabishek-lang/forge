@@ -104,6 +104,14 @@ const api = {
   ): Promise<Record<string, string>> =>
     ipcRenderer.invoke('project:relink', { assets, assetId }),
 
+  /* ------------------------------------------------------ voice-over */
+
+  /** Whether the microphone may be opened; asks the system on macOS. */
+  microphonePermission: (): Promise<boolean> => ipcRenderer.invoke('voiceover:permission'),
+  /** A recorded take, converted to WAV by the main process; returns its path. */
+  saveVoiceOver: (bytes: ArrayBuffer, name: string, sampleRate: number): Promise<string> =>
+    ipcRenderer.invoke('voiceover:save', { bytes, name, sampleRate }),
+
   /* --------------------------------------------------------- settings */
 
   /** Everything that is the person's rather than the project's. */

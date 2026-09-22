@@ -15,7 +15,8 @@ export function Slider({
   max,
   step,
   suffix,
-  onChange
+  onChange,
+  display
 }: {
   label: string
   value: number
@@ -25,6 +26,14 @@ export function Slider({
   step?: number
   suffix: string
   onChange: (value: number) => void
+  /**
+   * What to show beside the track instead of `value` + `suffix`.
+   *
+   * For a slider whose position is not the number people read — a level
+   * fader moves in a curve and is read in dB. Optional, so every existing
+   * slider is unchanged.
+   */
+  display?: string
 }): ReactNode {
   return (
     <div className="flex items-center gap-2">
@@ -38,9 +47,13 @@ export function Slider({
         onChange={(e) => onChange(Number(e.target.value))}
         className="min-w-0 flex-1"
       />
-      <span className="w-11 shrink-0 text-right font-mono text-[10px] tabular-nums text-ink-500">
-        {value}
-        {suffix}
+      <span className={`${display ? 'w-14' : 'w-11'} shrink-0 text-right font-mono text-[10px] tabular-nums text-ink-500`}>
+        {display ?? (
+          <>
+            {value}
+            {suffix}
+          </>
+        )}
       </span>
     </div>
   )
