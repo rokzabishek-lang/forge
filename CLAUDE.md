@@ -22,6 +22,7 @@ measurements and paper sketches that do not survive a new session.
 | `docs/LLM.md` | the LLM design — the plan schema, the passes, what was rejected and why, and what is built |
 | `docs/COMPARISON.md` | Forge against CapCut, Premiere, Resolve, Final Cut and the AI ad tools — every confirmed gap with its file:line, and what each runs on |
 | `docs/FIX.md` | the plan that closes those gaps, in order, with the Windows-floor risks named — then the Director eval, the dressing planner, templates and the market |
+| `docs/MARKET.md` | the later part: templates with slots, free packs, then a store — its prerequisites, rights rules, money and risks. Not current work |
 | `docs/STACK.md`, `docs/SIDECAR.md` | architecture and the optional Python capabilities |
 
 Before re-measuring something against ffmpeg, check whether `EFFECTS.md` already
