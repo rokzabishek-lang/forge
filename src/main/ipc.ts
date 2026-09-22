@@ -1,6 +1,6 @@
 import { BrowserWindow, dialog, ipcMain, shell, app } from 'electron'
 import { access, mkdir, readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises'
-import { basename, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import type { Job } from '@shared/types'
 import type { MediaAsset, ParallaxBake, Project } from '@shared/timeline'
 import { ALL_EXTENSIONS } from '@shared/media'
@@ -10,6 +10,7 @@ import {
   worthRecovering,
   type AutosaveRecord
 } from '@shared/project/recovery'
+import { candidatePaths, dirNameOf, matchByName } from '@shared/project/relink'
 import { probeMany } from './ffmpeg/probe'
 import { getSidecar } from './sidecar/service'
 import { SIDECAR_METHODS } from '@shared/sidecar/protocol'
@@ -1173,7 +1174,13 @@ export function registerIpc(getWindow: () => BrowserWindow | null): JobQueue {
       target = result.filePath
     }
 
-    const file = serializeProject(project, { appVersion: app.getVersion(), decisions })
+    const file = serializeProject(project, {
+      appVersion: app.getVersion(),
+      decisions,
+      // Told where it is going, so each asset underneath records its own place
+      // relative to the project — which is what lets the folder be moved.
+      projectDir: dirname(target)
+    })
     // Atomic here too: a crash mid-save used to be able to leave a truncated
     // project where a whole one had been.
     await writeAtomic(target, JSON.stringify(file, null, 2))
@@ -1222,7 +1229,108 @@ export function registerIpc(getWindow: () => BrowserWindow | null): JobQueue {
       file.project = { ...file.project, parallax: surviving }
     }
 
+    /*
+     * Find every asset, or say which one is missing.
+     *
+     * Absolute first, then relative to the project file, then the folders this
+     * project has already found media in. Whatever still resolves to nothing is
+     * marked `offline` — a runtime mark, never saved — so the pool, the preview
+     * and the timeline can all show it rather than each quietly rendering
+     * black.
+     */
+    const projectDir = dirname(target)
+    const searchFolders = [
+      ...new Set(
+        file.project.assets
+          .map((a) => dirNameOf(a.path))
+          .filter((d) => d.length > 0)
+      )
+    ]
+
+    file.project = {
+      ...file.project,
+      assets: await Promise.all(
+        file.project.assets.map(async (asset) => {
+          /*
+           * A self-drawn asset has no file to find.
+           *
+           * Text cards, colour cards and clippings are baked into the app's own
+           * cache and re-baked on demand; marking one offline would put a red
+           * card over a caption that draws itself perfectly well.
+           */
+          if (asset.size === 0) return asset
+          for (const candidate of candidatePaths(asset, projectDir, searchFolders)) {
+            const found = await access(candidate).then(() => true, () => false)
+            if (found) return candidate === asset.path ? asset : { ...asset, path: candidate }
+          }
+          return { ...asset, offline: true }
+        })
+      )
+    }
+
+    app.addRecentDocument(target)
     return { path: target, ...file }
+  })
+
+  /**
+   * Relink: point a project's missing media at files that exist.
+   *
+   * One file for one asset, or a folder for all of them — the folder case is
+   * what matters, because a project arrives with a hundred clips missing and
+   * relinking them one at a time is not a feature anyone would use.
+   */
+  ipcMain.handle('project:relink', async (_e, payload: unknown) => {
+    const { assets, assetId } = (payload ?? {}) as {
+      assets?: { id: string; path: string; size: number }[]
+      assetId?: string
+    }
+    if (!Array.isArray(assets) || assets.length === 0) return {}
+    const window = getWindow()
+    if (!window) return {}
+
+    if (assetId) {
+      const asset = assets.find((a) => a.id === assetId)
+      const result = await dialog.showOpenDialog(window, {
+        title: `Find ${asset ? basename(asset.path) : 'this file'}`,
+        properties: ['openFile'],
+        filters: [{ name: 'Media', extensions: [...ALL_EXTENSIONS] }]
+      })
+      if (result.canceled || result.filePaths.length === 0) return {}
+      return { [assetId]: result.filePaths[0] }
+    }
+
+    const result = await dialog.showOpenDialog(window, {
+      title: 'Find the folder holding this project\u2019s media',
+      properties: ['openDirectory']
+    })
+    if (result.canceled || result.filePaths.length === 0) return {}
+    const folder = result.filePaths[0]
+
+    /*
+     * One level of subfolders as well as the folder itself.
+     *
+     * Footage is usually in `clips/` and `audio/` beside the project rather
+     * than loose, and asking the user to relink twice for that is asking them
+     * to know how the app searches. Not recursive beyond that: a pointed-at
+     * home directory would take minutes and find the wrong files.
+     */
+    const entries = await readdir(folder, { withFileTypes: true }).catch(() => [])
+    const files: { path: string; size: number }[] = []
+    const scan = async (dir: string): Promise<void> => {
+      const found = await readdir(dir, { withFileTypes: true }).catch(() => [])
+      for (const entry of found) {
+        if (!entry.isFile()) continue
+        const full = join(dir, entry.name)
+        const size = await stat(full).then((st) => st.size, () => -1)
+        if (size >= 0) files.push({ path: full, size })
+      }
+    }
+    await scan(folder)
+    for (const entry of entries) {
+      if (entry.isDirectory()) await scan(join(folder, entry.name))
+    }
+
+    return matchByName(assets, files)
   })
 
   /* ---------------------------------------------------------------- shell */

@@ -836,7 +836,9 @@ export function Timeline(): ReactNode {
                         key={clip.id}
                         className={`group/clip absolute top-1.5 bottom-1.5 overflow-hidden rounded-md border text-[11px] transition-colors ${
                           selected ? kind.selected : kind.idle
-                        } ${hiddenKinds.includes(kind.kind) ? 'opacity-15' : ''}`}
+                        } ${hiddenKinds.includes(kind.kind) ? 'opacity-15' : ''} ${
+                          asset?.offline ? 'border-red-500/70' : ''
+                        }`}
                         style={{ left: clip.start * zoom, width: Math.max(6, clip.duration * zoom) }}
                         onContextMenu={(e) => {
                           e.preventDefault()
@@ -861,6 +863,21 @@ export function Timeline(): ReactNode {
                           behind the volume line — it is what they are both
                           about, not something to read over.
                         */}
+                        {/*
+                          Missing media, striped. The clip is still here and
+                          still editable — what is gone is the file — so it is
+                          marked rather than hidden or removed.
+                        */}
+                        {asset?.offline && (
+                          <span
+                            className="pointer-events-none absolute inset-0 opacity-40"
+                            style={{
+                              backgroundImage:
+                                'repeating-linear-gradient(45deg, rgb(239 68 68 / 0.55) 0 4px, transparent 4px 9px)'
+                            }}
+                          />
+                        )}
+
                         {asset?.hasAudio && (
                           <ClipWaveform
                             clip={clip}

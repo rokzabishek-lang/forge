@@ -39,6 +39,7 @@ import {
   pathForPreset,
   type ExportPreset
 } from '@shared/render/presets'
+import { offlineAssets } from '@shared/project/relink'
 import { useEffect, useMemo, useMemo as useMemoLocal, useState as useLocalState } from 'react'
 
 function Field({ label, value }: { label: string; value: string }): ReactNode {
@@ -192,6 +193,24 @@ export function Inspector(): ReactNode {
   const onExport = useCallback(async (preset?: ExportPreset) => {
     if (project.clips.length === 0) {
       notify('Add something to the timeline first', 'info')
+      return
+    }
+    /*
+     * Refuse before queueing, and NAME what is missing.
+     *
+     * An export with offline media does not fail cleanly — ffmpeg dies partway
+     * with "No such file or directory" against a path, which reads as the
+     * export being broken rather than as a file having moved. Only assets a
+     * clip actually uses count: a stale pool entry nothing references does not
+     * affect the render.
+     */
+    const missing = offlineAssets(project)
+    if (missing.length > 0) {
+      notify(
+        `Cannot export — ${missing.length} file${missing.length === 1 ? ' is' : 's are'} missing: ` +
+          `${missing.slice(0, 3).map((a) => a.name).join(', ')}` +
+          `${missing.length > 3 ? '…' : ''}. Use Relink in the media pool.`
+      )
       return
     }
     setExporting(true)

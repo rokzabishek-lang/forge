@@ -49,6 +49,28 @@ export interface CaptionSettings {
 export interface MediaAsset {
   id: string
   path: string
+  /**
+   * The same file, expressed relative to the PROJECT's folder.
+   *
+   * Set when the asset sits under the folder the project was saved into, which
+   * is the case worth handling: footage that travels with the project. On open,
+   * an absolute path that no longer resolves is retried through this, so
+   * moving the whole folder — or opening it on the other machine — simply
+   * works. Absent when the asset lives elsewhere, where a relative path would
+   * be `../../..` segments that stop meaning anything the moment either end
+   * moves.
+   */
+  relativeTo?: string
+  /**
+   * The file is not where the project says it is. RUNTIME ONLY.
+   *
+   * Never written to a project file: it describes this machine at this moment,
+   * and a saved `offline: true` would mark an asset missing on a machine where
+   * it is present. Every surface reads it — a badge in the pool, a card in the
+   * preview instead of black, a striped clip on the timeline — so a missing
+   * file looks like a missing file rather than like the app being broken.
+   */
+  offline?: boolean
   name: string
   kind: MediaKind
   /** Source length in project frames. Stills get a nominal length. */

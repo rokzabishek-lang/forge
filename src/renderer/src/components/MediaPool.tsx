@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState, type DragEvent, type ReactNode } from 'react'
-import { Captions, Film, Image as ImageIcon, Loader2, Music, Plus, X } from 'lucide-react'
+import { Captions, FileWarning, Film, Image as ImageIcon, Link2, Loader2, Music, Plus, X } from 'lucide-react'
 import type { MediaAsset } from '@shared/timeline'
 import { formatDuration, formatBytes } from '@shared/time'
 import { framesToSeconds } from '@shared/timeline'
@@ -37,6 +37,21 @@ function poolPayload(asset: MediaAsset): DragPayload {
  * icon and leans on its name.
  */
 function Thumbnail({ asset }: { asset: MediaAsset }): ReactNode {
+  /*
+   * A file that is not there says so, rather than showing a broken thumbnail.
+   *
+   * An `<img>` pointing at a missing file renders as a grey box with a torn
+   * icon in it, which reads as the app failing to load a picture — not as the
+   * picture having moved.
+   */
+  if (asset.offline) {
+    return (
+      <div className="flex size-full flex-col items-center justify-center gap-1 bg-red-950/40">
+        <FileWarning size={18} className="text-red-400" />
+        <span className="text-[9px] font-medium uppercase tracking-wide text-red-400">Offline</span>
+      </div>
+    )
+  }
   if (!asset.path || asset.kind === 'audio') {
     const Icon = ICON[asset.kind]
     return (
@@ -63,11 +78,13 @@ function Thumbnail({ asset }: { asset: MediaAsset }): ReactNode {
 export function MediaPool(): ReactNode {
   const project = useEditor((s) => s.project)
   const importAssets = useEditor((s) => s.importAssets)
+  const relinkMedia = useEditor((s) => s.relinkMedia)
   const addAssetToTimeline = useEditor((s) => s.addAssetToTimeline)
   const transcribeAsset = useEditor((s) => s.transcribeAsset)
   const cancelTranscribe = useEditor((s) => s.cancelTranscribe)
   const transcribing = useEditor((s) => s.transcribing)
   const sidecarReady = useEditor((s) => s.sidecarReady)
+  const offline = project.assets.filter((a) => a.offline)
   const notify = useEditor((s) => s.notify)
   const [over, setOver] = useState(false)
   const depth = useRef(0)
@@ -133,6 +150,27 @@ export function MediaPool(): ReactNode {
           <Plus size={12} /> Import
         </button>
       </div>
+
+      {/*
+        One bar for everything that is missing, with one button that fixes all
+        of it. A project arrives from another machine with a hundred clips
+        offline, and relinking them one at a time is not a feature anyone would
+        use — so the folder case is the one the header offers.
+      */}
+      {offline.length > 0 && (
+        <div className="flex items-center gap-2 border-b border-red-900/50 bg-red-950/30 px-3 py-1.5">
+          <FileWarning size={13} className="shrink-0 text-red-400" />
+          <span className="min-w-0 flex-1 truncate text-[11px] text-red-200">
+            {offline.length} file{offline.length === 1 ? '' : 's'} missing
+          </span>
+          <button
+            onClick={() => void relinkMedia()}
+            className="flex shrink-0 items-center gap-1 rounded bg-red-500/20 px-1.5 py-0.5 text-[11px] text-red-200 hover:bg-red-500/30"
+          >
+            <Link2 size={11} /> Relink…
+          </button>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto">
         {project.assets.length === 0 ? (

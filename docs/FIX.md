@@ -388,7 +388,7 @@ shipped: the App reports its menu state during the first render, and neither
 fallback bridge had that method — so the whole window rendered into the error
 boundary. Both bridges now answer the startup calls.
 
-### A8. Missing media is visible and relinkable; projects travel
+### A8. Missing media is visible and relinkable; projects travel — **DONE**
 
 **Where.** `src/shared/project.ts:126-133` (asset-id check only, no
 filesystem), `src/main/ipc.ts:1044-1070` (`project:open` checks only parallax
@@ -403,6 +403,27 @@ layers), `Preview.tsx:1174` (skips an unready layer silently).
 - **Relink…** on a tile or for the whole project: pick a file or a folder;
   match by basename, then by basename + size.
 - Export refuses before queueing, naming the offline assets.
+
+**What was actually built.** All four, with the decisions in
+`src/shared/project/relink.ts` and only the filesystem work in main.
+
+`relativeTo` is written on save for assets under the project's folder, and not
+for anything outside it — `../../..` segments stop meaning anything the moment
+either end moves, so those rely on relinking instead. `offline` is runtime-only
+and stripped on the way out: a saved `offline: true` would mark an asset missing
+on a machine where it is sitting right there.
+
+Relink matches by basename, then by basename and size — and **leaves an
+ambiguous asset alone rather than guessing**. A wrongly relinked clip is worse
+than an offline one: it renders, it looks plausible, and nothing says it is the
+wrong take. `IMG_0001.MOV` is the most common filename in the world.
+
+Twelve mutations, all killed. Two survived the first run and both were the
+code's fault rather than the tests': a `?? asset.relativeTo` fallback that read
+as a safeguard and was dead code (the spread above it had already done the job),
+and a zero-size guard my fixture could not reach — it takes exactly ONE
+zero-byte file among several to show that a drawn asset would otherwise relink
+itself to a truncated file and clear its own offline mark.
 
 ### A9. The first hour
 

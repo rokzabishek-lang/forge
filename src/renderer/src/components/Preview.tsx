@@ -1423,6 +1423,40 @@ export function Preview(): ReactNode {
           continue
         }
 
+        /*
+         * Media that is not there says so, in the frame.
+         *
+         * A missing file leaves `ready()` false forever, so the layer was
+         * skipped and the preview showed black — indistinguishable from a clip
+         * that is genuinely black, and from the app failing to draw at all.
+         */
+        if (layer.asset.offline) {
+          ctx.save()
+          ctx.globalAlpha = 1
+          ctx.fillStyle = 'rgba(69,10,10,0.92)'
+          ctx.fillRect(destination[0], destination[1], destination[2], destination[3])
+          ctx.strokeStyle = 'rgba(248,113,113,0.9)'
+          ctx.lineWidth = 2
+          ctx.strokeRect(
+            destination[0] + 1,
+            destination[1] + 1,
+            destination[2] - 2,
+            destination[3] - 2
+          )
+          ctx.fillStyle = 'rgb(252,165,165)'
+          ctx.textAlign = 'center'
+          ctx.textBaseline = 'middle'
+          const cx = destination[0] + destination[2] / 2
+          const cy = destination[1] + destination[3] / 2
+          ctx.font = '600 13px ui-sans-serif, system-ui, sans-serif'
+          ctx.fillText('Media offline', cx, cy - 9)
+          ctx.font = '12px ui-sans-serif, system-ui, sans-serif'
+          ctx.fillStyle = 'rgba(252,165,165,0.8)'
+          ctx.fillText(layer.asset.name, cx, cy + 9)
+          ctx.restore()
+          continue
+        }
+
         if (!ready(layer)) continue
 
         /*

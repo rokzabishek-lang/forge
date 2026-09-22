@@ -91,6 +91,19 @@ const api = {
   openProject: (path?: string): Promise<OpenedProject | null> =>
     ipcRenderer.invoke('project:open', path),
 
+  /**
+   * Point missing media at files that exist.
+   *
+   * With `assetId`, asks for one file; without it, asks for a folder and
+   * matches everything in it by name — which is the case that matters, because
+   * a project arrives with a hundred clips missing.
+   */
+  relinkAssets: (
+    assets: { id: string; path: string; size: number }[],
+    assetId?: string
+  ): Promise<Record<string, string>> =>
+    ipcRenderer.invoke('project:relink', { assets, assetId }),
+
   /* --------------------------------------------------------- settings */
 
   /** Everything that is the person's rather than the project's. */

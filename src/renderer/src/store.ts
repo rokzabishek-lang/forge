@@ -21,6 +21,7 @@ import type { Mask, MaskShape } from '@shared/render/mask'
 import { clipSpeed, maxDurationAtSpeed, withClipSpeed } from '@shared/render/speed'
 import type { VoiceId } from '@shared/render/voice'
 import type { ClipKind } from '@shared/edit/clipKind'
+import { applyRelink } from '@shared/project/relink'
 import {
   BUILT_IN_PRESETS,
   isBuiltIn,
@@ -765,6 +766,14 @@ interface EditorState {
    * three are always present and cannot be deleted, so the picker is never
    * empty and never needs an explanation of what a preset is.
    */
+  /**
+   * Find media the project has lost.
+   *
+   * With an id, asks for that one file; without, asks for a folder and matches
+   * everything it can. One `update()` either way, so a hundred relinked clips
+   * are one undo entry.
+   */
+  relinkMedia: (assetId?: string) => Promise<void>
   exportPresets: ExportPreset[]
   loadPresets: () => Promise<void>
   savePreset: (preset: ExportPreset) => Promise<void>
@@ -3815,6 +3824,30 @@ export const useEditor = create<EditorState>((set, get) => ({
   setLoop: (loop) => set({ loop }),
   setScrubAudio: (scrubAudio) => set({ scrubAudio }),
   requestExport: () => set((s) => ({ exportRequests: s.exportRequests + 1 })),
+
+  relinkMedia: async (assetId) => {
+    const { project, notify } = get()
+    const missing = project.assets.filter((a) => a.offline)
+    if (missing.length === 0) {
+      notify('Nothing is missing', 'info')
+      return
+    }
+    try {
+      const found = await window.forge.relinkAssets(
+        missing.map((a) => ({ id: a.id, path: a.path, size: a.size })),
+        assetId
+      )
+      const count = Object.keys(found).length
+      if (count === 0) {
+        notify('Nothing in there matched the missing files', 'info')
+        return
+      }
+      get().update((p) => applyRelink(p, found))
+      notify(`Relinked ${count} file${count === 1 ? '' : 's'}`, 'info')
+    } catch (err) {
+      notify(err instanceof Error ? err.message : String(err))
+    }
+  },
 
   loadPresets: async () => {
     try {
