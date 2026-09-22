@@ -33,6 +33,7 @@ import {
 } from '@shared/render/strips'
 import { Music } from 'lucide-react'
 import { useEditor } from '../store'
+import { Director } from './Director'
 import { MusicRange } from './MusicRange'
 
 /**
@@ -185,6 +186,9 @@ export function Automation(): ReactNode {
       <div className="border-b border-ink-800 px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-ink-400">
         Automation
       </div>
+
+      {/* First, because ads and product demos are what the product is for. */}
+      <Director />
 
       <section className="space-y-2 border-b border-ink-800 p-3">
         <div className="flex items-center justify-between">

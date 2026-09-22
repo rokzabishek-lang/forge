@@ -49,7 +49,7 @@ import {
   planReel,
   reelClips
 } from '@shared/automation/reel'
-import { pickTransition } from '@shared/automation/cutPlan'
+import { pickTransition, type MusicAnalysis } from '@shared/automation/cutPlan'
 import { accentsFrom } from '@shared/automation/lyrics'
 import { sandwich, unsandwich } from '@shared/automation/sandwich'
 import {
@@ -124,6 +124,21 @@ import {
   type SplitLayout
 } from '@shared/render/layout'
 import type { DecisionRecord } from '@shared/project'
+import { applySpine, clearDirector, decisionFor, occupiedBy } from '@shared/director/apply'
+import { BASELINE_MODEL, baselineSpine } from '@shared/director/baseline'
+import type { Problem } from '@shared/director/conforms'
+import { buildCutMenu, buildSlots, familyMenu, type Menu } from '@shared/director/menu'
+import { maxTokensFor, spinePrompt } from '@shared/director/prompt'
+import {
+  parseModelJson,
+  type LlmProviderChoice,
+  type LlmStatus,
+  type OllamaConfig,
+  type OpenAiConfig,
+  type PublicDirectorConfig
+} from '@shared/director/provider'
+import { spineSchema, type Brief, type SpinePlan, type Tone } from '@shared/director/schema'
+import { validateSpine, type SegmentLayout, type SpineVerdict } from '@shared/director/validate'
 import type { Transcript } from '@shared/transcript'
 
 /*
@@ -256,6 +271,26 @@ export interface Notice {
   tone: 'error' | 'info'
 }
 
+/**
+ * The brief the Director panel edits.
+ *
+ * `seconds: null` means "the default" — thirty seconds or the music,
+ * whichever is shorter — so the field can be left blank. Only `product` is
+ * required; the rest is filled in from it when it is empty.
+ */
+export interface DirectBrief {
+  product: string
+  benefit: string
+  audience: string
+  tone: Tone
+  cta: string
+  seconds: number | null
+  language: string
+}
+
+/** A validator's note, as one line for the panel. */
+const describeProblem = (p: Problem): string => `${p.path.replace(/^\$\.?/, '')}: ${p.message}`
+
 interface EditorState {
   project: Project
   projectPath: string | null
@@ -374,6 +409,44 @@ interface EditorState {
   cancelReel: () => void
   buildReel: () => Promise<void>
   clearReel: () => void
+
+  /**
+   * The director: an ad from the brief, the pictures and the music.
+   *
+   * The model picks from a menu and writes the copy; the app validates the
+   * plan whole and applies it as ONE update, so it is one undo. When the
+   * model's plan cannot be used, the standard cut lands instead and the panel
+   * says so. See docs/LLM.md and shared/director/.
+   */
+  directBrief: DirectBrief
+  setDirectBrief: (patch: Partial<DirectBrief>) => void
+  /** A line about each picture, by asset id — what the model reads instead of a filename. */
+  slotNotes: Record<string, string>
+  setSlotNote: (assetId: string, note: string) => void
+  directing: boolean
+  /** What the run is doing right now, e.g. "asking the model". */
+  directStage: string | null
+  direct: () => Promise<void>
+  clearDirectorOutput: () => void
+  /** What the last run did: who answered, its reasoning, every note. */
+  lastDirection: { model: string; reasoning: string; problems: string[]; baseline: boolean } | null
+  directorStatus: LlmStatus[] | null
+  directorConfig: PublicDirectorConfig | null
+  refreshDirector: () => Promise<void>
+  setDirectorProvider: (patch: {
+    provider?: LlmProviderChoice
+    ollama?: Partial<OllamaConfig>
+    openai?: Partial<OpenAiConfig>
+  }) => Promise<void>
+  /**
+   * Fill in an asset's fields WITHOUT a history entry.
+   *
+   * A baked PNG landing is not a gesture of the user's. Recorded as one, a
+   * plan that placed five cards took six presses of Undo, five of which
+   * visibly did nothing. No-op when the asset has gone — the user may already
+   * have undone the clip it belonged to.
+   */
+  fillAssetPath: (assetId: string, patch: Partial<MediaAsset>) => void
 
   /**
    * One photograph, one song, one caption.
@@ -1244,6 +1317,266 @@ export const useEditor = create<EditorState>((set, get) => ({
 
   clearReel: () => get().update((p) => clearGenerated(p, REEL_RULE)),
 
+  /* ------------------------------------------------------------ director */
+
+  directBrief: {
+    product: '',
+    benefit: '',
+    audience: '',
+    tone: 'energetic',
+    cta: '',
+    seconds: null,
+    language: 'English'
+  },
+  setDirectBrief: (patch) => set((s) => ({ directBrief: { ...s.directBrief, ...patch } })),
+  slotNotes: {},
+  setSlotNote: (assetId, note) => set((s) => ({ slotNotes: { ...s.slotNotes, [assetId]: note } })),
+  directing: false,
+  directStage: null,
+  lastDirection: null,
+  directorStatus: null,
+  directorConfig: null,
+
+  refreshDirector: async () => {
+    try {
+      const [directorStatus, directorConfig] = await Promise.all([
+        window.forge.directorStatus(),
+        window.forge.directorSettings()
+      ])
+      set({ directorStatus, directorConfig })
+    } catch (err) {
+      // The panel keeps saying it is looking; there is nothing to show yet.
+      console.warn('director status', err)
+    }
+  },
+
+  setDirectorProvider: async (patch) => {
+    try {
+      const directorConfig = await window.forge.setDirectorSettings(patch)
+      set({ directorConfig })
+      await get().refreshDirector()
+    } catch (err) {
+      get().notify(err instanceof Error ? err.message : String(err))
+    }
+  },
+
+  fillAssetPath: (assetId, patch) =>
+    set((s) => {
+      if (!s.project.assets.some((a) => a.id === assetId)) return s
+      return {
+        project: {
+          ...s.project,
+          assets: s.project.assets.map((a) => (a.id === assetId ? { ...a, ...patch } : a))
+        },
+        dirty: true
+      }
+    }),
+
+  clearDirectorOutput: () => {
+    get().update((p) => clearDirector(p))
+    set({ lastDirection: null })
+  },
+
+  direct: async () => {
+    const { notify, directBrief, slotNotes } = get()
+    const product = directBrief.product.trim()
+    if (!product) {
+      notify('Name the product first — everything else can stay blank', 'info')
+      return
+    }
+
+    const startProject = get().project
+    const fps = startProject.settings.fps
+    const videoTrack = startProject.tracks.find((t) => t.kind === 'video' && !t.locked)
+    if (!videoTrack) {
+      notify('There is no video track to build onto', 'info')
+      return
+    }
+
+    /*
+     * Work from a copy with the previous run cleared, so the music window is
+     * the clip the user placed and not the one the last run trimmed — without
+     * this the ad could only ever get shorter.
+     */
+    const cleared = clearDirector(startProject)
+    const slots = buildSlots(cleared, slotNotes)
+    if (slots.length === 0) {
+      notify('Import a picture or a clip first', 'info')
+      return
+    }
+
+    const musicClip = cleared.clips.find((clip) => {
+      const track = cleared.tracks.find((t) => t.id === clip.trackId)
+      const asset = cleared.assets.find((a) => a.id === clip.assetId)
+      return track?.kind === 'audio' && asset?.hasAudio
+    })
+    const musicAsset = musicClip ? cleared.assets.find((a) => a.id === musicClip.assetId) ?? null : null
+    const windowMs = musicClip ? framesToSeconds(musicClip.duration, fps) * 1000 : null
+    const seconds = directBrief.seconds ?? Math.min(30, windowMs !== null ? windowMs / 1000 : 30)
+    const offsetFrames = musicClip?.start ?? 0
+
+    // The ad is footage, so it wants the bottom layer — and the user's own
+    // clips must not be built over.
+    const blocking = occupiedBy(cleared, videoTrack.id, offsetFrames, offsetFrames + secondsToFrames(seconds, fps))
+    if (blocking.length > 0) {
+      notify(
+        `${videoTrack.name} has ${blocking.length} clip${blocking.length === 1 ? '' : 's'} where the ad would go — move ${
+          blocking.length === 1 ? 'it' : 'them'
+        }, or lock the track and add another`,
+        'info'
+      )
+      return
+    }
+
+    set({ directing: true, directStage: musicClip ? 'reading the music' : 'laying out the beats' })
+    try {
+      let analysis: MusicAnalysis | null = null
+      if (musicClip && musicAsset) {
+        // Only the part of the song the clip actually keeps, as the reel does.
+        const startMs = framesToSeconds(musicClip.inPoint, fps) * 1000
+        const endMs = startMs + framesToSeconds(musicClip.duration, fps) * 1000
+        analysis = await window.forge.analyseBeats(musicAsset.path, { startMs, endMs })
+      }
+      const catalogue = useCatalog.getState().transitions
+      const menu: Menu = {
+        slots,
+        cuts: buildCutMenu(analysis, {
+          fps,
+          seconds,
+          offsetFrames,
+          ...(windowMs !== null ? { windowMs } : {})
+        }),
+        families: familyMenu(catalogue),
+        seconds,
+        fps
+      }
+      const brief: Brief = {
+        product,
+        benefit: directBrief.benefit.trim() || product,
+        audience: directBrief.audience.trim(),
+        tone: directBrief.tone,
+        cta: directBrief.cta.trim() || 'Shop now',
+        seconds,
+        language: directBrief.language.trim() || 'English'
+      }
+
+      /* Ask — once with thinking off, and once more with it on if prose came back. */
+      set({ directStage: 'asking the model' })
+      const { system, user } = spinePrompt(brief, menu)
+      const schema = spineSchema(menu)
+      const maxTokens = maxTokensFor(menu)
+      const notes: string[] = []
+      let verdict: SpineVerdict
+      let model = BASELINE_MODEL
+      let runtime = 'baseline'
+      try {
+        let result = await window.forge.directorComplete({ system, user, schema, maxTokens, think: false })
+        let parsed = parseModelJson(result.text)
+        if ('error' in parsed && !result.truncated) {
+          /*
+           * Ollama has an open bug where `think: false` makes it drop the
+           * schema for Gemma 4 and Qwen 3.5 (#15260, #14645), and the answer
+           * comes back as prose. Thinking on costs seconds; the alternative is
+           * the standard cut every time, looking like a model failure.
+           */
+          set({ directStage: 'asking again, thinking on' })
+          notes.push(`the first answer was not JSON (${parsed.error}) — asked again with thinking on`)
+          result = await window.forge.directorComplete({
+            system,
+            user,
+            schema,
+            maxTokens: maxTokens + 800,
+            think: true
+          })
+          parsed = parseModelJson(result.text)
+        }
+        model = result.model
+        runtime = result.provider
+        verdict =
+          'error' in parsed
+            ? { rejected: parsed.error, problems: [] }
+            : validateSpine(parsed.value, menu, { truncated: result.truncated })
+      } catch (err) {
+        verdict = { rejected: err instanceof Error ? err.message : String(err), problems: [] }
+      }
+
+      /* A plan that cannot be used is replaced by the standard cut — never by nothing. */
+      let baseline = false
+      let plan: SpinePlan
+      let layout: SegmentLayout[]
+      if ('rejected' in verdict) {
+        baseline = true
+        notes.unshift(`The model's plan could not be used — ${verdict.rejected}. Built the standard cut instead`)
+        notes.push(...verdict.problems.map(describeProblem))
+        const fallback = validateSpine(baselineSpine(brief, menu), menu)
+        if ('rejected' in fallback) {
+          throw new Error(`Even the standard cut did not fit this music: ${fallback.rejected}`)
+        }
+        plan = fallback.plan
+        layout = fallback.layout
+        notes.push(...fallback.problems.map(describeProblem))
+        model = BASELINE_MODEL
+        runtime = 'baseline'
+      } else {
+        plan = verdict.plan
+        layout = verdict.layout
+        notes.push(...verdict.problems.map(describeProblem))
+      }
+
+      /* Apply, as ONE update: the whole plan is one undo. */
+      set({ directStage: 'placing the shots' })
+      const current = get().project
+      const parallaxAssets = new Set(
+        Object.entries(current.parallax ?? {})
+          .filter(([, bake]) => bake.separated)
+          .map(([id]) => id)
+      )
+      const applied = applySpine(current, plan, layout, menu, {
+        fps,
+        videoTrackId: videoTrack.id,
+        brief,
+        model,
+        catalogue,
+        ...(musicClip ? { musicClipId: musicClip.id } : {}),
+        parallaxAssets
+      })
+      notes.push(...applied.problems.map(describeProblem))
+      get().update(() => applied.project)
+      set((s) => ({
+        decisions: [...s.decisions, decisionFor(plan, { id: model, runtime })],
+        lastDirection: { model, reasoning: plan.reasoning, problems: notes, baseline }
+      }))
+
+      /*
+       * The cards' PNGs, in the background and history-less. The preview draws
+       * the type live and the export rebakes every generated card, so a missed
+       * write cannot produce a wrong frame — and an undo step per landing PNG
+       * would mean pressing Undo once per card before the plan itself went.
+       */
+      const { width, height } = applied.project.settings
+      for (const clipId of applied.cardClipIds) {
+        const card = applied.project.clips.find((c) => c.id === clipId)
+        if (!card?.text) continue
+        bakeText(card.text, clipId, width, height)
+          .then((path) => get().fillAssetPath(card.assetId, { path }))
+          .catch((err) => console.warn('A headline card did not bake', err))
+      }
+
+      const count = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`
+      notify(
+        `${baseline ? 'Standard cut' : `Directed by ${model}`}: ${count(applied.clipIds.length, 'shot')}, ${count(
+          applied.cardClipIds.length,
+          'card'
+        )}${notes.length > 0 ? ` — ${count(notes.length, 'note')}` : ''}`,
+        'info'
+      )
+    } catch (err) {
+      notify(err instanceof Error ? err.message : String(err))
+    } finally {
+      set({ directing: false, directStage: null })
+    }
+  },
+
   buildReel: async () => {
     const { project, notify, reelMotion, reelTransitions, reelParallax, reelLyrics } = get()
 
@@ -1780,12 +2113,9 @@ export const useEditor = create<EditorState>((set, get) => ({
     get().revealClip(clipId)
 
     bakeText(spec, clipId, width, height)
-      .then((path) => {
-        get().update((p) => ({
-          ...p,
-          assets: p.assets.map((a) => (a.id === assetId ? { ...a, path } : a))
-        }))
-      })
+      // History-less: the PNG landing is not a gesture, and an undo step for
+      // it is a press of Undo that visibly does nothing.
+      .then((path) => get().fillAssetPath(assetId, { path }))
       .catch((err) => notify(err instanceof Error ? err.message : String(err)))
 
     return clipId
@@ -1885,21 +2215,17 @@ export const useEditor = create<EditorState>((set, get) => ({
     try {
       const baked = await bakePaperSequence(clip.paper, clipId, width, height, Math.round(fps * 20))
       if (!baked) return
-      get().update((p) => ({
-        ...p,
-        assets: p.assets.map((a) =>
-          a.id === clip.assetId
-            // The new SIZE as well as the new frames, exactly as
-            // `rebakeGenerated` does. Leaving it out is what made a clipping
-            // right when it was made and small ever after an aspect change —
-            // see the note there, and the test that now checks both paths.
-            ? { ...a, path: baked.pattern.replace('%05d', '00000'),
-                width,
-                height,
-                frames: { pattern: baked.pattern, count: baked.frames } }
-            : a
-        )
-      }))
+      // The new SIZE as well as the new frames, exactly as `rebakeGenerated`
+      // does. Leaving it out is what made a clipping right when it was made
+      // and small ever after an aspect change — see the note there, and the
+      // test that now checks both paths. History-less: the frames landing is
+      // not a gesture of the user's, and an undo step for it undoes nothing.
+      get().fillAssetPath(clip.assetId, {
+        path: baked.pattern.replace('%05d', '00000'),
+        width,
+        height,
+        frames: { pattern: baked.pattern, count: baked.frames }
+      })
     } catch (err) {
       notify(err instanceof Error ? err.message : String(err))
     }
