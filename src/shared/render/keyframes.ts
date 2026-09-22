@@ -22,7 +22,7 @@
  * Two mechanisms for one property would be two things to disagree.
  */
 
-import { MAX_GAIN } from './audibility'
+import { MAX_GAIN, faderPosition, formatDb, gainAtPosition } from './audibility'
 
 /**
  * `volume` is the only one of these that is not a picture.
@@ -69,7 +69,43 @@ export function isAudioProperty(property: KeyedProperty): boolean {
   return property === 'volume'
 }
 
-/** Sorted, de-duplicated, clamped into the clip. */
+/* ------------------------------------------------- the control's own scale */
+
+/**
+ * Where a value sits on its property's control, 0 at the bottom and 1 at the top.
+ *
+ * Linear over `[min, max]` for the picture properties. Volume is on the FADER's
+ * curve — linear in dB, `faderPosition` — because that is how the Inspector's
+ * level slider and the on-clip envelope already draw it. The curve editor and
+ * the keyframe row drew it linearly in gain, so unity sat half-way up there
+ * and three-quarters of the way up on the clip, and a point dragged to the same
+ * height in the two places was two different levels. Found by the B1 review.
+ *
+ * Every control that draws a keyed value reads its height from here and its
+ * value back from `valueAtAxis`, so none of them can pick its own scale again.
+ */
+export function axisPosition(property: KeyedProperty, value: number): number {
+  if (property === 'volume') return faderPosition(value)
+  const { min, max } = PROPERTY_INFO[property]
+  if (!Number.isFinite(value)) return 0
+  return Math.max(0, Math.min(1, (value - min) / (max - min || 1)))
+}
+
+/** The value at a height on its control — the inverse of `axisPosition`. */
+export function valueAtAxis(property: KeyedProperty, position: number): number {
+  if (property === 'volume') return gainAtPosition(position)
+  const { min, max } = PROPERTY_INFO[property]
+  const p = Number.isFinite(position) ? Math.max(0, Math.min(1, position)) : 0
+  return min + p * (max - min)
+}
+
+/** A keyed value the way its control reads — volume in dB, as the fader does. */
+export function formatKeyed(property: KeyedProperty, value: number): string {
+  if (property === 'volume') return formatDb(value)
+  if (property === 'rotation') return `${Math.round(value)}${PROPERTY_INFO.rotation.suffix}`
+  return `${value.toFixed(2)}${PROPERTY_INFO[property].suffix}`
+}
+
 /**
  * Sorted, whole-frame, one key per frame — and NOT clamped to the clip.
  *

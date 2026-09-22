@@ -3,13 +3,18 @@ import type { Clip } from '@shared/timeline'
 import {
   KEYED_PROPERTIES,
   PROPERTY_INFO,
+  axisPosition,
+  formatKeyed,
   normaliseKeys,
   valueAt,
+  valueAtAxis,
   isAudioProperty,
-  type Ease,
-  type KeyedProperty
+  type Ease
 } from '@shared/render/keyframes'
 import { useEditor } from '../store'
+
+/** The Inspector's level slider's resolution — `faderPosition` × 1000. */
+const FADER_STEPS = 1000
 
 /**
  * Keyframes, per property.
@@ -56,6 +61,12 @@ export function Keyframes({ clip }: { clip: Clip }): ReactNode {
         const keys = normaliseKeys(clip.keyframes?.[property] ?? [], clip.duration)
         const onKey = keys.find((k) => k.frame === into) ?? null
         const current = valueAt(keys, into, clip.duration, info.neutral)
+        /*
+         * Volume slides on the fader's dB curve, in the same thousand steps as
+         * the Inspector's level slider, so the two sit at the same place for the
+         * same level. The rest slide over their own range in their own steps.
+         */
+        const onFader = isAudioProperty(property)
 
         return (
           <div key={property} className="space-y-1">
@@ -83,22 +94,29 @@ export function Keyframes({ clip }: { clip: Clip }): ReactNode {
               <span className="w-14 shrink-0 text-[10.5px] text-ink-400">{info.label}</span>
               <input
                 type="range"
-                min={info.min}
-                max={info.max}
-                step={info.step}
-                value={current}
+                min={onFader ? 0 : info.min}
+                max={onFader ? FADER_STEPS : info.max}
+                step={onFader ? 1 : info.step}
+                value={onFader ? Math.round(axisPosition(property, current) * FADER_STEPS) : current}
                 disabled={!inside}
                 /*
                  * Dragging writes a key at the playhead rather than a static
                  * value. Once a property is animated there is no such thing as
                  * "the value" — only the value here.
                  */
-                onChange={(e) => setKeyframe(clip.id, property, into, Number(e.target.value))}
+                onChange={(e) => {
+                  const slid = Number(e.target.value)
+                  setKeyframe(
+                    clip.id,
+                    property,
+                    into,
+                    onFader ? valueAtAxis(property, slid / FADER_STEPS) : slid
+                  )
+                }}
                 className="min-w-0 flex-1 disabled:opacity-30"
               />
-              <span className="w-12 shrink-0 text-right font-mono text-[10px] tabular-nums text-ink-500">
-                {format(current, property)}
-                {info.suffix}
+              <span className="w-14 shrink-0 text-right font-mono text-[10px] tabular-nums text-ink-500">
+                {formatKeyed(property, current)}
               </span>
             </div>
 
@@ -152,8 +170,4 @@ export function Keyframes({ clip }: { clip: Clip }): ReactNode {
       </p>
     </div>
   )
-}
-
-function format(value: number, property: KeyedProperty): string {
-  return property === 'rotation' ? String(Math.round(value)) : value.toFixed(2)
 }

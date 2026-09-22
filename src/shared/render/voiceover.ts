@@ -66,5 +66,29 @@ export function takeName(trackName: string, take: number, stamp: number): string
   return `${safe || 'Voice-over'} take ${Math.max(1, Math.round(take))} ${stamp.toString(36)}`
 }
 
+/**
+ * The name the MAIN process gives a take on disk, from whatever the renderer sent.
+ *
+ * `takeName` above is what the renderer asks for; this is what the main
+ * process accepts, because the name crosses the IPC and reaches a file path —
+ * `../../somewhere` has to become a name, not a place. So: the last path
+ * segment only, Windows' illegal set out, no leading or trailing dots and
+ * spaces, and never a reserved device name. `CON.wav` is not a file on
+ * Windows whatever its extension; it is the console.
+ *
+ * Empty after all that means the caller picks the name (`fallback`).
+ */
+export function safeTakeBase(name: unknown, fallback: string): string {
+  if (typeof name !== 'string') return fallback
+  const lastSegment = name.split(/[/\\]/).pop() ?? ''
+  const cleaned = lastSegment
+    .replace(/[<>:"|?*\u0000-\u001f]/g, '')
+    .replace(/^[. ]+|[. ]+$/g, '')
+    .slice(0, 80)
+    .replace(/[. ]+$/, '')
+  if (!cleaned) return fallback
+  return /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$/i.test(cleaned) ? `_${cleaned}` : cleaned
+}
+
 /** A three-count before recording starts: long enough to breathe, short enough not to wait. */
 export const COUNT_IN_SECONDS = 3

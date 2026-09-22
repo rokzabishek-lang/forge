@@ -149,6 +149,7 @@ const api = {
     canRedo: boolean
     hasSelection: boolean
     dirty: boolean
+    recording: boolean
   }): void => {
     ipcRenderer.send('menu:state', state)
   },

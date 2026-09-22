@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll } from 'vitest'
 import { join } from 'node:path'
 import { buildRenderPlan } from '@shared/render/plan'
 import { voiceOverArgs } from '@shared/render/voiceover'
+import { detachAudio } from '@shared/edit/recipes'
 import { emptyProject, type Clip, type MediaAsset, type Project, type Track } from '@shared/timeline'
 import {
   FFMPEG, run, outputDir, makeColour, makeClipWithTone, makeTone, meanVolumeDb, writeNote
@@ -43,6 +44,13 @@ beforeAll(async () => {
     'boost.mp4          a tone at 200% (+6 dB) against the same tone at 100%',
     'unity.mp4          the 100% reference for boost.mp4',
     'voiceover.wav      a WebM/Opus take converted the way the app converts one',
+    '',
+    'The B1 review’s fixes:',
+    'detach-muted-lane.mp4    detached with A1 muted: lands on A2, heard at the attached level',
+    'duck-attached.mp4        dialogue on V1, music on a DUCKED A1: the bed steps back',
+    'duck-wrong-lane.mp4      the old detach: dialogue on an ordinary lane, the bed does NOT duck',
+    'duck-detached.mp4        the real detach: the lane is dialogue, the bed ducks as before',
+    'envelope-over-fader.mp4  fader +3.5 dB, envelope drawn at unity: the envelope wins (= unity.mp4)',
     '',
     'Levels are volumedetect means; the numbers are in the test.'
   ])
@@ -186,5 +194,88 @@ describe('a voice-over take, converted', () => {
     expect(stderr).toMatch(/mono/)
     // And the take survived the trip rather than coming out empty.
     expect(await meanVolumeDb(wav, 0.2, 1.5)).toBeGreaterThan(-40)
+  }, 300_000)
+})
+
+/* ------------------------------------------------ the B1 review's fixes */
+
+/**
+ * The bed's level alone: the music is 440 Hz and the dialogue 900 Hz, and four
+ * low-passes at 550 Hz leave the one and take the other down by well over 30 dB.
+ */
+async function bedLevelDb(file: string, from: number, seconds: number): Promise<number> {
+  const { stderr } = await run(FFMPEG, [
+    '-hide_banner', '-nostats', '-ss', String(from), '-t', String(seconds), '-i', file,
+    '-af', 'lowpass=f=550,lowpass=f=550,lowpass=f=550,lowpass=f=550,volumedetect', '-f', 'null', '-'
+  ])
+  const found = /mean_volume:\s*(-?\d+(?:\.\d+)?) dB/.exec(stderr)
+  if (!found) throw new Error(`no mean_volume for ${file}`)
+  return Number(found[1])
+}
+
+function lift(p: Project): Project {
+  const result = detachAudio(p, 'c')
+  if (!result.ok) throw new Error(`detach refused: ${result.reason}`)
+  return result.project
+}
+
+describe('the B1 review’s fixes, rendered', () => {
+  it('a detach past a MUTED lane is still heard, at the level it had', async () => {
+    // Before the fix the sound landed on the muted A1 and the file went silent.
+    const p = project([clip({})], { a1: { muted: true } })
+    const attached = await render(p, 'detach-attached.mp4')
+    const detached = await render(lift(p), 'detach-muted-lane.mp4')
+    const a = await meanVolumeDb(attached, 0.5, 2)
+    const d = await meanVolumeDb(detached, 0.5, 2)
+    expect(d).toBeGreaterThan(-40)
+    expect(Math.abs(d - a)).toBeLessThan(1)
+  }, 300_000)
+
+  it('footage’s sound, detached, still ducks the music as it did', async () => {
+    const p = project([clip({}), clip({ id: 'music', assetId: 'bed', trackId: 'a1' })], { a1: { duck: true } })
+    const attached = await render(p, 'duck-attached.mp4')
+    // What the old detach did: the sound on an ordinary lane, no longer dialogue.
+    const wrong = await render(
+      project(
+        [
+          clip({ audioDetached: true }),
+          clip({ id: 'music', assetId: 'bed', trackId: 'a1' }),
+          clip({ id: 'lifted', trackId: 'a2' })
+        ],
+        { a1: { duck: true } }
+      ),
+      'duck-wrong-lane.mp4'
+    )
+    const detached = await render(lift(p), 'duck-detached.mp4')
+
+    const ducked = await bedLevelDb(attached, 1, 1.5)
+    const unducked = await bedLevelDb(wrong, 1, 1.5)
+    const fixed = await bedLevelDb(detached, 1, 1.5)
+    // The measurement can see a duck at all — otherwise the next line is empty.
+    expect(unducked - ducked).toBeGreaterThan(3)
+    expect(Math.abs(fixed - ducked)).toBeLessThan(1)
+  }, 300_000)
+
+  it('a drawn envelope REPLACES the fader in the file — the rule the preview now follows', async () => {
+    const quiet = await makeTone(join(dir, 'source-quiet-envelope.m4a'), 440, SECONDS, 0.1)
+    const base: Project = {
+      ...project([clip({ assetId: 'pic' })]),
+      assets: [...project([]).assets, asset('quiet', quiet, 'audio', true)]
+    }
+    const withClip = (over: Partial<Clip>): Project => ({
+      ...base,
+      clips: [...base.clips, clip({ id: 'q', assetId: 'quiet', trackId: 'a1', ...over })]
+    })
+    const unity = await render(withClip({ volume: 1 }), 'envelope-unity.mp4')
+    const overFader = await render(
+      withClip({ volume: 1.5, keyframes: { volume: [{ frame: 0, value: 1 }, { frame: 89, value: 1 }] } }),
+      'envelope-over-fader.mp4'
+    )
+    const fader = await render(withClip({ volume: 1.5 }), 'fader-alone.mp4')
+    const u = await meanVolumeDb(unity, 0.5, 2)
+    // The envelope at unity sounds like unity, whatever the fader says...
+    expect(Math.abs((await meanVolumeDb(overFader, 0.5, 2)) - u)).toBeLessThan(0.5)
+    // ...and the fader alone is +3.5 dB, so the test can tell the two apart.
+    expect((await meanVolumeDb(fader, 0.5, 2)) - u).toBeGreaterThan(3)
   }, 300_000)
 })

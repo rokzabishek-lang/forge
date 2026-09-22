@@ -11,7 +11,7 @@ import {
   type AutosaveRecord
 } from '@shared/project/recovery'
 import { candidatePaths, dirNameOf, matchByName } from '@shared/project/relink'
-import { voiceOverArgs } from '@shared/render/voiceover'
+import { safeTakeBase, voiceOverArgs } from '@shared/render/voiceover'
 import { execFile } from 'node:child_process'
 import { probeMany } from './ffmpeg/probe'
 import { getSidecar } from './sidecar/service'
@@ -425,16 +425,9 @@ export function registerIpc(getWindow: () => BrowserWindow | null): JobQueue {
     }
     const dir = join(app.getPath('userData'), 'voiceover')
     await mkdir(dir, { recursive: true })
-    /*
-     * The name comes from the renderer, so it is sanitised HERE as well as
-     * there: it reaches a file path, and `../../somewhere` must become a name,
-     * not a place. Windows' illegal set, and no leading dots.
-     */
-    const cleaned =
-      typeof name === 'string'
-        ? basename(name).replace(/[<>:"/\\|?*\u0000-\u001f]/g, '').replace(/^[. ]+|[. ]+$/g, '').slice(0, 80)
-        : ''
-    const base = cleaned || `Voice-over ${Date.now()}`
+    // The name comes from the renderer, so it is sanitised HERE as well as
+    // there: it reaches a file path. See `safeTakeBase`.
+    const base = safeTakeBase(name, `Voice-over ${Date.now()}`)
     const raw = join(dir, `${base}.webm`)
     const wav = join(dir, `${base}.wav`)
     await writeFile(raw, Buffer.from(bytes as ArrayBuffer))

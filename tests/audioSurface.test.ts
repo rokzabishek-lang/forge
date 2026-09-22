@@ -1,4 +1,7 @@
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { EMPTY_MENU_STATE, mustAskBeforeClosing } from '../src/main/menu'
 import {
   MAX_GAIN,
   SILENT_DB,
@@ -11,7 +14,8 @@ import {
   gainAtPosition,
   anySolo,
   isAudible,
-  audioRole
+  audioRole,
+  clipLevelAt
 } from '@shared/render/audibility'
 import {
   METER_SILENT,
@@ -24,9 +28,9 @@ import {
   meterFraction,
   isClipping
 } from '@shared/render/meter'
-import { PROPERTY_INFO } from '@shared/render/keyframes'
-import { detachAudio, reattachAudio, placeTake } from '@shared/edit/recipes'
-import { voiceOverArgs, takeName, recorderType, RECORDER_TYPES } from '@shared/render/voiceover'
+import { PROPERTY_INFO, axisPosition, formatKeyed, valueAt, valueAtAxis } from '@shared/render/keyframes'
+import { detachAudio, detachRefusalMessage, reattachAudio, placeTake } from '@shared/edit/recipes'
+import { voiceOverArgs, takeName, recorderType, RECORDER_TYPES, safeTakeBase } from '@shared/render/voiceover'
 import { buildRenderPlan } from '@shared/render/plan'
 import { MAX_TRACKS, emptyProject, type Clip, type MediaAsset, type Project, type Track } from '@shared/timeline'
 
@@ -261,13 +265,26 @@ const project = (clips: Clip[], assets: MediaAsset[] = [asset()]): Project => ({
 })
 const at = (p: Project, id: string): Clip => p.clips.find((c) => c.id === id)!
 
+/** A detach that must succeed — and a readable failure if it did not. */
+function lifted(p: Project, id = 'c'): { project: Project; audioClipId: string } {
+  const result = detachAudio(p, id)
+  if (!result.ok) throw new Error(`detach refused: ${result.reason}`)
+  return result
+}
+const laneOf = (r: { project: Project; audioClipId: string }): Track =>
+  r.project.tracks.find((t) => t.id === at(r.project, r.audioClipId).trackId)!
+const withTracks = (p: Project, over: Record<string, Partial<Track>>): Project => ({
+  ...p,
+  tracks: p.tracks.map((t) => ({ ...t, ...(over[t.id] ?? {}) }))
+})
+
 describe('detaching a clip’s sound', () => {
   it('lands the sound at exactly the same frame, carrying everything about it', () => {
     const envelope = [{ frame: 0, value: 1 }, { frame: 60, value: 0.2 }]
     const p = project([
       clip({ speed: 1.5, fadeIn: 5, fadeOut: 9, voice: { id: 'deep' }, keyframes: { volume: envelope } })
     ])
-    const result = detachAudio(p, 'c')!
+    const result = lifted(p)
     const sound = at(result.project, result.audioClipId)
 
     // One frame off is lip-sync drift.
@@ -280,7 +297,7 @@ describe('detaching a clip’s sound', () => {
     expect(sound.fadeOut).toBe(9)
     expect(sound.voice).toEqual({ id: 'deep' })
     expect(sound.keyframes?.volume).toEqual(envelope)
-    expect(result.project.tracks.find((t) => t.id === sound.trackId)?.kind).toBe('audio')
+    expect(laneOf(result).kind).toBe('audio')
   })
 
   it('FLAGS the original rather than zeroing its fader', () => {
@@ -291,7 +308,7 @@ describe('detaching a clip’s sound', () => {
      * which is also what lets the sound be put back exactly.
      */
     const p = project([clip({ keyframes: { volume: [{ frame: 0, value: 1 }] } })])
-    const original = at(detachAudio(p, 'c')!.project, 'c')
+    const original = at(lifted(p).project, 'c')
     expect(original.audioDetached).toBe(true)
     expect(original.volume).toBe(0.8)
   })
@@ -303,7 +320,7 @@ describe('detaching a clip’s sound', () => {
       clip({ id: 'bed2', trackId: 'a2', start: 0, duration: 600, assetId: 'v' })
     ])
     const before = busy.tracks.length
-    const result = detachAudio(busy, 'c')!
+    const result = lifted(busy)
     const sound = at(result.project, result.audioClipId)
     expect(result.project.tracks.length).toBe(before + 1)
     expect(sound.start).toBe(30)
@@ -311,20 +328,26 @@ describe('detaching a clip’s sound', () => {
   })
 
   it('uses a free lane when there is one', () => {
-    const result = detachAudio(project([clip()]), 'c')!
+    const result = lifted(project([clip()]))
     expect(at(result.project, result.audioClipId).trackId).toBe('a1')
     expect(result.project.tracks).toHaveLength(emptyProject().tracks.length)
   })
 
-  it('refuses what has no sound of its own to lift', () => {
-    expect(detachAudio(project([clip()], [asset({ hasAudio: false })]), 'c')).toBeNull()
-    expect(detachAudio(project([clip()], [asset({ kind: 'image' })]), 'c')).toBeNull()
-    expect(detachAudio(project([clip({ trackId: 'a1' })]), 'c')).toBeNull()
-    expect(detachAudio(project([clip({ audioDetached: true })]), 'c')).toBeNull()
-    expect(detachAudio(project([clip()]), 'nope')).toBeNull()
+  it('says WHY it refused, one reason per case', () => {
+    /*
+     * Every refusal used to be a bare null, and the store read every null as
+     * "that clip has no sound" — including a clip that plainly had sound and
+     * was refused for want of room. Found by the B1 review.
+     */
+    const refused = (p: Project, id = 'c'): unknown => detachAudio(p, id)
+    expect(refused(project([clip()], [asset({ hasAudio: false })]))).toEqual({ ok: false, reason: 'no-sound' })
+    expect(refused(project([clip()], [asset({ kind: 'image' })]))).toEqual({ ok: false, reason: 'no-sound' })
+    expect(refused(project([clip({ trackId: 'a1' })]))).toEqual({ ok: false, reason: 'no-sound' })
+    expect(refused(project([clip({ audioDetached: true })]))).toEqual({ ok: false, reason: 'already-detached' })
+    expect(refused(project([clip()]), 'nope')).toEqual({ ok: false, reason: 'no-clip' })
   })
 
-  it('refuses at the track limit rather than stacking onto a busy lane', () => {
+  it('refuses at the track limit — as NO ROOM, not as no sound', () => {
     let p = project([clip()])
     // Fill every audio lane for the clip's span, then fill the track limit.
     const lanes: Clip[] = []
@@ -335,11 +358,20 @@ describe('detaching a clip’s sound', () => {
       lanes.push(clip({ id: `fill-${t.id}`, trackId: t.id, start: 0, duration: 600 }))
     }
     p = { ...p, clips: [...p.clips, ...lanes] }
-    expect(detachAudio(p, 'c')).toBeNull()
+    expect(detachAudio(p, 'c')).toEqual({ ok: false, reason: 'no-room' })
+  })
+
+  it('tells each refusal apart in words, and never calls a sound-carrying clip silent', () => {
+    const reasons = ['no-clip', 'no-sound', 'already-detached', 'no-room'] as const
+    const said = reasons.map((r) => detachRefusalMessage(r))
+    expect(new Set(said).size).toBe(reasons.length)
+    expect(detachRefusalMessage('no-room')).not.toMatch(/no sound/i)
+    expect(detachRefusalMessage('no-room')).toContain(String(MAX_TRACKS))
+    expect(detachRefusalMessage('no-sound')).toMatch(/no sound/i)
   })
 
   it('reattaches by clearing the flag and leaving the lifted clip alone', () => {
-    const detached = detachAudio(project([clip()]), 'c')!
+    const detached = lifted(project([clip()]))
     const back = reattachAudio(detached.project, 'c')
     expect(at(back, 'c').audioDetached).toBeUndefined()
     expect('audioDetached' in at(back, 'c')).toBe(false)
@@ -347,6 +379,90 @@ describe('detaching a clip’s sound', () => {
     expect(back.clips.some((c) => c.id === detached.audioClipId)).toBe(true)
     // Nothing to reattach leaves the project alone.
     expect(reattachAudio(back, 'c')).toBe(back)
+  })
+})
+
+describe('the lifted sound plays as it did', () => {
+  /** Heard before (from the picture's track) and after (from its lane) alike. */
+  const heardTheSame = (before: Project, r: { project: Project; audioClipId: string }): void => {
+    const source = before.tracks.find((t) => t.id === 'v1')!
+    expect(isAudible(laneOf(r), r.project.tracks)).toBe(isAudible(source, before.tracks))
+  }
+
+  it('skips a MUTED free lane — the sound would vanish there', () => {
+    const p = withTracks(project([clip()]), { a1: { muted: true } })
+    const r = lifted(p)
+    expect(laneOf(r).id).toBe('a2')
+    heardTheSame(p, r)
+  })
+
+  it('makes a new, unmuted lane when every free lane is muted', () => {
+    const p = withTracks(project([clip()]), { a1: { muted: true }, a2: { muted: true } })
+    const r = lifted(p)
+    expect(r.project.tracks).toHaveLength(p.tracks.length + 1)
+    expect(laneOf(r).muted).toBe(false)
+    heardTheSame(p, r)
+  })
+
+  it('stays audible while the picture’s own track is soloed', () => {
+    // v1 soloed: an unsoloed lane would silence the sound the moment it moved.
+    const p = withTracks(project([clip()]), { v1: { solo: true } })
+    const r = lifted(p)
+    expect(laneOf(r).solo).toBe(true)
+    heardTheSame(p, r)
+    // And the new lane is the ONLY thing that changed about who is soloed.
+    expect(r.project.tracks.filter((t) => t.solo).map((t) => t.id).sort()).toEqual(
+      ['v1', laneOf(r).id].sort()
+    )
+  })
+
+  it('uses a soloed free lane when the picture’s track is soloed', () => {
+    const p = withTracks(project([clip()]), { v1: { solo: true }, a2: { solo: true } })
+    const r = lifted(p)
+    expect(laneOf(r).id).toBe('a2')
+    expect(r.project.tracks).toHaveLength(p.tracks.length)
+    heardTheSame(p, r)
+  })
+
+  it('stays silent while something ELSE is soloed, rather than jumping in', () => {
+    // a1 is soloed and free; v1 is not soloed, so the sound is not heard now.
+    const p = withTracks(project([clip()]), { a1: { solo: true } })
+    const r = lifted(p)
+    expect(laneOf(r).id).toBe('a2')
+    heardTheSame(p, r)
+  })
+
+  it('keeps footage’s sound as DIALOGUE, so music still ducks under it', () => {
+    // a1 is an empty ducked music lane: dialogue there would duck under itself.
+    const p = withTracks(project([clip()]), { a1: { duck: true } })
+    const r = lifted(p)
+    expect(laneOf(r).id).toBe('a2')
+    expect(audioRole(laneOf(r))).toBe('dialogue')
+    // The ducked lane is left as it was.
+    expect(r.project.tracks.find((t) => t.id === 'a1')).toEqual(p.tracks.find((t) => t.id === 'a1'))
+  })
+
+  it('never re-roles a lane that has other clips on it', () => {
+    // a1 has a sound effect elsewhere; marking a1 as dialogue would make the
+    // music duck under that effect too. a2 is empty and becomes the lane.
+    const sfx = clip({ id: 'sfx', trackId: 'a1', start: 400, duration: 30 })
+    const p = project([clip(), sfx])
+    const r = lifted(p)
+    expect(laneOf(r).id).toBe('a2')
+    expect(r.project.tracks.find((t) => t.id === 'a1')?.dialogue).toBeUndefined()
+  })
+
+  it('shares a lane that is already dialogue, where the span is free', () => {
+    const earlier = clip({ id: 'vo', trackId: 'a1', start: 400, duration: 30 })
+    const p = withTracks(project([clip(), earlier]), { a1: { dialogue: true } })
+    expect(laneOf(lifted(p)).id).toBe('a1')
+  })
+
+  it('marks a new lane as dialogue too', () => {
+    const p = withTracks(project([clip()]), { a1: { duck: true }, a2: { locked: true } })
+    const r = lifted(p)
+    expect(r.project.tracks).toHaveLength(p.tracks.length + 1)
+    expect(audioRole(laneOf(r))).toBe('dialogue')
   })
 })
 
@@ -480,5 +596,199 @@ describe('the export obeys the same rules as the preview', () => {
     const absurd = graph(project([clip({ start: 0, volume: 50 })]))
     expect(absurd).toContain(`volume=${MAX_GAIN}`)
     expect(absurd).not.toContain('volume=50')
+  })
+})
+
+/* ------------------------------------------------ the B1 review's fixes */
+
+describe('a clip’s level — one rule for the preview and the file', () => {
+  const linear = (keys: { frame: number; value: number }[], frame: number, duration: number): number =>
+    valueAt(keys, frame, duration, 1)
+
+  it('lets a drawn envelope REPLACE the fader, as the export does', () => {
+    /*
+     * The preview multiplied the two, so a clip faded up to +3.5 dB with one
+     * envelope point drawn back at unity played at +3.5 dB in the editor and
+     * at 0 dB in the file (plan.ts addAudio: "a drawn envelope beats the flat
+     * level"). Found by the B1 review.
+     */
+    const clipped = { volume: 1.5, duration: 90, keyframes: { volume: [{ frame: 0, value: 1 }] } }
+    expect(clipLevelAt(clipped, 45, linear)).toBe(1)
+    const ramp = { volume: 0.2, duration: 90, keyframes: { volume: [{ frame: 0, value: 0 }, { frame: 90, value: 2 }] } }
+    expect(clipLevelAt(ramp, 45, linear)).toBeCloseTo(1, 6)
+  })
+
+  it('uses the fader when no envelope is drawn — including an emptied one', () => {
+    expect(clipLevelAt({ volume: 1.5, duration: 90 }, 10, linear)).toBe(1.5)
+    expect(clipLevelAt({ volume: 1.5, duration: 90, keyframes: { volume: [] } }, 10, linear)).toBe(1.5)
+    expect(clipLevelAt({ duration: 90 }, 10, linear)).toBe(1)
+  })
+
+  it('holds both to the same ceiling and the same idea of nonsense', () => {
+    expect(clipLevelAt({ volume: 50, duration: 90 }, 0, linear)).toBe(MAX_GAIN)
+    const wild = { duration: 90, keyframes: { volume: [{ frame: 0, value: 9 }] } }
+    expect(clipLevelAt(wild, 0, linear)).toBe(MAX_GAIN)
+    expect(clipLevelAt({ volume: Number.NaN, duration: 90 }, 0, linear)).toBe(0)
+  })
+})
+
+describe('the keyed-value scale', () => {
+  it('draws volume on the FADER’s curve, so a level is at one height everywhere', () => {
+    /*
+     * The curve editor and the keyframe row drew volume linearly in gain, so
+     * unity sat half-way up there and ~87% of the way up on the clip's own
+     * envelope. Found by the B1 review.
+     */
+    for (const gain of [0, 0.05, 0.25, 0.5, 1, 1.4, MAX_GAIN]) {
+      expect(axisPosition('volume', gain), String(gain)).toBe(faderPosition(gain))
+    }
+    expect(axisPosition('volume', 1)).toBeGreaterThan(0.8)
+  })
+
+  it('reads volume back off the same curve', () => {
+    for (const position of [0, 0.1, 0.5, 0.87, 1]) {
+      expect(valueAtAxis('volume', position)).toBe(gainAtPosition(position))
+    }
+    for (const gain of [0.1, 0.5, 1, 1.7]) {
+      expect(valueAtAxis('volume', axisPosition('volume', gain))).toBeCloseTo(gain, 9)
+    }
+  })
+
+  it('keeps the picture properties linear over their own range', () => {
+    // Whatever volume needs, zoom, rotation and opacity were right as they were.
+    for (const property of ['zoom', 'rotation', 'opacity'] as const) {
+      const { min, max } = PROPERTY_INFO[property]
+      expect(axisPosition(property, min)).toBe(0)
+      expect(axisPosition(property, max)).toBe(1)
+      expect(axisPosition(property, (min + max) / 2)).toBeCloseTo(0.5, 9)
+      expect(valueAtAxis(property, 0.25)).toBeCloseTo(min + 0.25 * (max - min), 9)
+    }
+  })
+
+  it('labels volume in dB, the way the fader does', () => {
+    expect(formatKeyed('volume', 1)).toBe(formatDb(1))
+    expect(formatKeyed('volume', 0)).toBe('−∞ dB')
+    expect(formatKeyed('rotation', 12.4)).toBe('12°')
+    expect(formatKeyed('zoom', 1.5)).toBe('1.50×')
+  })
+})
+
+describe('the take name the main process accepts', () => {
+  it('keeps a name a name — never a place', () => {
+    // It crosses the IPC from the renderer and reaches a file path.
+    expect(safeTakeBase('../../Library/LaunchAgents/evil', 'x')).toBe('evil')
+    expect(safeTakeBase('..\\..\\Windows\\evil', 'x')).toBe('evil')
+    expect(safeTakeBase('/etc/passwd', 'x')).toBe('passwd')
+  })
+
+  it('drops what Windows refuses, and the dots and spaces it strips', () => {
+    // An ordinary wedding filename, and CLAUDE.md's Windows rules.
+    expect(safeTakeBase('Bride 5:30pm take 1', 'x')).toBe('Bride 530pm take 1')
+    expect(safeTakeBase('what? <now> | "yes" *', 'x')).toBe('what now  yes')
+    expect(safeTakeBase('...hidden. ', 'x')).toBe('hidden')
+  })
+
+  it('never lands on a device name, with or without an extension', () => {
+    for (const reserved of ['CON', 'nul', 'Com1', 'LPT9', 'aux.take']) {
+      const named = safeTakeBase(reserved, 'x')
+      expect(named, reserved).not.toMatch(/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$/i)
+      expect(named.length, reserved).toBeGreaterThan(0)
+    }
+    // Only the WHOLE name is reserved: "Console take" is an ordinary name.
+    expect(safeTakeBase('Console take 1', 'x')).toBe('Console take 1')
+  })
+
+  it('falls back when nothing usable is left', () => {
+    for (const empty of ['', '   ', '...', '/', 42, undefined]) {
+      expect(safeTakeBase(empty, 'Voice-over 1'), String(empty)).toBe('Voice-over 1')
+    }
+  })
+
+  it('is what voiceover:save actually uses', () => {
+    const save = blockAfter(source('src/main/ipc.ts'), "ipcMain.handle('voiceover:save'")
+    expect(save).toContain('safeTakeBase(name,')
+  })
+})
+
+describe('closing mid-take', () => {
+  it('asks before closing while a take is in progress, even with nothing unsaved', () => {
+    /*
+     * The close guard asked only about unsaved changes — and a take in
+     * progress is exactly when a project is often clean, because the take lands
+     * on the timeline only when it stops. Found by the B1 review.
+     */
+    expect(mustAskBeforeClosing({ ...EMPTY_MENU_STATE, recording: true })).toBe(true)
+    expect(mustAskBeforeClosing({ ...EMPTY_MENU_STATE, dirty: true })).toBe(true)
+    expect(mustAskBeforeClosing(EMPTY_MENU_STATE)).toBe(false)
+  })
+})
+
+/* ------------------------------------------------------------ the wiring */
+
+/*
+ * The rules above are only fixes if the places that had the bug now ask them.
+ * Each of these is a site the B1 review found making its own decision.
+ */
+const source = (path: string): string => readFileSync(resolve(__dirname, '..', path), 'utf8')
+
+/** The text of the first `{ … }` block after an anchor that must match once. */
+function blockAfter(text: string, anchor: string): string {
+  expect(text.split(anchor).length - 1, `anchor "${anchor}"`).toBe(1)
+  const from = text.indexOf(anchor)
+  const open = text.indexOf('{', from)
+  let depth = 0
+  for (let i = open; i < text.length; i++) {
+    if (text[i] === '{') depth++
+    if (text[i] === '}' && --depth === 0) return text.slice(from, i + 1)
+  }
+  throw new Error(`unbalanced block after "${anchor}"`)
+}
+
+describe('the sites the review found now ask the shared rules', () => {
+  it('the preview’s clip level goes through clipLevelAt, never the fader directly', () => {
+    const gain = blockAfter(source('src/renderer/src/components/Preview.tsx'), 'const clipGainAt = useCallback(')
+    expect(gain).toContain('clipLevelAt(clip')
+    expect(gain).not.toMatch(/clip\.volume/)
+  })
+
+  it('the curve editor and the keyframe row take their heights from the shared scale', () => {
+    const editor = source('src/renderer/src/components/CurveEditor.tsx')
+    expect(editor).toContain('HEIGHT - axisPosition(property, value) * HEIGHT')
+    expect(editor).toContain('valueAtAxis(property, 1 - (e.clientY - box.top) / box.height)')
+    // No second, private scale left behind to drift from the shared one.
+    expect(editor).not.toMatch(/info\.(min|max)/)
+    const row = source('src/renderer/src/components/Keyframes.tsx')
+    expect(row).toContain('axisPosition(property, current)')
+    expect(row).toContain('valueAtAxis(property, slid / FADER_STEPS)')
+  })
+
+  it('the store says WHY a detach was refused', () => {
+    const store = source('src/renderer/src/store.ts')
+    const detach = blockAfter(store, 'detachAudio: (clipId) =>')
+    expect(detach).toContain('detachRefusalMessage(result.reason)')
+    expect(detach).not.toContain('no sound of its own')
+  })
+
+  it('a drawn stroke is simplified on the scale it was drawn on', () => {
+    const editor = source('src/renderer/src/components/CurveEditor.tsx')
+    expect(editor).toContain('value: axisPosition(property, s.value)')
+    expect(editor).toContain('.map((k) => ({ ...k, value: valueAtAxis(property, k.value) }))')
+  })
+
+  it('the Inspector says when the envelope, not the fader, sets the level', () => {
+    const inspector = source('src/renderer/src/components/Inspector.tsx')
+    expect(inspector).toMatch(/clip\.keyframes\?\.volume\?\.length \?\? 0\) > 0 && \(\s*<div[^>]*>\s*The drawn envelope sets this clip's level/)
+  })
+
+  it('both ways out of the app ask about a take in progress', () => {
+    const main = source('src/main/index.ts')
+    const close = blockAfter(main, "mainWindow.on('close', (event) =>")
+    expect(close).toMatch(/^[^]*?\{\s*if \(closing \|\| !mustAskBeforeClosing\(menuState\)\) return/)
+    const quit = blockAfter(main, "app.on('before-quit', (event) =>")
+    expect(quit).toContain('mustAskBeforeClosing(menuState)')
+    // And the renderer tells it, and stops the take when asked.
+    const app = source('src/renderer/src/App.tsx')
+    expect(app).toContain('recording: s.recording !== null')
+    expect(app).toContain("case 'stopRecording': void stopVoiceOver()")
   })
 })

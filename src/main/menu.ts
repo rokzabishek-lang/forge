@@ -37,6 +37,8 @@ export type MenuCommand =
   | 'zoomOut'
   | 'zoomFit'
   | 'shortcuts'
+  /** Not a menu item: the close guard sends it to keep a take in progress. */
+  | 'stopRecording'
 
 /** What the renderer tells us, so items can enable and disable correctly. */
 export interface MenuState {
@@ -44,13 +46,33 @@ export interface MenuState {
   canRedo: boolean
   hasSelection: boolean
   dirty: boolean
+  /** A voice-over is counting in, recording, or being saved. */
+  recording: boolean
 }
 
 export const EMPTY_MENU_STATE: MenuState = {
   canUndo: false,
   canRedo: false,
   hasSelection: false,
-  dirty: false
+  dirty: false,
+  recording: false
+}
+
+/**
+ * Whether closing the window has to ask anything first.
+ *
+ * Unsaved changes, and a take in progress. The guard used to ask only about
+ * the first, so closing the window — or Cmd+Q — mid-take tore the renderer
+ * down with the microphone open and the take went with it: never saved, never
+ * placed, not even a file in the voice-over folder. And a take in progress is
+ * the one time the project is often NOT dirty yet, because the take lands on
+ * the timeline only when it stops. Found by the B1 review.
+ *
+ * The take is asked about FIRST, because stopping it is what makes the project
+ * dirty; asked the other way round, "Save" would save an edit without the take.
+ */
+export function mustAskBeforeClosing(state: MenuState): boolean {
+  return state.recording || state.dirty
 }
 
 export function buildMenu(

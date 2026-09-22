@@ -28,7 +28,7 @@ import { forgetWipe, wipedSource } from '../wipe'
 import { PreviewMixer } from '../audioGraph'
 import { publishLevels } from '../levels'
 import { fadeGainAt, fadesWithNeighbours } from '@shared/render/audioFade'
-import { audioRole, clampGain, isAudible } from '@shared/render/audibility'
+import { audioRole, clampGain, clipLevelAt, isAudible } from '@shared/render/audibility'
 import { NO_SCRUB, SCRUB_BURST_MS, scrubStep, type ScrubState } from '@shared/render/scrub'
 import { motionSourceRect } from '@shared/render/motion'
 import { clipBox, parallaxBakeFor, planeShare } from '@shared/render/plan'
@@ -765,8 +765,9 @@ export function Preview(): ReactNode {
       const into = frame - clip.start
       // A detached clip's sound lives on the audio clip lifted off it.
       if (clip.audioDetached) return 0
-      const fader = clampGain(clip.volume ?? 1)
-      const envelope = valueAt(clip.keyframes?.volume ?? [], into, clip.duration, 1)
+      // The envelope REPLACES the fader when one is drawn — the export's rule,
+      // asked of the same function. See `clipLevelAt`.
+      const level = clipLevelAt(clip, into, (keys, f, d) => valueAt(keys, f, d, 1))
 
       // Neighbours on the SAME track, because an overlap is only a crossfade
       // between clips that are actually fighting for the same moment.
@@ -776,7 +777,7 @@ export function Preview(): ReactNode {
       const at = lane.findIndex((c) => c.id === clip.id)
       const fades = fadesWithNeighbours(clip, lane[at - 1] ?? null, lane[at + 1] ?? null)
 
-      return fader * Math.max(0, envelope) * fadeGainAt(fades, into)
+      return level * fadeGainAt(fades, into)
     },
     [project.clips]
   )

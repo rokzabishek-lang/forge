@@ -26,6 +26,14 @@ import { clearInput, publishInput } from './levels'
 
 interface Session {
   trackId: string
+  /**
+   * The project the take was recorded into. If a different project is open by
+   * the time the take is saved, it is NOT placed — it would land in an edit it
+   * was never recorded against. Found by the B1 review.
+   */
+  projectId: string | undefined
+  /** Stops the recording if the project changes underneath it. */
+  unsubscribe: () => void
   stream: MediaStream
   recorder: MediaRecorder | null
   chunks: Blob[]
@@ -36,6 +44,15 @@ interface Session {
 
 let session: Session | null = null
 let takes = 0
+/**
+ * True from the first click until the session exists.
+ *
+ * `session` is only set after two awaits — the permission check and
+ * `getUserMedia` — so a second click inside that window saw no session and
+ * started another: two microphones open, and the first one's stream, context
+ * and meter loop leaked for good. Set synchronously, before anything awaits.
+ */
+let arming = false
 
 /** Show the microphone's level on the armed track's meter, from the moment it opens. */
 function watchLevel(trackId: string, stream: MediaStream): Session['meter'] {
@@ -63,6 +80,7 @@ function watchLevel(trackId: string, stream: MediaStream): Session['meter'] {
 }
 
 function release(s: Session): void {
+  s.unsubscribe()
   if (s.meter) {
     cancelAnimationFrame(s.meter.raf)
     void s.meter.context.close().catch(() => undefined)
@@ -76,32 +94,48 @@ const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms)
 /** Arm a track, count in, and start recording over the edit. */
 export async function startVoiceOver(trackId: string): Promise<void> {
   const store = useEditor.getState()
-  if (session) return
+  if (session || arming) return
   const track = store.project.tracks.find((t) => t.id === trackId)
   if (!track || track.kind !== 'audio' || track.locked) {
     store.notify('Record onto an audio track that is not locked', 'info')
     return
   }
 
-  if (!(await window.forge.microphonePermission())) {
-    store.notify(
-      'Forge is not allowed to use the microphone. Allow it in System Settings → Privacy & Security → Microphone, then try again.'
-    )
-    return
-  }
-
+  arming = true
   let stream: MediaStream
   try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: false }
-    })
-  } catch (err) {
-    store.notify(`The microphone could not be opened: ${err instanceof Error ? err.message : String(err)}`)
-    return
+    if (!(await window.forge.microphonePermission())) {
+      store.notify(
+        'Forge is not allowed to use the microphone. Allow it in System Settings → Privacy & Security → Microphone, then try again.'
+      )
+      return
+    }
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: false }
+      })
+    } catch (err) {
+      store.notify(`The microphone could not be opened: ${err instanceof Error ? err.message : String(err)}`)
+      return
+    }
+  } finally {
+    arming = false
   }
 
+  const projectId = useEditor.getState().project.id
   const current: Session = {
     trackId,
+    projectId,
+    /*
+     * A different project opened mid-take stops the recording.
+     *
+     * Otherwise the armed track no longer exists, so its stop button is gone,
+     * and every other record button stays disabled because a recording is
+     * still "in progress" — a microphone left open with no way to close it.
+     */
+    unsubscribe: useEditor.subscribe((state) => {
+      if (state.project.id !== projectId && session === current) void stopVoiceOver()
+    }),
     stream,
     recorder: null,
     chunks: [],
@@ -168,6 +202,13 @@ export async function stopVoiceOver(): Promise<void> {
       takeName(track?.name ?? 'Voice-over', takes, Date.now()),
       project.settings.sampleRate
     )
+    if (useEditor.getState().project.id !== current.projectId) {
+      // Saved, not placed: it belongs to an edit that is no longer open.
+      useEditor
+        .getState()
+        .notify(`The project changed while you were recording. The take is kept at ${path}.`, 'info')
+      return
+    }
     await useEditor.getState().placeVoiceOver(current.trackId, path, current.startFrame)
   } catch (err) {
     useEditor.getState().notify(`The take could not be saved: ${err instanceof Error ? err.message : String(err)}`)

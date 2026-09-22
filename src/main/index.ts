@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, protocol, shell } from 'electron'
 import { join } from 'node:path'
 import { registerIpc } from './ipc'
-import { applyMenu, EMPTY_MENU_STATE, type MenuState } from './menu'
+import { applyMenu, EMPTY_MENU_STATE, mustAskBeforeClosing, type MenuState } from './menu'
 import { registerMediaProtocol } from './mediaProtocol'
 import { assertBinaries } from './ffmpeg/paths'
 import { startSidecar, stopSidecar, type SidecarStatus } from './sidecar/service'
@@ -48,6 +48,37 @@ let recentProjects: string[] = []
 /** True once the close guard has had its answer, so it does not ask twice. */
 let closing = false
 
+/**
+ * Ask the renderer to stop the take, and wait until it is on the timeline.
+ *
+ * Waits on the renderer's own state report rather than a reply to the
+ * command: `recording` clears only after the take has been saved AND placed,
+ * so by the time it does, the project is dirty and the save question sees it.
+ * Stopping during the count-in keeps nothing, and clears it at once.
+ *
+ * A take that has not landed in a minute is a reason to stay open — the same
+ * rule as a save that has not finished — never a reason to close and hope.
+ */
+function stopRecording(window: BrowserWindow): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (!menuState.recording) {
+      resolve(true)
+      return
+    }
+    const onState = (_e: unknown, next: Partial<MenuState>): void => {
+      if (next?.recording !== true) done(true)
+    }
+    const done = (stopped: boolean): void => {
+      clearTimeout(timer)
+      ipcMain.off('menu:state', onState)
+      resolve(stopped)
+    }
+    const timer = setTimeout(() => done(false), 60_000)
+    ipcMain.on('menu:state', onState)
+    window.webContents.send('menu:command', 'stopRecording')
+  })
+}
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -80,11 +111,30 @@ function createWindow(): void {
    * time — forever.
    */
   mainWindow.on('close', (event) => {
-    if (closing || !menuState.dirty) return
+    if (closing || !mustAskBeforeClosing(menuState)) return
     event.preventDefault()
     void (async () => {
       const window = mainWindow
       if (!window) return
+      if (menuState.recording) {
+        const { response } = await dialog.showMessageBox(window, {
+          type: 'warning',
+          buttons: ['Stop and Keep', 'Cancel'],
+          defaultId: 0,
+          cancelId: 1,
+          message: 'A voice-over is recording.',
+          detail: 'Stop it to keep the take — it goes on the timeline where it began. Closing without stopping would lose it.'
+        })
+        if (response === 1) return
+        // The take on the timeline makes the project dirty, so the question
+        // below is asked about the edit WITH the take in it.
+        if (!(await stopRecording(window))) return
+      }
+      if (!menuState.dirty) {
+        closing = true
+        window.close()
+        return
+      }
       const { response } = await dialog.showMessageBox(window, {
         type: 'warning',
         buttons: ['Save', "Don't Save", 'Cancel'],
@@ -222,7 +272,7 @@ app.on('before-quit', (event) => {
    * work. Routed through the window's own guard so there is one dialog and one
    * answer.
    */
-  if (!closing && menuState.dirty && mainWindow) {
+  if (!closing && mustAskBeforeClosing(menuState) && mainWindow) {
     event.preventDefault()
     mainWindow.close()
     return

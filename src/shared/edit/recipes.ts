@@ -18,13 +18,16 @@ import {
   addTrack,
   clipEnd,
   findFreeSlot,
+  MAX_TRACKS,
   overlapsOn,
   stackedSlot,
   type Clip,
   type Frames,
   type MediaAsset,
-  type Project
+  type Project,
+  type Track
 } from '../timeline'
+import { anySolo, audioRole } from '../render/audibility'
 
 /** A fresh id in the shape the rest of the app makes them. */
 function freshId(prefix: string): string {
@@ -297,10 +300,36 @@ export function duplicateSelection(project: Project, ids: readonly string[]): Pa
 
 /* --------------------------------------------------------- detach audio */
 
-export interface DetachResult {
-  project: Project
-  /** The audio clip that now carries the sound. */
-  audioClipId: string
+/**
+ * Why a detach did not happen — each one is a different thing to tell someone.
+ *
+ * This was a bare `null`, and the store read every null as "that clip has no
+ * sound", so a clip that plainly had sound, refused only because there was no
+ * room for it, was told it had none. Found by the B1 review.
+ */
+export type DetachRefusal = 'no-clip' | 'no-sound' | 'already-detached' | 'no-room'
+
+export type DetachResult =
+  | {
+      ok: true
+      project: Project
+      /** The audio clip that now carries the sound. */
+      audioClipId: string
+    }
+  | { ok: false; reason: DetachRefusal }
+
+/** What to tell someone whose detach was refused — one sentence per reason. */
+export function detachRefusalMessage(reason: DetachRefusal): string {
+  switch (reason) {
+    case 'no-clip':
+      return 'That clip is no longer on the timeline'
+    case 'no-sound':
+      return 'That clip has no sound of its own to detach'
+    case 'already-detached':
+      return 'That clip’s sound is already detached — “Restore its own sound” puts it back'
+    case 'no-room':
+      return `There is no free audio track under that clip, and the timeline already has the most tracks it can hold (${MAX_TRACKS}). Clear a lane or remove a track, then detach again.`
+  }
 }
 
 /**
@@ -326,17 +355,41 @@ export interface DetachResult {
  * fader would leave a drawn envelope still speaking in the file. And leaving
  * the original's level alone is what lets it be reattached exactly as it was.
  *
- * Returns null when there is nothing to detach: a still, a clip with no sound,
- * a clip on an audio track already, or one whose sound is already detached.
+ * **The sound plays as it did.** A lane is only used if the sound would be
+ * heard the same way on it, which rules out three that looked free:
+ *
+ * - a **muted** lane, where the lifted sound would simply vanish — the
+ *   detach would look like it had thrown the sound away (the B1 review);
+ * - a lane on the wrong side of a **solo**: with the picture's track soloed,
+ *   an unsoloed lane silences the sound; with something else soloed, a soloed
+ *   lane makes it suddenly audible. A new lane copies the picture track's solo;
+ * - a lane in the wrong **part of the mix**. A video track's sound is dialogue
+ *   (`audioRole`) — what a ducked music bed steps back for. On an ordinary
+ *   lane it would stop being dialogue and the music would stop ducking under
+ *   the vows. So the lane must be a dialogue lane already, or an empty,
+ *   unducked one that becomes one; a lane with other clips on it is never
+ *   re-roled, because that would change how THOSE clips mix.
+ *
+ * The picture track's mute and hidden do not follow the sound. Detaching is
+ * how a sound is taken out from under its picture's track.
+ *
+ * Refuses, and says which, when there is no clip, no sound of its own (a
+ * still, a silent file, a clip on an audio track already), the sound is
+ * already detached, or there is no room at the track limit.
  */
-export function detachAudio(project: Project, clipId: string): DetachResult | null {
+export function detachAudio(project: Project, clipId: string): DetachResult {
   const clip = project.clips.find((c) => c.id === clipId)
-  if (!clip || clip.audioDetached) return null
+  if (!clip) return { ok: false, reason: 'no-clip' }
+  if (clip.audioDetached) return { ok: false, reason: 'already-detached' }
   const track = project.tracks.find((t) => t.id === clip.trackId)
-  if (!track || track.kind !== 'video') return null
   const asset = project.assets.find((a) => a.id === clip.assetId)
-  if (!asset?.hasAudio || asset.kind === 'image') return null
+  if (!track || track.kind !== 'video' || !asset?.hasAudio || asset.kind === 'image') {
+    return { ok: false, reason: 'no-sound' }
+  }
 
+  const soloing = anySolo(project.tracks)
+  const soloed = track.solo === true
+  const empty = (t: Track): boolean => !project.clips.some((c) => c.trackId === t.id)
   /*
    * A lane free for EXACTLY this span, or a new one.
    *
@@ -348,23 +401,28 @@ export function detachAudio(project: Project, clipId: string): DetachResult | nu
     (t) =>
       t.kind === 'audio' &&
       !t.locked &&
+      !t.muted &&
+      (!soloing || (t.solo === true) === soloed) &&
+      (audioRole(t) === 'dialogue' || (t.duck !== true && empty(t))) &&
       overlapsOn(next, t.id, clip.start, clip.duration).length === 0
   )
   if (!lane) {
     const grown = addTrack(next, 'audio')
     // At the track limit there is nowhere to put it, and a detach that quietly
     // stacked the sound onto a busy lane would be worse than refusing.
-    if (grown === next) return null
+    if (grown === next) return { ok: false, reason: 'no-room' }
     next = grown
     lane = next.tracks[next.tracks.length - 1]
   }
+  const laneId = lane.id
+  const laneSolo = soloing && soloed
 
   const audioClipId = freshId('audio')
   const envelope = clip.keyframes?.volume
   const sound: Clip = {
     id: audioClipId,
     assetId: clip.assetId,
-    trackId: lane.id,
+    trackId: laneId,
     start: clip.start,
     duration: clip.duration,
     inPoint: clip.inPoint,
@@ -379,9 +437,13 @@ export function detachAudio(project: Project, clipId: string): DetachResult | nu
   }
 
   return {
+    ok: true,
     audioClipId,
     project: {
       ...next,
+      tracks: next.tracks.map((t) =>
+        t.id === laneId ? { ...t, dialogue: true, ...(laneSolo ? { solo: true } : {}) } : t
+      ),
       clips: [
         ...next.clips.map((c) => (c.id === clipId ? { ...c, audioDetached: true } : c)),
         sound

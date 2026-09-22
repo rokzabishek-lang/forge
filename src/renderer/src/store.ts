@@ -40,6 +40,7 @@ import {
   rippleDelete,
   copySelection as clipsToClipboard,
   detachAudio as detachAudioFrom,
+  detachRefusalMessage,
   reattachAudio as reattachAudioTo,
   placeTake as placeTakeOn,
   pasteClipboard as placeClipboard,
@@ -3829,8 +3830,8 @@ export const useEditor = create<EditorState>((set, get) => ({
 
   detachAudio: (clipId) => {
     const result = detachAudioFrom(get().project, clipId)
-    if (!result) {
-      get().notify('That clip has no sound of its own to detach', 'info')
+    if (!result.ok) {
+      get().notify(detachRefusalMessage(result.reason), 'info')
       return
     }
     get().update(() => result.project)

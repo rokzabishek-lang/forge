@@ -152,3 +152,29 @@ export function audioRole(track: Track): AudioRole {
   if (track.duck === true) return 'music'
   return 'other'
 }
+
+/* --------------------------------------------------------- a clip's level */
+
+/**
+ * A clip's level at a frame of its own time, BEFORE fades.
+ *
+ * A drawn envelope REPLACES the fader; it does not multiply it. That is the
+ * export's rule (`plan.ts` addAudio: "a drawn envelope beats the flat level")
+ * and it is what the envelope's own interface promises — its flat line is drawn
+ * at the fader's level and a new point is seeded from it, so the curve is in the
+ * same absolute units as the fader, not a percentage of it.
+ *
+ * The preview used to multiply the two, so a clip faded up to +3.5 dB with one
+ * envelope point drawn back at unity played at +3.5 dB in the editor and at
+ * 0 dB in the file — and with the fader now reaching +6 dB, the preview could
+ * be louder than the export by up to that much. Found by the B1 review.
+ */
+export function clipLevelAt(
+  clip: { volume?: number; duration: number; keyframes?: { volume?: { frame: number; value: number }[] } },
+  into: number,
+  evaluate: (keys: { frame: number; value: number }[], frame: number, duration: number) => number
+): number {
+  const envelope = clip.keyframes?.volume
+  if (envelope && envelope.length > 0) return clampGain(evaluate(envelope, into, clip.duration))
+  return clampGain(clip.volume ?? 1)
+}

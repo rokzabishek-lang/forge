@@ -902,6 +902,17 @@ export function Inspector(): ReactNode {
                     display={formatDb(clip.volume ?? 1)}
                     onChange={(v) => setClipVolume(clip.id, gainAtPosition(v / 1000))}
                   />
+                  {/*
+                    A drawn envelope REPLACES this fader, in the export and now
+                    the preview too (audibility.ts clipLevelAt). That was true of
+                    the export all along and nothing said so — a fader that moved
+                    and changed nothing, with no hint why.
+                  */}
+                  {(clip.keyframes?.volume?.length ?? 0) > 0 && (
+                    <div className="mt-0.5 text-[10px] leading-snug text-amber-400/80">
+                      The drawn envelope sets this clip's level — clear it to use the fader.
+                    </div>
+                  )}
 
                   {/*
                     Crossfade needs a button because it cannot be a drag.

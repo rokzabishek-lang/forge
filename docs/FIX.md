@@ -477,9 +477,9 @@ were found that the list did not know about, three of them shipped:
 
 ## Phase B — the other three
 
-> **Where it stands (2026-09-22).** B1 is done (`55094a2`). A split/trim fix
-> found while planning B2 is pushed (`c5eb1ea`) — its mutation check is still
-> to run. B2 is STARTED: `src/shared/render/encode.ts` (codec families; the
+> **Where it stands (2026-09-22).** B1 is done (`55094a2`) and its adversarial
+> review is closed (see the end of B1). A split/trim fix found while planning
+> B2 is pushed (`c5eb1ea`) and now mutation-checked. B2 is STARTED: `src/shared/render/encode.ts` (codec families; the
 > arguments measured working on the Mac binary for x264, x265 and ProRes,
 > including bitrate mode) and `src/main/render/encoders.ts` (the runtime
 > probe) exist and are **not yet wired in**. B3 is mapped, not started.
@@ -579,6 +579,45 @@ Twenty-seven mutations, all killed against a green gate — two only after the
 tests were extended: the export's audio-track solo filter was deletable while
 the test had one audio clip, and a released peak-hold could sink below its bar
 without a steady signal held just under it.
+
+**Reviewed afterwards, and eight things were wrong.** An adversarial review
+of `55094a2` confirmed eight findings (one refuted); all are fixed:
+
+1. **The preview and the file disagreed on a drawn envelope.** The export lets
+   an envelope REPLACE the fader; the preview multiplied the two, so a clip at
+   +3.5 dB with an envelope drawn at unity played 3.5 dB louder in the editor
+   than in the file. One rule now, `clipLevelAt`, and the Inspector says when
+   the envelope is what sets the level. Rendered: envelope-over-fader measures
+   −44.1 dB, identical to unity; the fader alone −40.6.
+2. **Closing or quitting mid-take lost the take** — the close guard asked only
+   about unsaved changes, and a take in progress is exactly when a project is
+   often clean. `MenuState.recording`; the guard asks "Stop and Keep" first,
+   waits for the take to land, THEN asks about saving the edit with it in.
+3. **Opening another project mid-take** landed the take in the wrong edit and
+   left the microphone open with no stop button. The take is stopped, saved,
+   and not placed; the notice says where it is.
+4. **A double-click on Record opened two microphones** — the guard was set
+   after two awaits. A synchronous `arming` flag.
+5. The take name reaching a file path unsanitised — fixed in `c5eb1ea`, and
+   now `safeTakeBase` in `voiceover.ts`, which also refuses Windows device
+   names (`CON.wav` is the console, whatever its extension).
+6. **Detach picked a muted lane**, where the sound vanished. Widened on the way
+   to "the lifted sound plays as it did": not muted, the same side of a solo,
+   and a DIALOGUE lane — footage's sound is dialogue, and on an ordinary lane
+   the music stopped ducking under it. Rendered: the bed ducks 7.9 dB under
+   attached dialogue, 0 dB under the old detach, 7.9 dB under the new one.
+7. **Detach said "no sound" when it meant "no room".** A reason per refusal.
+8. **The curve editor and the keyframe row drew volume linearly** while the
+   fader and the on-clip envelope use the dB curve — unity half-way up in one
+   place and 87 % in the other. `axisPosition`/`valueAtAxis` in `keyframes.ts`
+   are the one scale every keyed control reads.
+
+The recorder is tested by driving it (`tests/renderer/recorder.test.ts`, a fake
+microphone and store), not by reading its source. Forty-two mutations — these
+eight and the `c5eb1ea` split fix, whose check had not been run — all killed
+against a green gate. One only after a test was added: releasing a take could
+leave its store subscription behind, inert but running on every store change,
+one more per take.
 
 ### B2. Export has a shape: frame rate, size, codec, quality, hardware, range
 

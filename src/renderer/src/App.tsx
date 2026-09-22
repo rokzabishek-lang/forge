@@ -5,6 +5,7 @@ import { AlertCircle, Info, X } from 'lucide-react'
 import { projectDuration } from '@shared/timeline'
 import { AUTOSAVE_INTERVAL_MS } from '@shared/project/recovery'
 import { useEditor } from './store'
+import { stopVoiceOver } from './recorder'
 import { LeftPanel } from './components/LeftPanel'
 import { Preview } from './components/Preview'
 import { Timeline } from './components/Timeline'
@@ -238,7 +239,9 @@ export default function App(): ReactNode {
         canUndo: s.past.length > 0,
         canRedo: s.future.length > 0,
         hasSelection: s.selectedClipIds.length > 0,
-        dirty: s.dirty
+        dirty: s.dirty,
+        // Closing mid-take asks first; see mustAskBeforeClosing in main/menu.ts.
+        recording: s.recording !== null
       })
     }
     report()
@@ -268,6 +271,8 @@ export default function App(): ReactNode {
         case 'zoomOut': s.setZoom(s.zoom / 1.4); break
         case 'zoomFit': window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Z', shiftKey: true })); break
         case 'shortcuts': setShortcutsOpen(true); break
+        // The close guard waits for `recording` to clear in the state report.
+        case 'stopRecording': void stopVoiceOver(); break
         default: break
       }
     })

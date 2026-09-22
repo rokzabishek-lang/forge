@@ -6,6 +6,7 @@
     "src/shared/**/*",
     "tests/**/*"
   ],
+  "exclude": ["tests/renderer/**/*"],
   "compilerOptions": {
     "composite": true,
     "target": "ES2022",

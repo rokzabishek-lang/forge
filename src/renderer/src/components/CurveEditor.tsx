@@ -1,8 +1,11 @@
 import { useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import {
   PROPERTY_INFO,
+  axisPosition,
+  formatKeyed,
   normaliseKeys,
   valueAt,
+  valueAtAxis,
   type KeyedProperty,
   type Keyframe
 } from '@shared/render/keyframes'
@@ -50,28 +53,42 @@ export function CurveEditor({
 
   const info = PROPERTY_INFO[property]
   const span = Math.max(1, durationFrames)
-  const range = info.max - info.min || 1
   const points = normaliseKeys(keys, durationFrames)
 
+  /*
+   * Heights come from the property's own scale — volume on the fader's dB
+   * curve — so a level is at the same height here as on the clip.
+   */
   const toX = (frame: number, width: number): number => (frame / span) * width
-  const toY = (value: number): number =>
-    HEIGHT - ((value - info.min) / range) * HEIGHT
+  const toY = (value: number): number => HEIGHT - axisPosition(property, value) * HEIGHT
 
   const fromEvent = (e: { clientX: number; clientY: number }): Sample | null => {
     const box = boxRef.current?.getBoundingClientRect()
     if (!box || box.width < 1) return null
     const frame = ((e.clientX - box.left) / box.width) * span
-    const value = info.min + (1 - (e.clientY - box.top) / box.height) * range
     return {
       frame: Math.max(0, Math.min(span, frame)),
-      value: Math.max(info.min, Math.min(info.max, value))
+      value: valueAtAxis(property, 1 - (e.clientY - box.top) / box.height)
     }
   }
+
+  /**
+   * A stroke's keys, simplified in the space it was DRAWN in.
+   *
+   * On a dB axis, a bend near the bottom is a few thousandths of gain; judged
+   * in gain it would be dropped as noise, although it is plainly on screen.
+   */
+  const fromStroke = (samples: Sample[]): Keyframe[] =>
+    keysFromStroke(
+      samples.map((s) => ({ ...s, value: axisPosition(property, s.value) })),
+      durationFrames,
+      1
+    ).map((k) => ({ ...k, value: valueAtAxis(property, k.value) }))
 
   /** The curve as a polyline, sampled densely enough to show the easing. */
   const outline = (width: number): string => {
     const steps = Math.max(24, Math.min(160, Math.round(width)))
-    const shown = stroke ? keysFromStroke(stroke, durationFrames, range) : points
+    const shown = stroke ? fromStroke(stroke) : points
     return Array.from({ length: steps + 1 }, (_, i) => {
       const frame = (i / steps) * span
       return `${toX(frame, width).toFixed(1)},${toY(
@@ -105,7 +122,7 @@ export function CurveEditor({
       setStrokeView(null)
       strokeRef.current = []
       // A tap is not a stroke — it would collapse the whole curve to one value.
-      if (drawn.length >= 3) onChange(keysFromStroke(drawn, durationFrames, range))
+      if (drawn.length >= 3) onChange(fromStroke(drawn))
     }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
@@ -241,7 +258,7 @@ export function CurveEditor({
               onDoubleClick={() =>
                 onChange(points.filter((_, i) => i !== index))
               }
-              title={`Frame ${key.frame} · ${key.value.toFixed(2)} — drag to move, double-click to remove`}
+              title={`Frame ${key.frame} · ${formatKeyed(property, key.value)} — drag to move, double-click to remove`}
               style={{
                 left: `${(key.frame / span) * 100}%`,
                 top: toY(key.value),
@@ -253,14 +270,8 @@ export function CurveEditor({
       </div>
 
       <div className="flex justify-between text-[9px] text-ink-700">
-        <span>
-          {info.min}
-          {info.suffix} · start
-        </span>
-        <span>
-          {info.max}
-          {info.suffix} · end
-        </span>
+        <span>{formatKeyed(property, valueAtAxis(property, 0))} · start</span>
+        <span>{formatKeyed(property, valueAtAxis(property, 1))} · end</span>
       </div>
     </div>
   )
