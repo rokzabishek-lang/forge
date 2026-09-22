@@ -19,6 +19,8 @@ import type {
 import { DEFAULT_COLOR, DEFAULT_TEXT, clipCoversFrame } from '@shared/timeline'
 import type { Mask, MaskShape } from '@shared/render/mask'
 import { clipSpeed, maxDurationAtSpeed, withClipSpeed } from '@shared/render/speed'
+import type { VoiceId } from '@shared/render/voice'
+import type { ClipKind } from '@shared/edit/clipKind'
 import { defaultFadeFrames } from '@shared/render/audioFade'
 import { collapsesIntoBurst } from '@shared/edit/coalesce'
 import {
@@ -613,6 +615,8 @@ interface EditorState {
    * rippling whatever follows it on that track so nothing silently collides.
    */
   setClipSpeed: (clipId: string, speed: number, smoothSlow?: boolean) => void
+  /** A voice effect on a clip's sound, or null to take it off. */
+  setVoice: (clipId: string, voice: VoiceId | null) => void
   /** Animated position. Undefined clears it. */
   setPath: (clipId: string, path: PathPoint[] | undefined) => void
   /** Write a key at a frame, replacing one already there. */
@@ -707,6 +711,28 @@ interface EditorState {
   setPlaying: (playing: boolean) => void
   loop: boolean
   setLoop: (loop: boolean) => void
+  /**
+   * The in and out points — the stretch being worked on.
+   *
+   * Premiere's I and O, CapCut's trim bar. Null means the whole project. It is
+   * a VIEW of the timeline, not part of it: playback loops inside it and the
+   * export offers it, but nothing about the clips changes, so it is not saved
+   * with the project and undo has nothing to do with it.
+   */
+  rangeIn: number | null
+  rangeOut: number | null
+  setRangeIn: (frame: number | null) => void
+  setRangeOut: (frame: number | null) => void
+  clearRange: () => void
+  /**
+   * Kinds hidden from view — the coloured toggles above the tracks.
+   *
+   * A view filter and nothing more: a hidden kind is still exported, still
+   * plays, still occupies its frames. It is for finding things on a busy
+   * timeline, which is why it is not saved and not undoable.
+   */
+  hiddenKinds: ClipKind[]
+  toggleKind: (kind: ClipKind) => void
   /**
    * Hear the sound while dragging the playhead. On by default.
    *
@@ -815,6 +841,9 @@ export const useEditor = create<EditorState>((set, get) => ({
   playing: false,
   loop: false,
   scrubAudio: true,
+  rangeIn: null,
+  rangeOut: null,
+  hiddenKinds: [],
   selectedClipIds: [],
   selectedClipId: null,
   clipboard: null,
@@ -3513,6 +3542,15 @@ export const useEditor = create<EditorState>((set, get) => ({
 
   removeSandwich: (frontClipId) => get().update((p) => unsandwich(p, frontClipId)),
 
+  setVoice: (clipId, voice) => {
+    get().update((p) => ({
+      ...p,
+      clips: p.clips.map((c) =>
+        c.id === clipId ? { ...c, ...(voice ? { voice: { id: voice } } : { voice: undefined }) } : c
+      )
+    }))
+  },
+
   setClipSpeed: (clipId, speed, smoothSlow) => {
     // The rule itself lives in the shared layer, where it can be tested; this
     // is only the wiring.
@@ -3747,6 +3785,32 @@ export const useEditor = create<EditorState>((set, get) => ({
   setPlaying: (playing) => set({ playing }),
   setLoop: (loop) => set({ loop }),
   setScrubAudio: (scrubAudio) => set({ scrubAudio }),
+
+  setRangeIn: (frame) =>
+    set((s) => {
+      if (frame === null) return { rangeIn: null }
+      const at = Math.max(0, Math.round(frame))
+      // An in past the out is a range that cannot exist. Pushing the out
+      // rather than refusing keeps the gesture working: someone setting in
+      // beyond out means "the range starts here now".
+      return { rangeIn: at, rangeOut: s.rangeOut !== null && s.rangeOut <= at ? null : s.rangeOut }
+    }),
+
+  setRangeOut: (frame) =>
+    set((s) => {
+      if (frame === null) return { rangeOut: null }
+      const at = Math.max(0, Math.round(frame))
+      return { rangeOut: at, rangeIn: s.rangeIn !== null && s.rangeIn >= at ? null : s.rangeIn }
+    }),
+
+  clearRange: () => set({ rangeIn: null, rangeOut: null }),
+
+  toggleKind: (kind) =>
+    set((s) => ({
+      hiddenKinds: s.hiddenKinds.includes(kind)
+        ? s.hiddenKinds.filter((k) => k !== kind)
+        : [...s.hiddenKinds, kind]
+    })),
   select: (clipId) =>
     set({
       selectedClipIds: clipId ? [clipId] : [],

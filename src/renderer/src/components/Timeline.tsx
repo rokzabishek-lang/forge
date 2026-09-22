@@ -10,6 +10,7 @@ import {
   MAX_TRACKS
 } from '@shared/timeline'
 import { gapAt } from '@shared/edit/recipes'
+import { clipKind, kindsPresent, styleFor } from '@shared/edit/clipKind'
 import { ClipMenu, type ClipMenuTarget } from './ClipMenu'
 import { useEditor } from '../store'
 import { useCatalog } from '../catalog'
@@ -48,6 +49,13 @@ export function Timeline(): ReactNode {
   const selectedClipIds = useEditor((s) => s.selectedClipIds)
   const selectedGap = useEditor((s) => s.selectedGap)
   const moveSelectionTo = useEditor((s) => s.moveSelectionTo)
+  const rangeIn = useEditor((s) => s.rangeIn)
+  const rangeOut = useEditor((s) => s.rangeOut)
+  const setRangeIn = useEditor((s) => s.setRangeIn)
+  const setRangeOut = useEditor((s) => s.setRangeOut)
+  const clearRange = useEditor((s) => s.clearRange)
+  const hiddenKinds = useEditor((s) => s.hiddenKinds)
+  const toggleKind = useEditor((s) => s.toggleKind)
   const moveClip = useEditor((s) => s.moveClip)
   const placePoolAsset = useEditor((s) => s.placePoolAsset)
   const trimClipStart = useEditor((s) => s.trimClipStart)
@@ -334,6 +342,8 @@ export function Timeline(): ReactNode {
 
   /** Which lane the marquee began in, for reporting only. */
   const marqueeTrack = useRef<string | null>(null)
+  /** True while the playhead's own head is being dragged. */
+  const scrubbingHead = useRef(false)
 
   /**
    * Every clip the rubber band touches.
@@ -387,6 +397,23 @@ export function Timeline(): ReactNode {
   // not be rebuilt on every track change.
   lanesRef.current = lanes
 
+  /*
+   * Which kinds are actually on this timeline.
+   *
+   * The legend shows what is there and nothing else: a row of nine swatches
+   * where six can never match anything is a row nobody reads.
+   */
+  const present = kindsPresent(
+    project.clips.map((c) =>
+      clipKind(
+        c,
+        project.assets.find((a) => a.id === c.assetId),
+        project.tracks.find((t) => t.id === c.trackId),
+        fps
+      )
+    )
+  )
+
   return (
     /*
      * `select-none` on the whole timeline.
@@ -404,6 +431,57 @@ export function Timeline(): ReactNode {
      */
     <div className="flex h-full select-none flex-col border-t border-ink-800 bg-ink-900">
       {clipMenu && <ClipMenu target={clipMenu} onClose={() => setClipMenu(null)} />}
+
+      {/*
+        The strip above the tracks: what is on this timeline, and which stretch
+        of it is being worked on. Both are about FINDING things — the colours so
+        a sound effect is not one more grey box in a row of thirty, the in and
+        out so playback stops running the whole reel to check two seconds.
+      */}
+      <div className="flex h-7 items-center gap-1 border-b border-ink-800 px-2 text-[10px]">
+        {present.map((style) => {
+          const off = hiddenKinds.includes(style.kind)
+          return (
+            <button
+              key={style.kind}
+              onClick={() => toggleKind(style.kind)}
+              title={off ? `Show ${style.label}` : `Dim ${style.label} — they stay in the export`}
+              className={`flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors hover:bg-ink-800 ${
+                off ? 'text-ink-600' : 'text-ink-300'
+              }`}
+            >
+              <span className={`size-2 rounded-[2px] ${style.dot} ${off ? 'opacity-25' : ''}`} />
+              {style.label}
+            </button>
+          )
+        })}
+
+        <div className="ml-auto flex items-center gap-1">
+          <button
+            onClick={() => setRangeIn(playhead)}
+            title="Mark in at the playhead (I)"
+            className="rounded px-1.5 py-0.5 text-ink-400 transition-colors hover:bg-ink-800 hover:text-flame-400"
+          >
+            Mark in
+          </button>
+          <button
+            onClick={() => setRangeOut(playhead)}
+            title="Mark out at the playhead (O)"
+            className="rounded px-1.5 py-0.5 text-ink-400 transition-colors hover:bg-ink-800 hover:text-flame-400"
+          >
+            Mark out
+          </button>
+          {(rangeIn !== null || rangeOut !== null) && (
+            <button
+              onClick={clearRange}
+              title="Clear the range"
+              className="rounded px-1.5 py-0.5 text-flame-400 transition-colors hover:bg-ink-800"
+            >
+              {formatTimecode(Math.max(0, (rangeOut ?? duration) - (rangeIn ?? 0)), fps)} ✕
+            </button>
+          )}
+        </div>
+      </div>
       <div className="flex flex-1 overflow-hidden">
         {/* Track headers stay put while the lane scrolls. */}
         <div className="w-[128px] shrink-0 overflow-y-auto border-r border-ink-800 bg-ink-850">
@@ -518,6 +596,34 @@ export function Timeline(): ReactNode {
                   {formatTimecode(frame, fps)}
                 </div>
               ))}
+
+              {/*
+                The stretch being worked on, drawn ON the ruler where the in and
+                out points are set. Everything outside it is dimmed rather than
+                hidden: the rest of the timeline is still there and still
+                editable, it is simply not what playback is about right now.
+              */}
+              {(rangeIn !== null || rangeOut !== null) && (
+                <div
+                  className="pointer-events-none absolute bottom-0 h-1.5 rounded-sm bg-flame-500/70"
+                  style={{
+                    left: (rangeIn ?? 0) * zoom,
+                    width: Math.max(2, ((rangeOut ?? duration) - (rangeIn ?? 0)) * zoom)
+                  }}
+                />
+              )}
+              {rangeIn !== null && (
+                <div
+                  className="pointer-events-none absolute bottom-0 h-3 w-[3px] bg-flame-400"
+                  style={{ left: rangeIn * zoom }}
+                />
+              )}
+              {rangeOut !== null && (
+                <div
+                  className="pointer-events-none absolute bottom-0 h-3 w-[3px] bg-flame-400"
+                  style={{ left: rangeOut * zoom - 3 }}
+                />
+              )}
             </div>
 
             {lanes.map((track) => (
@@ -669,14 +775,18 @@ export function Timeline(): ReactNode {
                   .map((clip) => {
                     const asset = project.assets.find((a) => a.id === clip.assetId)
                     const selected = selectedClipIds.includes(clip.id)
+                    /*
+                      Coloured by what it IS. Every clip used to be the same
+                      grey box, so a reel of thirty was a grey wall and finding
+                      the music meant clicking through them.
+                    */
+                    const kind = styleFor(clipKind(clip, asset, track, fps))
                     return (
                       <div
                         key={clip.id}
                         className={`group/clip absolute top-1.5 bottom-1.5 overflow-hidden rounded-md border text-[11px] transition-colors ${
-                          selected
-                            ? 'border-flame-500 bg-flame-500/25'
-                            : 'border-ink-600 bg-ink-700/70 hover:bg-ink-700'
-                        }`}
+                          selected ? kind.selected : kind.idle
+                        } ${hiddenKinds.includes(kind.kind) ? 'opacity-15' : ''}`}
                         style={{ left: clip.start * zoom, width: Math.max(6, clip.duration * zoom) }}
                         onContextMenu={(e) => {
                           e.preventDefault()
@@ -794,11 +904,49 @@ export function Timeline(): ReactNode {
               />
             )}
 
+            {/*
+              The playhead, with a head you can actually grab.
+              
+              It was a one-pixel line and a six-pixel arrow: nothing to aim at,
+              so the only way to move it was to hit the ruler exactly. Premiere
+              and CapCut both give it a head wide enough to be a target and tall
+              enough to read against the ruler, and drag it from anywhere down
+              the line. The line stays one pixel — a thick one hides the frame
+              it is pointing at, which is the one thing it must not do.
+            */}
             <div
-              className="pointer-events-none absolute top-0 z-30 w-px bg-flame-500"
+              className="absolute top-0 z-30 w-px bg-flame-500"
               style={{ left: playhead * zoom, height: 28 + project.tracks.length * TRACK_HEIGHT }}
             >
-              <div className="absolute -left-1.5 top-0 size-0 border-x-[6px] border-t-[7px] border-x-transparent border-t-flame-500" />
+              <div
+                onPointerDown={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+                  scrubbingHead.current = true
+                }}
+                onPointerMove={(e) => {
+                  if (scrubbingHead.current) setPlayhead(frameFromEvent(e.clientX))
+                }}
+                onPointerUp={() => {
+                  scrubbingHead.current = false
+                }}
+                onPointerCancel={() => {
+                  scrubbingHead.current = false
+                }}
+                title={`${formatTimecode(playhead, fps)} — drag to scrub`}
+                /*
+                  A house shape: flat top to read the timecode against, point at
+                  the bottom landing exactly on the line. Pulled left by half its
+                  width so the POINT is on the frame, not its left edge — an
+                  off-by-half-a-head is a playhead that lies about where it is.
+                */
+                className="absolute -top-px h-[15px] w-[13px] cursor-ew-resize bg-flame-500"
+                style={{
+                  left: -6,
+                  clipPath: 'polygon(0 0, 100% 0, 100% 62%, 50% 100%, 0 62%)'
+                }}
+              />
             </div>
           </div>
         </div>

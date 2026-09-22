@@ -180,6 +180,11 @@ export default function App(): ReactNode {
       'Shift+Delete': () => state().rippleDeleteSelection(),
       'Shift+Backspace': () => state().rippleDeleteSelection(),
 
+      // I and O: Premiere's, Resolve's, and every NLE's since.
+      i: () => state().setRangeIn(state().playhead),
+      o: () => state().setRangeOut(state().playhead),
+      'Alt+x': () => state().clearRange(),
+
       '$mod+a': (e) => {
         e.preventDefault()
         state().selectAll()

@@ -6,6 +6,7 @@ import type { PaperSpec } from './render/paper'
 import type { CarouselClipSpec } from './render/carousel'
 import type { Mask } from './render/mask'
 import type { Transcript } from './transcript'
+import type { VoiceEffect } from './render/voice'
 /*
  * A value import, unlike every other one above, and safe: `render/speed.ts`
  * takes only TYPES from this file, so the edge is one-way at runtime. It is
@@ -231,6 +232,14 @@ export interface Clip {
    * render/speed.ts — the frames consumed are always `duration × speed`.
    */
   speed?: number
+  /**
+   * A voice effect on this clip's sound — chipmunk, monster, phone call.
+   *
+   * Pitch WITHOUT tempo, so the clip is exactly as long as it was and nothing
+   * after it on the timeline moves. See render/voice.ts. Absent means the
+   * sound is untouched, which is every clip made before this existed.
+   */
+  voice?: VoiceEffect
   /**
    * Frames of fade at the head and the tail of the clip's sound.
    *

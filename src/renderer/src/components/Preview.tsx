@@ -304,6 +304,8 @@ export function Preview(): ReactNode {
   const setPlaying = useEditor((s) => s.setPlaying)
   const loop = useEditor((s) => s.loop)
   const scrubAudio = useEditor((s) => s.scrubAudio)
+  const rangeIn = useEditor((s) => s.rangeIn)
+  const rangeOut = useEditor((s) => s.rangeOut)
   const showThirds = useEditor((s) => s.showThirds)
   const showSafe = useEditor((s) => s.showSafe)
   const previewTool = useEditor((s) => s.previewTool)
@@ -1682,18 +1684,26 @@ export function Preview(): ReactNode {
           clockRef.current = { anchor: { at: now, frame: playhead }, wrote: playhead }
         }
 
+        /*
+         * Playback obeys the marked range.
+         *
+         * The point of marking one is to watch two seconds of a ninety-second
+         * reel without watching the other eighty-eight, so the out point stops
+         * playback and the in point is where a loop returns to.
+         */
         const step = clockStep(
           clockRef.current.anchor,
           now,
           fps,
-          projectDuration(project),
-          loop
+          rangeOut ?? projectDuration(project),
+          loop,
+          rangeIn ?? 0
         )
 
         if (step.kind === 'loop') {
-          clockRef.current = { anchor: { at: now, frame: 0 }, wrote: 0 }
-          setPlayhead(0)
-          syncMedia(0, true)
+          clockRef.current = { anchor: { at: now, frame: step.frame }, wrote: step.frame }
+          setPlayhead(step.frame)
+          syncMedia(step.frame, true)
         } else if (step.kind === 'stop') {
           setPlaying(false)
           setPlayhead(step.frame)
@@ -1708,7 +1718,7 @@ export function Preview(): ReactNode {
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [draw, playing, playhead, fps, project, layersAtFrame, setPlayhead, setPlaying, syncMedia, loop])
+  }, [draw, playing, playhead, fps, project, layersAtFrame, setPlayhead, setPlaying, syncMedia, loop, rangeIn, rangeOut])
 
   /*
    * The selected text clip, when the playhead is actually over it.

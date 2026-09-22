@@ -74,7 +74,16 @@ export function clockStep(
   now: number,
   fps: number,
   end: number,
-  loop: boolean
+  loop: boolean,
+  /**
+   * Where a loop returns to — the in point, when one is marked.
+   *
+   * Playback within a marked range is the whole reason to mark one: checking
+   * two seconds of a ninety-second reel should not mean watching the other
+   * eighty-eight. Defaulted rather than required, so every existing caller
+   * keeps the behaviour it had.
+   */
+  start = 0
 ): ClockStep {
   const frame = frameAt(anchor, now, fps)
 
@@ -87,7 +96,11 @@ export function clockStep(
    */
   if (end <= 0) return { kind: 'stop', frame: 0 }
 
-  if (frame >= end) return loop ? { kind: 'loop', frame: 0 } : { kind: 'stop', frame: end }
+  // A start at or past the end is not a range, it is a mistake upstream; the
+  // whole timeline is the honest answer rather than a loop that cannot advance.
+  const from = start > 0 && start < end ? start : 0
+
+  if (frame >= end) return loop ? { kind: 'loop', frame: from } : { kind: 'stop', frame: end }
   return { kind: 'play', frame }
 }
 

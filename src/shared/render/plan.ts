@@ -19,6 +19,7 @@ import { safeCrop, type Size } from './crop'
 import { atempoChain, clipSpeed, sourceFramesFor, speedVideoFilter } from './speed'
 import { audioFadeFilters, fadesWithNeighbours } from './audioFade'
 import { duckFilter } from './duck'
+import { voiceFilters } from './voice'
 import { loudnessFilters } from './loudness'
 import {
   DEFAULT_SHAKE_DECAY,
@@ -1391,6 +1392,19 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
        * offset too and slide every slowed clip out of sync.
        */
       ...atempoChain(clipSpeed(clip)),
+      /*
+       * The voice effect after the speed stretch, before the level.
+       *
+       * After, because both reach for `atempo` and the two are different
+       * intentions: speed changes how long the clip is, and a voice effect
+       * changes its pitch while deliberately keeping the length. Running them
+       * in one chain rather than combining the ratios keeps that readable —
+       * and keeps a slowed clip with a chipmunk voice honest about being both.
+       *
+       * Before the level, so the fader and the envelope apply to the finished
+       * sound rather than being re-scaled by a band filter afterwards.
+       */
+      ...voiceFilters(clip.voice, project.settings.sampleRate),
       volumeFilter,
       /*
        * Fades after the level, before the delay.
