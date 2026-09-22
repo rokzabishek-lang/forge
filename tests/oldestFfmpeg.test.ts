@@ -54,6 +54,14 @@ const TOO_NEW: { pattern: RegExp; since: string; why: string }[] = [
   { pattern: /\bspeechnorm\b/, since: '4.3', why: 'dynaudnorm is the old one' },
   { pattern: /\b(colorize|exposure|dblur|shufflepixels|thistogram)\b/, since: '4.3', why: 'no' },
   { pattern: /\b(colorcorrect|colorcontrast|monochrome|estdif|adenorm)\b/, since: '4.4', why: 'no' },
+  /*
+   * Temperature and tint are the obvious reach for a white-balance slider,
+   * and the macOS build HAS `colortemperature` — measured 2026-09-22 — which
+   * is exactly how it would ship broken. It merged in January 2021. The
+   * same slider is a 3×3 matrix on `colorchannelmixer` (2013), and the
+   * preview's WebGL grade can apply the identical matrix. docs/FIX.md B3.
+   */
+  { pattern: /\bcolortemperature\b/, since: '4.4', why: 'colorchannelmixer with a temperature/tint matrix' },
   { pattern: /\b(asupercut|asubcut|asuperpass|asuperstop)\b/, since: '4.4', why: 'highpass/lowpass' },
   /*
    * `afade` itself is from 2013 and is safe. Its CURVE list is not uniformly
