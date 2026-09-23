@@ -792,6 +792,9 @@ arithmetic. Temp and Tint sliders head the Colour section. While there:
 Reset now clears curves and the balance too (`NEUTRAL_COLOR_PATCH`) — it used
 to spread only the three sliders' defaults, so with curves on it did nothing
 and stayed on screen.
+Seventeen mutations over the crop and the balance — the preview's two crop
+sites, the plan's stream size, the gains, their order, the adjustment gate,
+the grade mask, the shader and its cache key — all killed.
 
 **Chroma key.** `Clip.key?: { color, similarity, blend, despill }` →
 `chromakey` (2015) + `despill` (2017) in the clip chain before the overlay.
