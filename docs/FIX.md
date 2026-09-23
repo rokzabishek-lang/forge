@@ -6,6 +6,13 @@ the two things that come after: measuring the Director on a real model, and
 the pass that dresses its spine. Written to be precise enough to start from
 cold on either machine.
 
+> **Status, 2026-09-24.** **Phases A and B are complete** — the editor is done;
+> the one piece left out on purpose is mask *tracking* (a later component),
+> and bugs found in real use come after. **Phase C is next, and Phase D now
+> lives inside it**: C is the ad-maker — measure the Director, give it eyes,
+> directing recipes, sound design, a three.js moments engine — and D's
+> dressing is C2 and C3. Phase E (templates and the market) follows.
+
 **Three facts that shape every item below.**
 
 1. **No fix here needs a new model.** One needs a new *component* — mask
@@ -35,7 +42,7 @@ cold on either machine.
 |---|---|---|---|---|---|
 | **A** | the editing surface — nine items a CapCut user hits in the first hour | ~9–12 | no | Web Audio (browser API) | none |
 | **B** | audio surface · export shape · colour, key, masks, motion, transcript | ~9–13 | no | OpenCV for mask tracking only | `libx265`/hardware encoders, `vidstab` — measure on Windows |
-| **C** | the Director, measured on a real model | 1 + ongoing | uses one | no | — |
+| **C** | from a slideshow to a commercial: measure, eyes (the VLM + OpenCV), directing recipes and rhythm, sound design, a three.js moments engine | ~16–22 + ongoing | uses one (the VLM) | OpenCV checks; a sound pack; three.js already bundled | none for the moments engine — it bakes frames |
 | **D** | the dressing planner (pass 2) | ~3–4 (+ sticker index later) | uses one | bge-m3 embeddings for stickers, later | — |
 | **E** | templates with slots; the market around them | design first | no | a server, later | — |
 
@@ -943,12 +950,70 @@ what is tested is that it arrives.
 
 ---
 
-## Phase C — the Director, measured
+## Phase C — from a slideshow to a commercial
 
-`docs/LLM.md` calls the missing eval the quiet killer: until it exists, no
-change to the prompt can be called an improvement. This phase builds it and
-runs it. **No fine-tuning** — that is `LLM.md`'s fourth move, taken only if
-the prompt path fails. "Tuning" here means prompt, menu and parameters.
+Agreed with the user on 2026-09-24, from a research pass (workflow
+`wf_b3dbcdb3-7bb`: readers over the Director, the toolkit, the sheets, the
+signals and the models, a web sweep of how Apple, Nike, Puma spots, trailers
+and wedding films are cut, then two skeptics — one against the code and the
+2018 Windows ffmpeg, one on taste and reliability).
+
+**Why a Director ad reads as a slideshow today** — from the code:
+
+1. The plan is a spine of seven fields per segment (`director/schema.ts`):
+   slot, role, which beat it ends on, cut or a transition family, headline,
+   punch word, why. Nothing else is expressible.
+2. The toolkit is out of its reach: `apply.ts` imports none of the 42 text
+   styles × 9 animations, the 7 looks, masks, speed, grids, strips, clippings,
+   the ring, stickers or SFX. Text is always `DEFAULT_TEXT`; the grade is
+   always neutral.
+3. No hierarchy: every shot lasts until the nearest beat. Nothing holds
+   longer because it matters more — the single biggest tell.
+4. Motion is compulsory on every still (`apply.ts`), and "always moving" is
+   itself a synthetic tell. There is no "hold still".
+5. No sound design: music only — no hit on the drop, no whoosh on a whip, no
+   silence before the end card.
+6. No eyes: a slot carries a label, a note, a snippet of speech and a length.
+   Images are plumbed to both model clients and never sent.
+7. Never run on a real model. Nothing below is proven until C0 has run.
+
+**What commercials do, ranked by how much each contributes** (research,
+sourced in the workflow): rhythm with a shape — cuts accelerating to a peak,
+then one long hold (social ads average ~1.2 s a shot); motivated cuts, not
+decorative transitions; sound driving the picture — risers into hits,
+whooshes, a beat of silence; movement inside the frame — ramps, push-ins,
+slow motion on the hero; a designed ending — cut to black, then an unhurried
+end card; typography as its own beat — at least 1.5 s, ~21 characters a
+second; one grade across the piece. Only the fourth is an effect. The rest is
+grammar, and grammar is what can be made reliable.
+
+**The principle: the model chooses, code composes.** A small local model can
+be trusted to choose from a menu, to say what is in a photo it is shown, to
+mark the hero, to pick a style, and — unmeasured — to write short copy. It
+cannot be trusted to time things, to shape a pacing curve over twelve
+segments, or to avoid legal choices compounding into something garish. So
+the grammar lives in **directing recipes**: deterministic rules for a kind of
+ad — its pacing curve, where it holds, where the moments go and how many,
+which sound events fire where, its type rules, its grade. The model picks the
+recipe, casts the photos into roles, marks the hero and writes the words; code
+realises the recipe. A bad answer still lands on the beat and inside the
+rules. Recipes are also the seed of Phase E's templates.
+
+First recipes to write (the user picks the first two): *Product reveal*
+(Apple-like: slow build, hero push-in, silence, cut to black, end card),
+*Energy* (Nike/Puma: accelerating cuts, a speed ramp, hits on the drops),
+*Trailer* (three acts, riser into the hit, title cards), *Wedding highlight*
+(emotional holds on faces, one warm grade, lyric-timed cards),
+*Fashion/perfume* (slow motion, negative space, minimal type).
+
+### C0. Measure the Director as it is — 1–2 days
+
+The eval `docs/LLM.md` calls the missing piece: until it exists, no change to
+the prompt can be called an improvement. **No fine-tuning** — that is
+`LLM.md`'s fourth move, taken only if the prompt path fails. "Tuning" means
+prompt, menu and parameters. The sandbox this is developed in cannot reach
+localhost, so the harness is written here and **run on the user's machine**
+(or the sandbox is given localhost).
 
 **Fixtures.** Ten briefs in `tests/fixtures/director/`: each 4–8 stills, one
 short clip, 30 s of music, a product line, a language (six English, two
@@ -974,9 +1039,103 @@ what fits a phone frame in those scripts and set per-language capacity.
 a non-rejected plan on eight of ten briefs with copy the user rates ≥ 3.
 If none does, the finding is written down before anything is retrained.
 
+**Also measured in C0, because C1 depends on it:** the VLM shown each photo —
+do its descriptions match what is in the fixture photos (the user marks each
+right or wrong), and what do the images add to the time and memory on the
+Surface, the 8 GB-class floor machine.
+
+### C1. Eyes — 3–4 days
+
+**The VLM is the Director's eyes.** An ad uses few photos, so they can simply
+be shown: a handful of downscaled images is a few thousand tokens, not the
+~45k a frame-a-second sampling costs. A **look pass** per photo, cached by the
+file so a retry never looks twice, answering from closed lists — who is in it
+(no one / one / a couple / a group), shot type (wide / medium / close /
+detail), mood, product visible, hero strength 1–5 — plus up to twelve words
+of what is there, so the copy is about the picture. The spine then reads the
+looks: the model picks the hero from what it saw, and the recipe paces by
+shot type — wides early, close-ups toward the peak, holds on faces.
+
+**OpenCV and ffmpeg are the objective check, beside it.** Sharpness
+(Laplacian variance), exposure (`signalstats`, 2014, safe on both builds),
+orientation, duplicates (a perceptual hash), and for video, cut points
+(`select`'s scene score — `scdet` merged in 2020 and is not safe on the
+Windows build). Where the VLM and a measurement disagree, the measurement
+wins: a small VLM on a downscaled photo cannot see blur. They make a
+**quality gate**: a too-dark, too-soft or duplicate photo is never the hero,
+and the app says what it left out and why. Florence-2 keeps its own job —
+caption placement — and is not part of this.
+
+### C2. Recipes and the rhythm engine — 4–5 days
+
+Plan format v2: the recipe, the hero, and per shot a choice from short lists —
+a move *including hold still*, a speed (normal / slow on the hero / a ramp
+preset), a text style from a curated shortlist per recipe — and one look for
+the whole ad. The rhythm engine realises the recipe from the beat menu: the
+accelerating curve, holds stolen from neighbours for the hero and the faces,
+cut to black and silence before the end card, the end card's dwell, title
+timing (at least 1.5 s, reading speed). The transition budget varies with the
+input mix, stills against footage — the lesson the reel already paid for
+(`AUTOMATION.md` §5b), which the Director's one flat `TRANSITION_SHARE` never
+took. A **coherence check**: one intensity dial across grade, type, sound and
+moments, and a clash table, so legal choices cannot pile up; at most two or
+three moments, none on the hook unless the recipe designs one. Buildable
+pieces here are measured already or safe: speed ramps (`EFFECTS.md` §18),
+freeze frames (`tpad`), J/L cuts (`detachAudio`).
+
+### C3. Sound design — 2–3 days, and a pack
+
+Risers, whooshes, hits and sub-drops, fired by the recipe on its events: the
+hit on the drop cut, the whoosh under a whip, the riser into the climax, the
+silence before the end card. Firing is deterministic, never a per-cut model
+choice. The mechanism exists (`automation/keywords.ts` fires props on
+words); **the pack has to be sourced** — the user's call.
+
+### C4. The moments engine, on three.js / WebGL — 5–7 days
+
+The card ring's rails: three.js draws into a canvas the preview shows live,
+and the export gets that drawing baked to still frames it overlays — so
+preview and export cannot disagree, and the 2018 Windows ffmpeg does not
+matter to these effects at all. Exact frames come from a pre-pass (ffmpeg pulls
+both clips' frames across the moment, as Steady's analysis does). What it
+makes: designed shader transitions (zoom-blur punch, a motion-blurred whip,
+light-leak burn, luma melt — the open gl-transitions collection is the
+starting point), a real 2.5D camera *into* a photo using the depth maps the app
+already bakes, light leaks and flares generated in code rather than stock
+footage, kinetic type. Used for two or three moments an ad, placed by the
+recipe — never every cut. Overused, this is exactly what makes automatic
+editors look cheap.
+
+### C5. Evaluate and tune — ongoing
+
+C0's eval re-run after every step, into `docs/EVAL.md`, plus blind ratings
+against real reference ads. Degraded modes each tested: no music (every
+timing rule rides the beat grid, so it fails all at once without one), three
+photos only, a long product name, Telugu and Hindi headline capacity
+(unmeasured — the cap is a Latin-script number).
+
+**Doable, and not.** Wiring what exists, the rhythm engine, the ffmpeg-safe
+pieces, the eyes, the sound firing and the moments engine are all within the
+stack. True match cuts, cutting on action and Nike-style synchronized
+split-screen need motion understanding across footage: they stay manual or
+template features. And no editor, human or automatic, makes a soft reception
+photo look like a product shot — what this phase makes reliable is that
+*good* input looks directed, and the worst photo is never the hero.
+
+**Open decisions for the user:** who runs C0 (their machine, or localhost for
+the sandbox); the first two recipes; where the sound pack comes from; whether
+a hosted model is acceptable for the copy alone if the local copy fails C0.
+
 ---
 
 ## Phase D — the dressing planner (pass 2)
+
+> **Largely folded into Phase C (C2, C3)** since 2026-09-24: the recipe now
+> decides the treatments, the sound and the look, deterministically, and the
+> model chooses among them in the spine's plan v2. What survives from below is
+> the catalogue-from-code idea (the recipe's menus are built from the
+> registries) and the validator's restraint rules (fits its slot, sparse, one
+> look). Kept for the record of what was designed.
 
 The spine says *what* happens when. The planner says *how it looks*, from the
 library the app already has — and it is where that library becomes the

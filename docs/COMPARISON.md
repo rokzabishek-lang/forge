@@ -1,5 +1,15 @@
 # Forge against the market — 22 September 2026
 
+> **This is a snapshot, and much of its Forge side is no longer true.** Phases
+> A and B of `docs/FIX.md` closed nearly every gap in the "Behind the market"
+> list below — transitions and the audio mix play in the preview, audio
+> detaches, colour has temperature and tint, there is a chroma key, camera
+> moves can be set by hand, the export has codecs, sizes, ranges and frame
+> rates — everything except mask *tracking*. Read FIX.md for what is current.
+> Three research agents on 2026-09-24 took rows from this table as current and
+> were wrong three times; the rows they tripped on are marked below. The market
+> side (the other products) is unchanged.
+
 An honest, evidence-backed comparison of Forge with the editors and AI ad
 tools a marketer would otherwise use. Written to answer one question: **is
 this a real NLE yet, and what real things are missing?**
@@ -72,7 +82,7 @@ form (said how) · **✗** absent · **bug** present but wrong.
 | slip / slide / roll | ✗ | partial (drag-first, no trim modes) | ✓ tools + Trim Monitor | ✓ | ✓ |
 | markers | ✗ | ✓ | ✓ with comments, colours | ✓ | ✓ incl. to-do, chapter |
 | in / out points, range | ✗ | ✓ | ✓ three/four-point | ✓ | ✓ |
-| link / unlink / detach audio | **✗** — a video clip's audio cannot be separated; hiding a video track also drops its sound (`plan.ts:583`) | ✓ Separate audio | ✓ | ✓ | ✓ detach / expand |
+| link / unlink / detach audio | **✓ since B1** — `detachAudio`/`reattachAudio` (`edit/recipes.ts`), which is how a J- or L-cut is made. *Was:* ✗ — a video clip's audio could not be separated | ✓ Separate audio | ✓ | ✓ | ✓ detach / expand |
 | nesting / compound clips | ✗ | ✓ compound | ✓ nest, Productions | ✓ | ✓ compound, secondary storylines |
 | speed | ✓ constant, pitch-correct, ripples neighbours; optical-flow slow toggle with its 41× cost stated | ✓ curves / ramps | ✓ time remapping, ramps | ✓ ramps, Speed Warp | ✓ ramps, Smooth Slo-Mo |
 | snapping | ✓ pixel-constant to edges, playhead, zero; cannot be toggled | ✓ | ✓ | ✓ | ✓ |
@@ -95,12 +105,12 @@ speed-corrected window of the source (`ClipWaveform.tsx:85-87`).
 |---|---|---|---|---|---|
 | clock | timeline-owned, cannot drift; slow composite drops frames rather than slowing the edit (`clock.ts:57-92`) | native GPU preview | Mercury Playback Engine | GPU realtime engine | Metal, background render |
 | all layers composited live | ✓ every visible track, adjustment layers in order | ✓ | ✓ | ✓ | ✓ |
-| **transitions shown in preview** | **✗** — every one plays as a cross-dissolve; `transitionIn.id` is never read (`Preview.tsx:817-826`) | ✓ | ✓ (render bar on heavy ones) | ✓ | ✓ |
+| **transitions shown in preview** | **✓ since A2** — each family previews from the same numbers the render uses, wipes through their stencil. *Was:* ✗ — every one played as a cross-dissolve | ✓ | ✓ (render bar on heavy ones) | ✓ | ✓ |
 | colour shown as it exports | ✓ ffmpeg's `eq` maths in BT.709 on the GPU, same curve table, trilinear .cube (`grade.ts:32-101`) | ✓ | ✓ | ✓ (its flagship) | ✓ |
 | masks shown as pixel ops | ✓ (`maskPreview.ts`) | ✓ | ✓ | ✓ | ✓ |
 | text and captions live | ✓ same painter as the export; typing updates the frame | ✓ | partial (render bar) | ✓ | ✓ |
 | keyframes / speed / camera moves live | ✓ same `valueAt` as the export | ✓ | ✓ | ✓ | ✓ |
-| **audio mix heard in preview** | **✗** — only flat `clip.volume`; envelope, fades, crossfade and ducking are render-only (`Preview.tsx:605, 671`) | ✓ | ✓ | ✓ | ✓ |
+| **audio mix heard in preview** | **✓ since A3** — `PreviewMixer`: envelope, fades, crossfade and a ducker sharing the render's constants. *Was:* ✗ — render-only | ✓ | ✓ | ✓ | ✓ |
 | **audio while scrubbing** | **✗** — elements pause when not playing (`Preview.tsx:696-701`) | ✓ | ✓ | ✓ | ✓ |
 | proxy / playback quality control | ✗ — grades run at full source resolution per frame (`grade.ts:409-447`) | ✓ 720p/540p proxies ~ | ✓ ½ ¼ ⅛ + proxies | ✓ proxies, optimised media, cache | ✓ proxy, Better Performance |
 | scopes | ✗ | ✗ | ✓ Lumetri | ✓ full set | ✓ |
@@ -119,7 +129,7 @@ speed-corrected window of the source (`ClipWaveform.tsx:85-87`).
 | ducking under speech | ✓ render (`sidechaincompress`) — **not heard in preview** | ✓ in automated flows | ✓ Essential Sound, keyframed | ✓ | partial |
 | mute / **solo** per track | mute on audio tracks; **no solo**; video tracks have no mute | ✓ | ✓ | ✓ | ✓ |
 | **level meters / clipping** | **✗** none; no Web Audio graph in the renderer | ✓ level bar | ✓ | ✓ | ✓ |
-| **detach audio from video** | **✗** | ✓ | ✓ | ✓ | ✓ |
+| **detach audio from video** | **✓ since B1** | ✓ | ✓ | ✓ | ✓ |
 | **voice-over recording** | **✗** — no mic capture anywhere | ✓ | ✓ | ✓ | ✓ |
 | loudness normalisation | ✓ LUFS presets on the Output panel, measured after ducking and music | ✗ | Loudness Radar (manual) | ✓ | partial |
 | stems / vocal isolation | ✓ Demucs (opt-in) with mid/side fallback | ✓ Pro | Enhance Speech | ✓ Voice Isolation, Dialogue Separator | ✓ Voice Isolation |
