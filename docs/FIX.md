@@ -796,11 +796,39 @@ Seventeen mutations over the crop and the balance — the preview's two crop
 sites, the plan's stream size, the gains, their order, the adjustment gate,
 the grade mask, the shader and its cache key — all killed.
 
-**Chroma key.** `Clip.key?: { color, similarity, blend, despill }` →
-`chromakey` (2015) + `despill` (2017) in the clip chain before the overlay.
-Preview: a WebGL shader with `chromakey`'s own distance formula; parity test
-on a generated green frame — measure ffmpeg's alpha, compare the shader's.
-Colour picker: click the preview to sample.
+**Chroma key — DONE.** `Clip.key?: { color, similarity, blend, despill }` →
+`chromakey` (2015) + `despill` (2017). `render/chromaKey.ts` is ffmpeg's
+keying arithmetic, measured (EFFECTS.md §29): the pixel's chroma is BT.601
+limited, the key colour's is the JPEG formula in fixed point, alpha is
+truncated. The export keys a copy of the fitted, UNGRADED picture and
+multiplies its alpha into the clip's own before the grade, so a turn, an
+opacity or a transition acts on a picture already keyed. The preview's WebGL
+grade runs the same formula from the same coefficients — in the harness,
+within 6/255 of ffmpeg's alpha over 108 patches, despill exact. The Inspector's
+**Key** section sits above Colour (it is keyed before it is graded): Add,
+**Pick from picture** — the preview draws the clip raw and averages the pixels
+under the click — then Range, Soften and Despill. Offered on footage and
+photographs only (`isKeyable`).
+
+Four alpha bugs turned up on the way, each with a render check
+(`integration/gradeAlpha.int.test.ts`, `adjustment.int.test.ts`):
+- **`eq` drops alpha** (0 in, 255 out), so any clip with brightness, contrast
+  or saturation lost its transparency — letterbox bars black, stickers solid.
+  Older than B3 by a long way; the preview never showed it. Wrapped.
+- **A turned keyed clip failed the export** — the key was first built as a late
+  stencil shape, the box's size, meeting a picture already grown by the turn.
+- **A keyframed opacity replaced the clip's alpha** instead of multiplying it.
+- **A Grade layer with a look could not export at all** — a copy of the look was
+  built on the layer's own never-drawn picture and left unconnected.
+
+**The keyframe graph, reported unreadable — fixed.** Zoom's axis ran 1×–4× and
+rotation's ±180°, so a push-in or a tilt was a flat line on the floor; the graph
+now shows a window fitted round the keys (`graphWindow`, keyframes.ts), held
+still during a drag and refitted on release. Opacity and volume keep their
+whole axis — volume's must match the fader. The property tabs had fallen off
+the panel's header at an ordinary width and now have their own row; the plot is
+inset so a key on the edge is whole; and the axis limits are no longer labelled
+as the clip's start and end values.
 
 **Mask keyframes, then tracking.** Make mask `x/y/width/height` keyable
 (`KeyedProperty` grows); `maskExpression` compiles piecewise-linear

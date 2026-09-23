@@ -2216,3 +2216,75 @@ fit's see-through side bars came out 0,0,0 where they should have shown the
 red; without the mask they did. A half-transparent PNG went opaque the same
 way. The clip's own alpha (`split`, `alphaextract`) is now the first shape and
 everything multiplies into it (`integration/maskOwnAlpha.int.test.ts`).
+
+### Chroma key — ffmpeg's arithmetic, written down so the preview can copy it
+
+B3. `chromakey` (2015) and `despill` (2017), both older than the Windows
+build. `render/chromaKey.ts` holds the model; the preview's shader and the
+export's filters both take their numbers from it. Measured on the bundled
+binary with patches of known colour (`integration/chromaKey.int.test.ts`):
+
+- **A pixel's chroma is the stream's own U and V** — for a picture that
+  arrived as RGB, swscale's BT.601 limited range: pure green is (54, 34).
+- **The KEY colour is converted differently**: the full-range JPEG formula in
+  10-bit fixed point (`RGB_TO_U`/`RGB_TO_V`, colorspace.h), so pure green keys
+  at (44, 21). Copy the pixel formula for the key and every key is off.
+  A consequence: a key picked off the screen itself sits about 0.03 of
+  `similarity` from that screen, not 0. The default 0.12 covers it.
+- **Distance** is `sqrt((du² + dv²) / (255² · 2))`, averaged over the 3×3
+  neighbourhood; **alpha** is `clip((d − similarity) / blend, 0, 1) · 255`,
+  TRUNCATED — or a hard cut at `similarity` when blend is 0. The model
+  predicts every one of 18 patches × 5 keys within 4 levels.
+- **`chromakey` REPLACES alpha**, like `alphamerge`. So the export keys a
+  copy, keeps only its alpha, and multiplies it into the clip's own —
+  straight after the fit, before the grade (a key measured on graded greens
+  moves). It was first built as one of the late stencil shapes; a keyed clip
+  that was then turned failed the whole export, because `finish` (the turn)
+  runs before those shapes when there is no mask, and the box-sized key met a
+  grown picture.
+- **Despill**: `spill = max(g − (r·mix + b·(1−mix)), 0)`, and `green=−amount`
+  takes that much out (200 → 90 at full, 145 at half); alpha kept.
+
+**Preview parity, measured in the harness** (patch PNG over a black track,
+alpha read back as displayed ÷ source): across 6 keys × 18 patches, soft
+edges included, the WebGL shader is within 6/255 of the model; despill on
+kept patches is exact. The shader's chroma coefficients are interpolated from
+`PIXEL_U`/`PIXEL_V` rather than typed out a second time. Footage encoded
+BT.709 keys on its own chroma in ffmpeg while the browser hands the shader
+RGB, so on such a file the soft edge can sit a few percent differently — the
+export is the one to trust.
+
+The pick reads the preview canvas while it draws the clip RAW (no key, no
+grade, no mask, nothing over it, full opacity) and averages a 7×7 square.
+
+### `eq` drops the alpha plane — every graded clip lost its transparency
+
+Found while testing the key. `eq` takes no pixel format with alpha, so ffmpeg
+auto-inserts a conversion in front of it. Measured, a fully transparent pixel
+through `format=yuva420p,eq=brightness=0.1,format=yuva420p`: alpha 0 in, 255
+out. The same pixel through `colorchannelmixer`, `curves`, `lut3d`, `hue`,
+`lutyuv` and `despill`: alpha 0 — only `eq` drops it. So brightness, contrast
+or saturation on any clip with see-through parts made them solid: the bars a
+fit leaves round a 4:3 picture came out black over the track below, a PNG
+sticker became its rectangle. The preview never did this, so it looked right
+on screen. `eq` is now wrapped — `split`, `alphaextract` before, `alphamerge`
+after — so its colour is byte-for-byte what it was and only the alpha
+changes. Cost, measured at 1080×1920: 0.59 s → 0.77 s for six seconds through
+`eq` + encode alone, about 0.03 s per second of graded footage, paid only by
+clips whose sliders are set (`integration/gradeAlpha.int.test.ts`).
+
+### A keyframed opacity wrote over the alpha
+
+`geq … a='<expression>'` REPLACED the clip's alpha with the opacity, so a
+keyframed fade on a letterboxed clip had black bars for its whole length
+(measured: 5,0,0 where the red track should show). Now
+`a='alpha(X,Y)*(<expression>)/255'`. geq's `alpha()` is from 2013.
+
+### A Grade layer with a look could not export
+
+An adjustment layer's grade runs on the composited tracks below it. But the
+clip chain also built its look on the layer's own never-drawn picture and left
+it unconnected — `Filter lut3d has an unconnected output`, whole graph
+refused, at any intensity. The graph test only ever read the string. Neither
+the look nor the new `eq` wrap is built on an adjustment layer's own picture
+now, and `integration/adjustment.int.test.ts` renders one.

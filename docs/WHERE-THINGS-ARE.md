@@ -148,6 +148,14 @@ the preview; `Remove` takes the mask off. It sits directly above Colour on
 purpose — in *Colour* mode those sliders apply only inside the shape, and the
 Colour heading says so while that is true.
 
+**Key** (footage and photos) — take a green or blue screen out so the track
+below shows through. **Add** puts a key on and goes straight to picking: the
+preview shows the clip as it arrived, with a *Click the screen colour* banner,
+and a click takes the colour under it (Esc cancels). Then **Range** (how far
+from that colour still counts as screen), **Soften** (the edge) and
+**Despill** (the screen's colour pulled off hair and edges). It sits above
+Colour because it happens first: the key is measured on the ungraded picture.
+
 **Colour** — **Temp** and **Tint** first (white balance: warm a blue cloudy
 ceremony, cool an orange tungsten reception), then brightness, contrast,
 saturation, then **Looks**: seven one-click
@@ -225,6 +233,16 @@ outlined in its own colour.
 
 `+V` and `+A` add tracks. The eye hides a video track; the speaker mutes an audio
 one — both exclude it from the export.
+
+**The curve panel, to the right of the timeline** — two tabs. **Motion** is the
+selected clip's keyframes as a graph: pick **Zoom**, **Rotate**, **Opacity** or
+**Volume** on the row under the tabs, click to add a point, drag one, double-click
+to remove it, or press **Draw** and sketch the whole shape. Time runs from *clip
+start* to *clip end*; the range between them under the graph is what its height
+spans. Zoom and rotation show a window fitted round their keys, so a small move
+fills the graph — drag a point past the top and the window grows when you let
+go. Opacity and volume always show their whole range (volume matches the
+fader). **Colour** is the tone curve.
 
 **A clip moves in both axes.** Drag it sideways in time and up or down through
 the layers in one gesture, onto a lane of the same kind and never onto a locked
