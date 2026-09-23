@@ -1876,6 +1876,30 @@ verified by mutation: putting `normalize=0` back fails three of its cases.
 If ffmpeg is ever unified across platforms, delete that file rather than
 maintaining it — the whole class goes with it.
 
+### The same filter, a different answer: `chromakey`
+
+The blocklist catches a filter or option that is MISSING on the old build. It
+cannot catch one that is present on both and computes something different —
+and `chromakey` does. The 2018 snapshot measures a key's distance as
+`sqrt(du² + dv²) / 255`; the newer build divides by a further √2. At the same
+Similarity the Windows export kept pixels the Mac export keyed out. Nothing
+failed to run; five of CI's render checks failed on the numbers, and the √2
+predicts every one of them exactly (#00b140 over pure green: the newer
+formula 53, √2 gives 234, Windows gave 234).
+
+A version check would have to know when the formula changed; a measurement
+does not. The app keys one patch on the binary it has and reads the alpha
+back (`keyScaleFromProbe`, `main/render/keyScale.ts`), then scales Similarity
+and Soften — both distances — so either build keys what the model, and the
+preview's shader, say. The render tests take the same probe
+(`integration/output.ts keyScale()`).
+
+The lesson is the one CI keeps teaching: a filter that EXISTS on both builds
+has not been shown to AGREE on both. Anything the preview has to match
+(`chromakey`, `eq`, `colorchannelmixer`, `despill`) needs its render check to
+run on the Windows runner, not only on this Mac — and the runner's results
+need reading. These went red for a day before anyone looked.
+
 ### 26. What a full platform audit found afterwards
 
 Five independent lenses over the codebase, each finding adversarially refuted by
@@ -2288,3 +2312,37 @@ it unconnected — `Filter lut3d has an unconnected output`, whole graph
 refused, at any intensity. The graph test only ever read the string. Neither
 the look nor the new `eq` wrap is built on an adjustment layer's own picture
 now, and `integration/adjustment.int.test.ts` renders one.
+
+### A moving mask — curves of `T` in `geq`, worked out once per row
+
+B3. A mask's centre and size are keyframe tracks; the export writes each as a
+`keyframeExpression` of `T` into the mask's `geq`. Measured on the bundled
+binary:
+
+- **`T` is the clip's own seconds** where the mask is drawn — on the clip's
+  chain, before `setpts` moves it to its place — 0, 0.1, 0.2… at 10 fps, as
+  the opacity keyframes already rely on.
+- **`st(n, e)` / `ld(n)` work inside a quoted `filter_complex` argument, and so
+  does `;`**: `st(0,32);if(lt(X,ld(0)),200,0)` is 200 to x=31, 0 from x=32.
+  (A first probe looked wrong: `od` collapses repeated lines into `*`. Read
+  with `od -v`.)
+- **geq has no per-frame stage**, so a curve written in at every use is
+  evaluated a dozen times per pixel. geq walks each row from x=0 and the
+  variables persist between pixels, so the curves are stored at `X` = 0 and
+  read back. 3 s at 1080×1920, four tracks of six keys:
+
+  | | time |
+  |---|---|
+  | still mask | 11.4 s |
+  | curves at every pixel | 26.8 s |
+  | curves once per row | 13.4 s |
+
+  The per-row picture is byte-identical to the per-pixel one over 180 frames.
+- The still number is itself the finding: **a `geq` mask runs about 3.7×
+  slower than real time at 1080×1920.** Not changed yet (FIX.md B3).
+
+Rendered (`integration/maskKeyframes.int.test.ts`): a window keyed from a
+quarter to three quarters across lands within a pixel of prediction on every
+frame. A pixel-reading trap on the way: `-ss` returns the first frame AT OR
+AFTER the time, so the middle of a clip's last frame is past it and reads as
+the track below — sample a quarter-frame before the frame instead.

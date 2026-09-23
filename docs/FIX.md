@@ -810,6 +810,19 @@ within 6/255 of ffmpeg's alpha over 108 patches, despill exact. The Inspector's
 under the click — then Range, Soften and Despill. Offered on footage and
 photographs only (`isKeyable`).
 
+**The Windows build keys at a different distance** — found by CI, a day late.
+The 2018 `chromakey` measures `sqrt(du²+dv²)/255`, the newer one a further
+÷√2, so Windows kept pixels the Mac keyed out. The app now keys one probe patch
+on its own binary at startup-of-first-key-export and scales Similarity and
+Soften by the answer (`keyScaleFromProbe`, `main/render/keyScale.ts`); the
+render tests use the same probe. EFFECTS.md §25.
+
+**Open: white balance on Windows.** The same CI run had the warm red at 149
+against a predicted 154.6 — 5.6 levels, over the tolerance of 5, since
+09655f2. The check now reports every channel of every balance in one message,
+so the next Windows run says whether that is one channel's rounding or a
+different conversion. Not changed until it has.
+
 Four alpha bugs turned up on the way, each with a render check
 (`integration/gradeAlpha.int.test.ts`, `adjustment.int.test.ts`):
 - **`eq` drops alpha** (0 in, 255 out), so any clip with brightness, contrast
@@ -830,12 +843,34 @@ the panel's header at an ordinary width and now have their own row; the plot is
 inset so a key on the edge is whole; and the axis limits are no longer labelled
 as the clip's start and end values.
 
-**Mask keyframes, then tracking.** Make mask `x/y/width/height` keyable
-(`KeyedProperty` grows); `maskExpression` compiles piecewise-linear
-expressions in `T` into `geq`, which exposes `T`; preview via `valueAt`.
-Tracking comes after, as the one new component: OpenCV CSRT in the sidecar
+**Mask keyframes — DONE.** The mask's centre and size are four keyframe tracks
+on the clip — `maskX`, `maskY`, `maskWidth`, `maskHeight` — rather than a new
+field, so a split, a head trim and a frame-rate change move them without
+knowing about masks (`rebaseAnimation` and `convertFrameRate` are generic over
+the tracks). One edit rule, `withMaskEdit` (render/mask.ts), for the handles
+and the sliders alike: a number whose track has keys takes a key at the
+playhead; anything else edits the shape. The Mask panel's **Animate** puts a key
+where the shape is (nothing moves until something changes elsewhere); off keeps
+what is on screen. Previous/next buttons walk the keys, and the four tracks are
+tabs in the curve graph. Removing or replacing a mask takes its keys.
+The export writes each keyed curve into the mask's `geq` as a function of `T`
+(the clip's own seconds), worked out once per row with `st()`/`ld()` — 13.4 s
+against 26.8 s per pixel for 3 s at 1080×1920, byte-identical
+(EFFECTS.md §29). Rendered: the window within a pixel of prediction on every
+frame, on clip time, an iris opening, and a split's right half starting where
+the whole clip was. The preview draws `maskAt(clip, frame)`.
+
+Found on the way: a mask is expensive before it moves. A still ellipse through
+`geq` is 11.4 s per 3 s at 1080×1920 on the Mac — about 3.7× slower than
+real time for every masked second of a reel. Drawing the shape at a fraction
+of the size and scaling it up is the obvious saving (a feathered edge hides
+the scaling); not done yet, and it wants measuring on the Windows build.
+
+**Then tracking**, as the one new component: OpenCV CSRT in the sidecar
 (`opencv-python-headless`, BSD — a library, not a model) → `mask.track`
 returns per-frame boxes → written as mask keyframes the user can then edit.
+Per-frame boxes must be thinned before they are written (as `keysFromStroke`
+thins a drawn curve): every key is another `if` in the per-row curve.
 
 **Camera moves by hand.** An Inspector *Motion* section: the twelve moves,
 amount, shake (amount, rate, decay, anchor), parallax when a bake exists →

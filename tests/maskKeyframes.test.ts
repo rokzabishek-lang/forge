@@ -158,6 +158,19 @@ describe('the export’s expression', () => {
     // Y is not keyed: still a number.
     expect(e).toContain('(Y-0.50000*H)')
   })
+
+  it('keeps each number in its own slot, and the feather follows a keyed size', () => {
+    const e = maskExpression({ ...shape, radius: 0, feather: 0.2 }, motion({
+      maskY: [{ frame: 0, value: 0.3 }, { frame: 30, value: 0.6 }],
+      maskHeight: [{ frame: 0, value: 0.1 }, { frame: 30, value: 0.3 }]
+    }))
+    expect(e).toContain('st(1,')
+    expect(e).toContain('(Y-ld(1)*H)')
+    expect(e).toContain('st(3,max(0.002,abs(')
+    // The soft band is a fraction of the keyed half-extent, not the still one.
+    expect(e).toContain('ld(3)*0.20000*H')
+    expect(e).not.toContain('st(4,')
+  })
 })
 
 describe('the keyframe model knows the mask’s tracks', () => {
@@ -209,6 +222,19 @@ describe('the wiring', () => {
     const preview = source('src/renderer/src/components/Preview.tsx')
     expect(preview).toContain('const mask = raw ? undefined : maskAt(layer.clip, playhead - layer.clip.start)')
     expect(preview).toContain('mask={maskAt(selectedClip, playhead - selectedClip.start) ?? selectedClip.mask}')
+  })
+
+  it('the curve graph offers the mask’s four tracks on a masked clip, resting at its shape', () => {
+    const panel = source('src/renderer/src/components/CurvePanel.tsx')
+    expect(panel).toContain('const offered = [...KEYED_PROPERTIES, ...(clip?.mask ? MASK_PROPERTIES : [])]')
+    expect(panel).toContain('offered.map((key) =>')
+    expect(panel).toContain('const rest = field && clip?.mask ? clip.mask.shape[field] : undefined')
+    expect(panel).toContain('rest={rest}')
+    const editor = source('src/renderer/src/components/CurveEditor.tsx')
+    expect(editor).toContain('const resting = rest ?? info.neutral')
+    // Both the curve and the window read the resting value, not the constant.
+    expect(editor).toContain('valueAt(shown, frame, durationFrames, resting)')
+    expect(editor).not.toMatch(/valueAt\([^)]*info\.neutral\)/)
   })
 
   it('the panel writes to the stored mask, never the one showing', () => {

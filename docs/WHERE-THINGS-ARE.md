@@ -144,7 +144,12 @@ no rate to change.
 **Mask** — the numbers behind the shape on the picture: which shape, what
 happens inside it (**Blur** / **Colour** / **Show**), blur amount, feather,
 width, height, angle, and **Invert**. `Edit on picture` toggles the handles in
-the preview; `Remove` takes the mask off. It sits directly above Colour on
+the preview; `Remove` takes the mask off. **Animate** makes it move: it puts a
+key where the shape is, and from then on moving or resizing the shape — on the
+picture or with the sliders — at another moment keys that moment, and the mask
+glides between. The arrows jump to the previous and next key; the curves are
+the Mask X / Y / W / H tabs in the graph beside the timeline. Turning Animate
+off keeps the shape as it is at the playhead. It sits directly above Colour on
 purpose — in *Colour* mode those sliders apply only inside the shape, and the
 Colour heading says so while that is true.
 
@@ -239,7 +244,8 @@ selected clip's keyframes as a graph: pick **Zoom**, **Rotate**, **Opacity** or
 **Volume** on the row under the tabs, click to add a point, drag one, double-click
 to remove it, or press **Draw** and sketch the whole shape. Time runs from *clip
 start* to *clip end*; the range between them under the graph is what its height
-spans. Zoom and rotation show a window fitted round their keys, so a small move
+spans. A clip with a mask also gets **Mask X**, **Mask Y**, **Mask W** and
+**Mask H**. Zoom, rotation and the mask show a window fitted round their keys, so a small move
 fills the graph — drag a point past the top and the window grows when you let
 go. Opacity and volume always show their whole range (volume matches the
 fader). **Colour** is the tone curve.

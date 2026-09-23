@@ -30,7 +30,9 @@ beforeAll(async () => {
     'move-start.png / move-end.png   the window slides from the left quarter to the right quarter',
     'late-start.png                  the same move on a clip that starts half a second in: it starts from the left',
     'iris-start.png / iris-end.png   an ellipse opening from a dot to most of the frame',
-    'split-right.png                 the right half of a split clip: its window starts where the whole clip was'
+    'split-right.png                 the right half of a split clip: its window starts where the whole clip was',
+    'drop-end.png                    a band keyed from the top to the bottom',
+    'soft-end.png                    a soft iris: its edge softens in proportion as it opens'
   ])
 }, 120_000)
 
@@ -117,6 +119,36 @@ describe('a mask that moves', () => {
     expect(await at(file, 0, 160)).toBe('blue')
     expect(await at(file, 0, 200)).toBe('red')
     expect(await at(file, 29, 200)).toBe('blue')
+  }, 300_000)
+
+  it('moves up and down as well as across', async () => {
+    const band: Mask = { ...window, shape: { ...window.shape, width: 0.5, height: 0.1 } }
+    const keyframes: KeyframeTracks = { maskY: [{ frame: 0, value: 0.2 }, { frame: 29, value: 0.8 }] }
+    const file = await render(project({ mask: band, keyframes }), 'drop')
+    await saveFrame(file, 28.5 / FPS, join(dir, 'drop-end.png'))
+    const atY = async (frame: number, y: number): Promise<string> =>
+      kind(await pixelAt(file, Math.max(0, (frame - 0.25) / FPS), W / 2, y, { width: W, height: H }))
+    expect(await atY(0, 36)).toBe('blue')
+    expect(await atY(0, 144)).toBe('red')
+    expect(await atY(29, 144)).toBe('blue')
+    expect(await atY(29, 36)).toBe('red')
+  }, 300_000)
+
+  it('a soft edge scales with the size it is keyed to', async () => {
+    // Feather is a fraction of the radius: as the iris opens, its soft band
+    // widens with it. Half-way out from the centre of the open iris is inside
+    // the soft band, so the blue is only part-way over the red there.
+    const soft: Mask = { ...window, shape: { ...window.shape, kind: 'ellipse', width: 0.02, height: 0.02, feather: 0.6 } }
+    const keyframes: KeyframeTracks = {
+      maskWidth: [{ frame: 0, value: 0.02 }, { frame: 29, value: 0.4 }],
+      maskHeight: [{ frame: 0, value: 0.02 }, { frame: 29, value: 0.4 }]
+    }
+    const file = await render(project({ mask: soft, keyframes }), 'soft')
+    await saveFrame(file, 28.5 / FPS, join(dir, 'soft-end.png'))
+    // 0.4·W = 128 px of half-width; 0.7 of the radius out is in the soft band.
+    const [r, , b] = await pixelAt(file, 28.75 / FPS, W / 2 + Math.round(0.7 * 128), H / 2, { width: W, height: H })
+    expect(r, `r ${r} b ${b}`).toBeGreaterThan(40)
+    expect(b, `r ${r} b ${b}`).toBeGreaterThan(40)
   }, 300_000)
 
   it('the right half of a split starts where the whole clip had got to', async () => {
