@@ -1,0 +1,15 @@
+{
+  "id": "fashion-perfume",
+  "kind": "fashion",
+  "brief": { "product": "Noir 9 eau de parfum", "benefit": "a scent for after dark", "audience": "men and women 25 to 45", "tone": "premium", "cta": "Discover Noir 9", "seconds": 20, "language": "English" },
+  "music": { "bpm": 90, "seconds": 24, "buildFrom": 10, "dropAt": 14 },
+  "hero": "noir9_bottle_black.jpg",
+  "media": [
+    { "name": "noir9_bottle_black.jpg", "kind": "image", "colour": "#0b090a", "size": [1080, 1350], "note": "", "truth": { "people": "none", "shot": "detail", "product_visible": "yes", "what": "a black glass bottle on black" } },
+    { "name": "model_silhouette.jpg", "kind": "image", "colour": "#161a1d", "size": [1080, 1350], "note": "", "truth": { "people": "one", "shot": "medium", "product_visible": "no", "what": "a silhouette against a lit window" } },
+    { "name": "smoke_texture.jpg", "kind": "image", "colour": "#660708", "size": [1350, 1080], "note": "", "truth": { "people": "none", "shot": "detail", "product_visible": "no", "what": "curling smoke" } },
+    { "name": "wrist_spray.jpg", "kind": "image", "colour": "#a4161a", "size": [1080, 1080], "note": "", "truth": { "people": "one", "shot": "detail", "product_visible": "yes", "what": "perfume misting onto a wrist" } },
+    { "name": "night_city_blur.jpg", "kind": "image", "colour": "#b1a7a6", "size": [1350, 1080], "note": "", "truth": { "people": "none", "shot": "wide", "product_visible": "no", "what": "blurred city lights at night" } },
+    { "name": "bottle_turn.mp4", "kind": "video", "seconds": 5, "colour": "#d3d3d3", "size": [1080, 1920], "note": "", "truth": { "people": "none", "shot": "detail", "product_visible": "yes", "what": "the bottle turning on a plinth" } }
+  ]
+}

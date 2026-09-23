@@ -1,0 +1,15 @@
+{
+  "id": "food-biryani",
+  "kind": "food",
+  "brief": { "product": "Paradise Spice biryani", "benefit": "dum biryani, sealed for six hours", "audience": "Hyderabad food lovers", "tone": "playful", "cta": "Order now — free delivery this week", "seconds": 20, "language": "Telugu" },
+  "music": { "bpm": 104, "seconds": 22, "buildFrom": 8, "dropAt": 11 },
+  "hero": "biryani_handi_open.jpg",
+  "media": [
+    { "name": "biryani_handi_open.jpg", "kind": "image", "colour": "#e76f51", "size": [1080, 1350], "note": "", "truth": { "people": "none", "shot": "detail", "product_visible": "yes", "what": "a clay handi of biryani with the seal broken" } },
+    { "name": "raita_side.jpg", "kind": "image", "colour": "#f4a261", "size": [1080, 1080], "note": "", "truth": { "people": "none", "shot": "detail", "product_visible": "yes", "what": "raita and mirchi ka salan in bowls" } },
+    { "name": "chef_tossing.jpg", "kind": "image", "colour": "#e9c46a", "size": [1080, 1350], "note": "our head chef", "truth": { "people": "one", "shot": "medium", "product_visible": "no", "what": "a chef sealing a handi with dough" } },
+    { "name": "family_table.jpg", "kind": "image", "colour": "#2a9d8f", "size": [1350, 1080], "note": "", "truth": { "people": "group", "shot": "medium", "product_visible": "yes", "what": "a family eating around a table" } },
+    { "name": "restaurant_front.jpg", "kind": "image", "colour": "#264653", "size": [1350, 1080], "note": "", "truth": { "people": "none", "shot": "wide", "product_visible": "no", "what": "the restaurant's front at night" } },
+    { "name": "steam_reveal.mp4", "kind": "video", "seconds": 4, "colour": "#bc6c25", "size": [1080, 1920], "note": "", "truth": { "people": "none", "shot": "detail", "product_visible": "yes", "what": "steam rising as the lid comes off" } }
+  ]
+}

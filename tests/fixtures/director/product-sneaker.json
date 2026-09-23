@@ -1,0 +1,15 @@
+{
+  "id": "product-sneaker",
+  "kind": "product",
+  "brief": { "product": "Stride X2 running shoe", "benefit": "lighter, faster, 40% more bounce", "audience": "runners training for a 10K", "tone": "energetic", "cta": "Get yours", "seconds": 15, "language": "English" },
+  "music": { "bpm": 128, "seconds": 18, "buildFrom": 5, "dropAt": 7.5 },
+  "hero": "IMG_0911.jpg",
+  "media": [
+    { "name": "IMG_0911.jpg", "kind": "image", "colour": "#ff006e", "size": [1350, 1080], "note": "shoe side profile", "truth": { "people": "none", "shot": "detail", "product_visible": "yes", "what": "a neon running shoe in side profile" } },
+    { "name": "IMG_0915.jpg", "kind": "image", "colour": "#8338ec", "size": [1080, 1080], "note": "sole close-up", "truth": { "people": "none", "shot": "detail", "product_visible": "yes", "what": "the foam sole close up" } },
+    { "name": "IMG_0920.jpg", "kind": "image", "colour": "#3a86ff", "size": [1350, 1080], "note": "runner on track", "truth": { "people": "one", "shot": "wide", "product_visible": "yes", "what": "a runner on a red track" } },
+    { "name": "IMG_0931.jpg", "kind": "image", "colour": "#fb5607", "size": [1080, 1350], "note": "laces", "truth": { "people": "one", "shot": "detail", "product_visible": "yes", "what": "hands tying the laces" } },
+    { "name": "IMG_0940.jpg", "kind": "image", "colour": "#ffbe0b", "size": [1080, 1350], "note": "night run", "truth": { "people": "one", "shot": "wide", "product_visible": "no", "what": "a runner under city lights at night" } },
+    { "name": "sprint.mp4", "kind": "video", "seconds": 4, "colour": "#023047", "size": [1080, 1920], "note": "sprint finish", "truth": { "people": "one", "shot": "medium", "product_visible": "yes", "what": "a sprinter crossing a line" } }
+  ]
+}

@@ -2,6 +2,7 @@ import { resolve } from 'node:path'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { evalRelay, modelProxy } from './tests/eval/relay'
 
 /**
  * Serves the renderer as an ordinary web page.
@@ -41,8 +42,14 @@ export default defineConfig({
           next()
         })
       }
-    }
+    },
+    /*
+     * The Director eval's transport (tests/eval/relay.ts): a proxy to the model
+     * server and a file endpoint scoped to tests/output/eval. The development
+     * sandbox's shell cannot reach localhost; this server can.
+     */
+    evalRelay()
   ],
   define: { __BUILD_STAMP__: JSON.stringify('harness') },
-  server: { port: 5199, strictPort: true, open: false }
+  server: { port: 5199, strictPort: true, open: false, proxy: modelProxy }
 })

@@ -15,7 +15,10 @@
     "test:watch": "vitest",
     "pack:mac": "npm run build && electron-builder --mac --publish never",
     "pack:win": "npm run build && electron-builder --win --publish never",
-    "harness": "vite --config vite.harness.config.ts"
+    "harness": "vite --config vite.harness.config.ts",
+    "eval": "vitest run tests/eval/director.eval.test.ts",
+    "eval:rate": "node scripts/eval-rate.mjs",
+    "eval:report": "node scripts/eval-report.mjs"
   },
   "dependencies": {
     "@ffmpeg-installer/ffmpeg": "1.1.0",

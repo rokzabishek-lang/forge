@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import App from '../App'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { installHarnessBridge } from './bridge'
+import { installEvalRelay } from './evalRelay'
 import { useEditor } from '../store'
 import { useCatalog } from '../catalog'
 import '../styles.css'
@@ -16,6 +17,9 @@ import '../styles.css'
  * and those calls throw with a message saying so rather than faking a result.
  */
 installHarnessBridge()
+
+/* The Director eval's relay — tests/eval/relay.ts says why the harness carries it. */
+installEvalRelay()
 
 /*
  * The store, reachable from a driving script.

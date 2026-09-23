@@ -1,0 +1,14 @@
+{
+  "id": "event-diwali-sale",
+  "kind": "event",
+  "brief": { "product": "Rangrez Fashion Diwali sale", "benefit": "festive wear, 30% off everything", "audience": "families shopping for Diwali", "tone": "urgent", "cta": "Visit the store by Sunday", "seconds": 20, "language": "Hindi" },
+  "music": { "bpm": 112, "seconds": 22, "buildFrom": 8, "dropAt": 11 },
+  "hero": "saree_model.jpg",
+  "media": [
+    { "name": "diya_rangoli.jpg", "kind": "image", "colour": "#f48c06", "size": [1080, 1080], "note": "", "truth": { "people": "none", "shot": "detail", "product_visible": "no", "what": "diyas around a rangoli" } },
+    { "name": "kurta_display.jpg", "kind": "image", "colour": "#dc2f02", "size": [1080, 1350], "note": "new kurta range", "truth": { "people": "none", "shot": "medium", "product_visible": "yes", "what": "kurtas on a rack" } },
+    { "name": "saree_model.jpg", "kind": "image", "colour": "#9d0208", "size": [1080, 1350], "note": "", "truth": { "people": "one", "shot": "medium", "product_visible": "yes", "what": "a woman in a red silk saree" } },
+    { "name": "store_front_lights.jpg", "kind": "image", "colour": "#ffba08", "size": [1350, 1080], "note": "", "truth": { "people": "none", "shot": "wide", "product_visible": "no", "what": "the shop front strung with lights" } },
+    { "name": "family_shopping.jpg", "kind": "image", "colour": "#370617", "size": [1350, 1080], "note": "", "truth": { "people": "group", "shot": "medium", "product_visible": "yes", "what": "a family holding shopping bags" } }
+  ]
+}

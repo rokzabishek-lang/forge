@@ -134,25 +134,38 @@ pass take, and what do images cost in memory on the Surface?
 
 **No fine-tuning.** "Tuning" is the prompt, the menu and the parameters.
 
+> **Built 2026-09-23, and run once** — `tests/eval/` (the pipeline, the relay,
+> the fixtures' media), `tests/fixtures/director/*.json`, `scripts/eval-rate.mjs`
+> and `eval-report.mjs`, `shared/director/run.ts` (the part of `direct()` the
+> eval shares with the app), tests `evalHarness`, `directorRun` and the render
+> check `integration/evalPipeline`. First result: `docs/EVAL.md`; findings
+> `eval/findings.md`. As built, a brief is ONE file and its media are made by
+> default — below.
+
 ### 3.1 Fixtures — `tests/fixtures/director/`
 
-Ten briefs, each a folder: `brief.json` `{product, benefit, audience, tone,
-cta, seconds, language}`, a `media.json` manifest naming 4–8 stills, one clip
-under 8 s and one 30 s music file, and `truth.json` for the VLM check. Six
-English, two Telugu, two Hindi. Mix by design: three wedding sets (the niche),
-three product sets, two events, one fashion, one food.
+Ten briefs, one JSON file each: the brief `{product, benefit, audience, tone,
+cta, seconds, language}`, the music's shape `{bpm, seconds, buildFrom,
+dropAt}`, 5–7 stills and usually one clip under 8 s, each with the user's
+note and its ground truth, and the photo the user would make the hero. Six
+English, two Telugu, two Hindi. Mix by design: two wedding films and a wedding
+studio's ad (the niche), three product sets, two events, one fashion, one food;
+one set (`event-fest`) has camera file names and no notes at all — the case
+eyes matter most for.
 
-**The media is not committed** — they are photographs, and the repository
-does not carry other people's pictures (`.gitignore` says the same about the
-recordings). The manifests are; the files live in a folder the user names by
-`FORGE_EVAL_MEDIA`, and a committed test checks every manifest names only
-Windows-legal basenames and that a missing folder skips the eval with one
-clear line rather than ten failures. Two of the ten briefs are **synthetic
-and committed** — colour cards with a burned-in number and a music bed made
-by `aevalsrc` with a beat — so the harness's own plumbing runs in CI with the
-fake provider, and a fixture can never rot unnoticed.
+**The media are made, not committed**: a colour card per photo, a test-pattern
+clip per video, a beat bed with a build and a drop per song (`tests/eval/
+media.ts`). The spine reads each slot's NAME, note and speech — never its
+pixels — so to the spine a card named `05_first_look.jpg` with the note
+"first look, she's crying" is that photograph, and its colour tells a render
+check which slot is on screen. Real photos of the same names in
+`FORGE_EVAL_MEDIA/<brief>/` replace the cards, and are what the VLM half needs.
 
-`truth.json` is the user's ground truth per set, written once when the set is
+A committed test checks every brief names only Windows-legal basenames, and
+the render check runs one brief through the whole pipeline in CI with a canned
+answer, so a fixture can never rot unnoticed.
+
+Each brief's `truth` and `hero` are the user's ground truth, written once when the set is
 made: per photo `people` (none / one / couple / group), `shot` (wide / medium
 / close / detail), `product_visible` (yes / no) and one line of what is in it;
 and for the set, **which photo the user would make the hero**. That last mark
@@ -175,14 +188,26 @@ temporary settings file) against the real server at localhost. Three
     FORGE_EVAL=openai FORGE_EVAL_MODEL=google/gemma-4-e2b npm run eval        # LM Studio
 
 Per brief it builds the menu exactly as `direct()` does, by calling the same
-pure functions — `buildSlots`, the sidecar's `audio.beats` through
-`SidecarClient` (as `beats.int.test.ts` does), `buildCutMenu`, `familyMenu`
-over the installed catalogue — asks, parses, validates, and — always —
-applies to a project and **renders the ad** with `plan.ts` through the
-bundled ffmpeg into `tests/output/eval/<run>/<brief>.mp4`. Node has no
-canvas, so the eval's render is the shots and the music without the text
-cards; the headlines are recorded as text and rated as text. Said plainly in
-the run's README.
+functions — `musicFor`, `adSeconds`, `briefFor`, `menuFor` (moved out of the
+store into `shared/director/run.ts` so both call one copy), the sidecar's
+`audio.beats` through `SidecarClient`, and the request bodies
+`openaiRequestBody` / `ollamaRequestBody` (moved out of `main/director.ts`
+into `provider.ts` for the same reason) — asks, parses, validates, and —
+always — applies to a project and **renders the ad and the standard cut** with
+`plan.ts` into `tests/output/eval/<run>/renders/`. Node has no canvas, so the
+eval's render is the shots and the music without the text cards; the
+headlines are recorded as text and rated as text. Said plainly in the run's
+README.
+
+**Transport.** Three steps, each writing files: `FORGE_EVAL_STEP=prepare`
+(requests), the ask, `FORGE_EVAL_STEP=score` (results). On the user's machine
+`npm run eval` does all three from node. In the development sandbox the shell
+is refused a connection to localhost, so the ask goes through the harness dev
+server, which runs outside it: `vite.harness.config.ts` carries a proxy to the
+model (`/__lm`) and a file endpoint scoped to `tests/output/eval/`
+(`tests/eval/relay.ts`), and `window.__forgeEvalRelay('<run>')` in the harness
+page posts each prepared body as it is and writes the raw answer back. The
+bytes are the app's either way.
 
 Recorded per brief, into `eval/runs/<stamp>-<provider>-<model>-<think>.json`
 (small, committed by the user after a run):
@@ -801,8 +826,8 @@ director.sound`:
 
 | event | placement | level (relative to the music's set level) |
 |---|---|---|
-| riser / swell | ENDS on the target frame; starts `seconds` before, faded in over its first 20 % | −8 dB |
-| hit / braam | starts on the frame | −3 dB |
+| riser / swell | its measured **peak** lands on the target frame (§6.2); starts `peakSeconds` before, faded in over its first 20 %; anything after the peak is faded out over 4 frames unless the recipe keeps the tail | −8 dB |
+| hit / braam | its measured peak lands on the frame (a braam's hit is 0.55 s into its file) | −3 dB |
 | sub-drop | starts on the frame with the hit | −6 dB |
 | whoosh | centred on the transition's midpoint | −10 dB |
 | silence | the music's `volume` keyframes ramp to −∞ over 4 frames at the last body cut and return (or not) at the end card, as the recipe says | — |
@@ -812,26 +837,69 @@ once (§6.4) and read by both the export and the preview mixer. The music is
 **not** ducked under SFX — the hit is meant to sit on top; the silence is the
 envelope, which the preview already plays (A3).
 
-### 6.2 The pack — `sfx-cinematic`
+### 6.2 The sounds — the library first, then an open pack for the gaps
 
-Through the pack pipeline that exists (`assets:packs`, manifest with sha256,
-install/remove, progress), on the `sounds` group. Twenty files: four risers
-(2, 4, 8 s and a soft swell for weddings), six hits (two soft), four whooshes,
-three sub-drops, two ticks, one long swell. Each catalogue entry carries
-`role: 'riser' | 'swell' | 'hit' | 'whoosh' | 'sub' | 'tick'` and `seconds`;
-`sound.ts` picks by role and length, varying by index.
+Each sound the recipe can fire carries `role: 'riser' | 'swell' | 'hit' |
+'braam' | 'whoosh' | 'sub' | 'tick'` and `seconds` in the catalogue (a small
+table keyed by file name, `src/shared/director/soundRoles.ts`, since the
+library's catalogue entries carry no role today); `sound.ts` picks by role and
+length, varying by index.
 
-**Where the files come from is the user's decision (§10.3).** The
-recommendation: **synthesise the starter pack with the bundled ffmpeg**, in
-`scripts/make-sfx.mjs`, committed — a riser is band-passed noise swept up
-with `aevalsrc`/`highpass`/`lowpass` and `afade`; a sub-drop is a `sine` sweep
-80→30 Hz with a fast `afade` out; a hit is a noise burst plus a low sine with
-a 300 ms decay; a whoosh is noise through a moving band-pass. All of those
-filters are older than the floor, the files are ours, and there is no rights
-question. The trade-off is stated in §10.3: synthesised hits and risers are
-thinner than a recorded library's "brassy" hit, and C5's ratings will say
-whether that shows. A curated, recorded pack replaces it later through the
-same manifest without a code change.
+**What the library already has** (`assets/sfxx/`, the 23 sounds the library
+pack ships; measured 2026-09-23 with librosa on the sidecar's interpreter —
+peak time, attack, 30 dB decay, spectral centroid over the loud part, energy
+below 100 Hz, level change across the sound):
+
+| role | files | measured | verdict |
+|---|---|---|---|
+| **sub-drop / boom** | `cinematic_boom` 1.8 s, `bass_drop_sub` 1.5 s, `808_sub_boom` 0.95 s, `sub_bass_impact` 0.85 s, `sub_impact` 0.85 s | peak in the first 10 ms, 82–96 % of energy under 100 Hz, centroid falling to 34–51 Hz | **usable as is** — the Product reveal's sub on the reveal, the Energy/Trailer hit's low layer |
+| **whoosh** | `swoosh_heavy` 0.65 s, `whoosh_fast` 0.35 s, `sword_swish` 0.30 s, `fast_whoosh` 0.26 s | peak mid-sound (0.12–0.34 s), 50–62 % energy above 4 kHz, flat level | **usable** — the peak sits mid-file, which is what "centred on the transition" needs; `swoosh_heavy` has body (19 % in 100–500 Hz) for the slower recipes |
+| **tick / pulse** | `clock_tick` 0.08 s, `heartbeat_pulse` 0.6 s | — | usable for Trailer act 1 |
+| **riser** | `riser_tension` 1.2 s — rises +13.9 dB, centroid 426 → 2140 Hz, peak at its last frame; `riser_climax` 1.1 s — peaks at 0.61 s and falls into the sub (65 % under 100 Hz), a swell-into-boom rather than a riser | `riser_tension` is a true riser but **1.2 s**; the recipes want 2–8 s | **gap**: long risers (2, 4, 8 s) |
+| **swell** | — | — | **gap**: a soft 2–4 s swell for the Wedding highlight (no noise, no hit) |
+| **braam / cinematic hit** | `cinematic_boom` is a boom (96 % sub), not a braam | — | **gap**: one braam and one mid-heavy hit for Trailer, later |
+| not for the Director | `camera_shutter_click`, `shutter_click`, `cyber_scan`, `ding_chime`, `glitch_zap`, `glitch_data_stutter`, `page_turn`, `pop_bubble`, `record_scratch`, `tv_static_burst` | — | meme and UI sounds; stay in the library |
+
+So the first two recipes need only **two things the library lacks**: long
+risers (Product reveal) and a soft swell (Wedding highlight).
+
+**The gaps, filled from Freesound — searched, verified, downloaded and
+measured 2026-09-23** (workflow `wf_3f2f6693-c5b`: three searchers, a checker
+per candidate reading its page; 11 of 30 candidates survived; the user said
+"download them"). Freesound serves originals only to a signed-in account, so
+these are its public HQ previews — MP3, 127–194 kb/s, 44.1/48 kHz — which are
+fine to build and tune against under music and an AAC 192k export; the
+originals (same pages) replace them before the pack ships, fetched by the user
+signed in. Measured with the same script as the library:
+
+| role | sound (page) | licence | length | measured | verdict |
+|---|---|---|---|---|---|
+| riser | syntheffects "Riser sound effect long" (685255) | CC0 | 3.75 s | rises +12.8 dB, **peak at 3.24 s**, stops dead after it | **keep** |
+| riser | syntheffects "Riser sound effect short" (685256) | CC0 | 3.05 s | +13.5 dB, peak at 2.79 s | **keep** |
+| riser | BeaconStudio "Cinematic Riser #3 subtle" (859482) | CC0 | 3.0 s | +11.5 dB, peak at 2.28 s, 39 % under 100 Hz — a low, quiet build | **keep** — Product reveal's riser |
+| riser | Rizzard "Riser" (561207) | CC0 | 2.0 s | +11.2 dB, peak on its last frame | **keep** |
+| swell | Fester993 "Guitar Swell" (564442) | CC0 | 3.06 s | blooms +12.6 dB to its end, 74 % in 100–500 Hz, no transient | **keep** — Wedding highlight's swell |
+| swell | TheFlyFishingFilmmaker "Violin single note swell" (641703) | **CC-BY 4.0** — credit the author | 5.9 s | swells to a peak at 3.94 s, then fades | **keep**, credited |
+| swell | Sub-d "Guitar swell 1" (47021) | CC0 | 14 s | peaks at 1.62 s, then an 8.7 s tail | keep for later — trim with a fade |
+| braam | unfa "Braam" (647712) | CC0 | 10 s | hit at 0.55 s, 81 % under 100 Hz, long tail | keep — Trailer |
+| riser + hit | deep_ "Riser Slam Boom" (770200) | CC0 | 8 s | a 2.5 s rise into a slam at 2.87 s, then a boom tail | keep — Trailer |
+| riser | MajinLuu "Synth+White Noise Riser" (680514) | CC0 | 4.8 s | pitch sweeps up but the LEVEL does not (+0.7 dB); peaks at 1.76 s | **reject** — not a build |
+| reverse | John Rayson "reverse cymbal" (23127) | CC0 | 2.0 s | peaks at 0.28 s and decays — it is not reversed | **reject** |
+
+**What the measurement changed in the design:** a riser's loudest moment is
+not its last frame — the long one peaks half a second before it ends. So
+`soundRoles.ts` stores each file's measured **`peakSeconds`**, and §6.1's
+placement lines the PEAK up with the event frame (a riser ends on the cut at
+its peak; a braam's hit lands on the cut at 0.55 s in), never the file's
+start or end. The table is re-measured by a test (`librosa` on the sidecar's
+interpreter), so a replaced file cannot keep a stale peak.
+
+They ship through the pack pipeline that exists (`assets:packs`, manifest with
+sha256, install/remove) as `sfx-cinematic`, on the `sounds` group, with a
+CREDITS entry for the CC-BY file. The fallback, only if a role is still
+missing: synthesise it with the bundled ffmpeg in `scripts/make-sfx.mjs` —
+ours and floor-safe, and thinner-sounding, which C5's `sound` reason code
+would show.
 
 ### 6.3 Preview
 
@@ -1019,30 +1087,27 @@ still composes.
 
 ---
 
-## 10. Decisions — the user's, with a recommendation each
+## 10. Decisions — taken 2026-09-23
 
-1. **Who runs C0.** The sandbox cannot reach localhost. *Recommended:* the
-   harness is written here; the user runs `npm run eval` on the Mac first
-   (fastest turnaround), then once on the Surface for the memory and time
-   numbers. Alternative: localhost access for the sandbox, which would let
-   the tuning loop run without hand-offs.
-2. **The first two recipes.** *Recommended:* **Wedding highlight** (the
-   niche, and the one that most needs holds on faces) and **Product reveal**
-   (the clearest grammar, and the one marketers will judge first). Energy,
-   Trailer and Fashion follow in that order.
-3. **The sound pack.** *Recommended:* synthesise the starter pack with the
-   bundled ffmpeg (§6.2) — ours, floor-safe, no sourcing — and replace it
-   with a recorded pack later through the same manifest. **The trade-off:**
-   synthesised noise and sine will sound thinner than a produced library —
-   a filtered-noise burst is not a brassy trailer hit — so this buys C3 its
-   schedule and its rights at some cost to the "never embarrassing" bar,
-   which C5's ratings will measure (`sound` is one of the automatic-reason
-   codes). Alternative: a CC0 pack sourced now, which delays C3 on a search.
-4. **A hosted model for the copy alone if local copy fails C0.**
-   *Recommended:* yes, as the voice already works — one feature, one key,
-   the key never leaving main — but only after the copy templates (`LLM.md`
-   move 2) have been tried, since they are free and formulaic ad copy suits
-   them. Nothing else in the Director goes hosted.
+1. **Who runs C0 — decided: here, against the user's LM Studio**
+   (`google/gemma-4-e2b` on `127.0.0.1:1234`; `gemma-4-e4b` is also loaded
+   and is the obvious second row). Measured on the way in: the development
+   sandbox's shell is refused a connection to localhost ("Operation not
+   permitted") while the in-app browser reaches it, so the eval's model calls
+   go through the harness dev server, which runs outside the sandbox — see
+   §3.2 *Transport*. On the user's own machine `npm run eval` calls the model
+   directly. First probe: strict `json_schema` holds on Gemma 4 E2B in LM
+   Studio (a three-field schema, enum respected, 48 + 54 tokens, 5.1 s) — and
+   the headline came back ending in a stray `**`, the first copy note.
+2. **The first two recipes — decided: Wedding highlight and Product
+   reveal.** Energy, Trailer and Fashion follow in that order.
+3. **The sound pack — decided: use the library's own sounds first, and fill
+   the gaps from open-source packs** (the user: "we have sfx for this").
+   Measured (§6.2): the library's 23 sounds cover hits, sub-drops, whooshes
+   and ticks; they do not cover long risers, a soft swell or a braam. The
+   ffmpeg-synthesised pack is the fallback only if no open pack fits.
+4. **A hosted model for the copy alone — later**, after C0–C3; the copy
+   templates (`LLM.md` move 2) are tried first if local copy fails C0.
 
 ---
 

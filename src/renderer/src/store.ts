@@ -168,7 +168,8 @@ import type { DecisionRecord } from '@shared/project'
 import { applySpine, clearDirector, decisionFor, occupiedBy } from '@shared/director/apply'
 import { BASELINE_MODEL, baselineSpine } from '@shared/director/baseline'
 import type { Problem } from '@shared/director/conforms'
-import { buildCutMenu, buildSlots, familyMenu, type Menu } from '@shared/director/menu'
+import { buildSlots } from '@shared/director/menu'
+import { adSeconds, briefFor, menuFor, musicFor } from '@shared/director/run'
 import { maxTokensFor, spinePrompt } from '@shared/director/prompt'
 import {
   parseModelJson,
@@ -178,7 +179,7 @@ import {
   type OpenAiConfig,
   type PublicDirectorConfig
 } from '@shared/director/provider'
-import { spineSchema, type Brief, type SpinePlan, type Tone } from '@shared/director/schema'
+import { spineSchema, type SpinePlan, type Tone } from '@shared/director/schema'
 import { validateSpine, type SegmentLayout, type SpineVerdict } from '@shared/director/validate'
 import { vocabularyPrompt, withWordText, type Transcript } from '@shared/transcript'
 
@@ -1684,14 +1685,11 @@ export const useEditor = create<EditorState>((set, get) => ({
       return
     }
 
-    const musicClip = cleared.clips.find((clip) => {
-      const track = cleared.tracks.find((t) => t.id === clip.trackId)
-      const asset = cleared.assets.find((a) => a.id === clip.assetId)
-      return track?.kind === 'audio' && asset?.hasAudio
-    })
-    const musicAsset = musicClip ? cleared.assets.find((a) => a.id === musicClip.assetId) ?? null : null
-    const windowMs = musicClip ? framesToSeconds(musicClip.duration, fps) * 1000 : null
-    const seconds = directBrief.seconds ?? Math.min(30, windowMs !== null ? windowMs / 1000 : 30)
+    // What the music is and how long the ad is — shared/director/run.ts, so
+    // the Director eval builds exactly the same menu from exactly the same rules.
+    const music = musicFor(cleared)
+    const musicClip = music?.clip
+    const seconds = adSeconds(directBrief, music)
     const offsetFrames = musicClip?.start ?? 0
 
     // The ad is footage, so it wants the bottom layer — and the user's own
@@ -1710,34 +1708,13 @@ export const useEditor = create<EditorState>((set, get) => ({
     set({ directing: true, directStage: musicClip ? 'reading the music' : 'laying out the beats' })
     try {
       let analysis: MusicAnalysis | null = null
-      if (musicClip && musicAsset) {
+      if (music) {
         // Only the part of the song the clip actually keeps, as the reel does.
-        const startMs = framesToSeconds(musicClip.inPoint, fps) * 1000
-        const endMs = startMs + framesToSeconds(musicClip.duration, fps) * 1000
-        analysis = await window.forge.analyseBeats(musicAsset.path, { startMs, endMs })
+        analysis = await window.forge.analyseBeats(music.asset.path, { startMs: music.startMs, endMs: music.endMs })
       }
       const catalogue = useCatalog.getState().transitions
-      const menu: Menu = {
-        slots,
-        cuts: buildCutMenu(analysis, {
-          fps,
-          seconds,
-          offsetFrames,
-          ...(windowMs !== null ? { windowMs } : {})
-        }),
-        families: familyMenu(catalogue),
-        seconds,
-        fps
-      }
-      const brief: Brief = {
-        product,
-        benefit: directBrief.benefit.trim() || product,
-        audience: directBrief.audience.trim(),
-        tone: directBrief.tone,
-        cta: directBrief.cta.trim() || 'Shop now',
-        seconds,
-        language: directBrief.language.trim() || 'English'
-      }
+      const menu = menuFor(cleared, slots, music, analysis, catalogue, seconds)
+      const brief = briefFor(directBrief, seconds)
 
       /* Ask — once with thinking off, and once more with it on if prose came back. */
       set({ directStage: 'asking the model' })

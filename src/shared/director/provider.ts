@@ -147,6 +147,130 @@ export interface CompletionResult {
   truncated: boolean
 }
 
+/* ------------------------------------------------------------- the wire */
+
+/**
+ * What a server's answer comes down to, before anyone parses the JSON inside it.
+ *
+ * The request bodies and the answer readers live here, pure, rather than in
+ * the main process's two clients, so that anything else that talks to a model
+ * — the Director eval's relay (tests/eval/relay.ts), which has to send its
+ * requests through a different door — sends byte for byte what the app sends
+ * and reads the answer the way the app reads it.
+ */
+export interface ModelAnswer {
+  text: string
+  promptTokens: number | null
+  outputTokens: number | null
+  /** The decoder stopped at its token cap. */
+  truncated: boolean
+}
+
+const countOf = (value: unknown): number | null =>
+  typeof value === 'number' && Number.isFinite(value) ? value : null
+
+/**
+ * Ollama's /api/chat body.
+ *
+ * `format` is the schema itself — the server constrains decoding to it, which
+ * is the whole reason a plan can be trusted to have a shape (docs/DIRECTOR.md
+ * §4). Thinking is off unless the caller asks, because a trace costs seconds
+ * on CPU and the schema already has a `reasoning` field where thinking
+ * belongs. Sampling is pinned (temperature 0, one candidate, fixed seed) for
+ * repeatability on the same machine — knowing that it does not survive a
+ * change of machine or quantisation, which is why the plan is saved in the
+ * project rather than re-derived (§10.3).
+ */
+export function ollamaRequestBody(request: CompletionRequest, images: string[], model: string): object {
+  return {
+    model,
+    stream: false,
+    format: request.schema,
+    think: request.think ?? false,
+    // Kept loaded between passes; a cold load is most of the first call.
+    keep_alive: '10m',
+    options: {
+      temperature: 0,
+      seed: 7,
+      top_k: 1,
+      num_ctx: 8192,
+      num_predict: request.maxTokens ?? DEFAULT_MAX_TOKENS
+    },
+    messages: [
+      { role: 'system', content: request.system },
+      { role: 'user', content: request.user, ...(images.length > 0 ? { images } : {}) }
+    ]
+  }
+}
+
+/**
+ * An OpenAI-shaped /chat/completions body.
+ *
+ * `response_format: json_schema` with `strict` is the same idea as Ollama's
+ * `format`, and LM Studio, llama-server and the hosted APIs all take it.
+ * Images travel as data URLs inside the user message, which is the one shape
+ * every implementation agrees on.
+ */
+export function openaiRequestBody(request: CompletionRequest, images: string[], model: string): object {
+  const userContent =
+    images.length > 0
+      ? [
+          { type: 'text', text: request.user },
+          ...images.map((b64) => ({ type: 'image_url', image_url: { url: `data:image/jpeg;base64,${b64}` } }))
+        ]
+      : request.user
+  return {
+    model,
+    stream: false,
+    temperature: 0,
+    seed: 7,
+    max_tokens: request.maxTokens ?? DEFAULT_MAX_TOKENS,
+    response_format: {
+      type: 'json_schema',
+      json_schema: { name: 'plan', strict: true, schema: request.schema }
+    },
+    messages: [
+      { role: 'system', content: request.system },
+      { role: 'user', content: userContent }
+    ]
+  }
+}
+
+/** Ollama's answer, or a throw when it said nothing. */
+export function ollamaAnswer(data: unknown): ModelAnswer {
+  const d = (data ?? {}) as {
+    message?: { content?: unknown }
+    prompt_eval_count?: unknown
+    eval_count?: unknown
+    done_reason?: unknown
+  }
+  const text = typeof d.message?.content === 'string' ? d.message.content : ''
+  if (!text.trim()) throw new Error('The model returned an empty answer')
+  return {
+    text,
+    promptTokens: countOf(d.prompt_eval_count),
+    outputTokens: countOf(d.eval_count),
+    truncated: d.done_reason === 'length'
+  }
+}
+
+/** An OpenAI-shaped answer, or a throw when it said nothing. */
+export function openaiAnswer(data: unknown): ModelAnswer {
+  const d = (data ?? {}) as {
+    choices?: { message?: { content?: unknown }; finish_reason?: unknown }[]
+    usage?: { prompt_tokens?: unknown; completion_tokens?: unknown }
+  }
+  const choice = d.choices?.[0]
+  const text = typeof choice?.message?.content === 'string' ? choice.message.content : ''
+  if (!text.trim()) throw new Error('The model returned an empty answer')
+  return {
+    text,
+    promptTokens: countOf(d.usage?.prompt_tokens),
+    outputTokens: countOf(d.usage?.completion_tokens),
+    truncated: choice?.finish_reason === 'length'
+  }
+}
+
 /** How long a plan may take. Prefill on a CPU-only laptop is seconds, not minutes; three minutes is generous. */
 export const COMPLETION_TIMEOUT_MS = 180_000
 /** How long to wait for a server to say it exists. */

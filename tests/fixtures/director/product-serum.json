@@ -1,0 +1,16 @@
+{
+  "id": "product-serum",
+  "kind": "product",
+  "brief": { "product": "Aura Vitamin C Serum", "benefit": "brighter skin in 14 days", "audience": "women 25 to 40 with dull skin", "tone": "premium", "cta": "Shop now — 20% off your first order", "seconds": 20, "language": "English" },
+  "music": { "bpm": 100, "seconds": 24, "buildFrom": 8, "dropAt": 12 },
+  "hero": "serum_bottle_marble.jpg",
+  "media": [
+    { "name": "serum_bottle_marble.jpg", "kind": "image", "colour": "#ffd166", "size": [1080, 1350], "note": "", "truth": { "people": "none", "shot": "detail", "product_visible": "yes", "what": "an amber serum bottle on white marble" } },
+    { "name": "dropper_macro.jpg", "kind": "image", "colour": "#ef476f", "size": [1080, 1080], "note": "", "truth": { "people": "none", "shot": "detail", "product_visible": "yes", "what": "a glass dropper with a golden drop" } },
+    { "name": "model_applying.jpg", "kind": "image", "colour": "#06d6a0", "size": [1080, 1350], "note": "", "truth": { "people": "one", "shot": "close", "product_visible": "yes", "what": "a woman pressing serum into her cheek" } },
+    { "name": "before_after_skin.jpg", "kind": "image", "colour": "#118ab2", "size": [1080, 1350], "note": "day 1 vs day 14", "truth": { "people": "one", "shot": "close", "product_visible": "no", "what": "a split before and after of the same cheek" } },
+    { "name": "ingredients_orange_slices.jpg", "kind": "image", "colour": "#f78c6b", "size": [1350, 1080], "note": "", "truth": { "people": "none", "shot": "detail", "product_visible": "no", "what": "orange slices and leaves" } },
+    { "name": "pack_shot_box.jpg", "kind": "image", "colour": "#073b4c", "size": [1080, 1350], "note": "", "truth": { "people": "none", "shot": "medium", "product_visible": "yes", "what": "the bottle beside its box" } },
+    { "name": "serum_pour.mp4", "kind": "video", "seconds": 4, "colour": "#fcbf49", "size": [1080, 1920], "note": "", "truth": { "people": "none", "shot": "detail", "product_visible": "yes", "what": "serum pouring in slow motion" } }
+  ]
+}

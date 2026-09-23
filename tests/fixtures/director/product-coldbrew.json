@@ -1,0 +1,15 @@
+{
+  "id": "product-coldbrew",
+  "kind": "product",
+  "brief": { "product": "Chill Brew cold coffee", "benefit": "café taste at home in 30 seconds", "audience": "college students", "tone": "playful", "cta": "Order on Swiggy", "seconds": 15, "language": "Hindi" },
+  "music": { "bpm": 118, "seconds": 18, "buildFrom": 5, "dropAt": 8 },
+  "hero": "coldbrew_glass.jpg",
+  "media": [
+    { "name": "coldbrew_glass.jpg", "kind": "image", "colour": "#6f4e37", "size": [1080, 1350], "note": "", "truth": { "people": "none", "shot": "detail", "product_visible": "yes", "what": "a tall glass of iced coffee" } },
+    { "name": "pouring_milk.jpg", "kind": "image", "colour": "#f5ebe0", "size": [1080, 1350], "note": "", "truth": { "people": "none", "shot": "detail", "product_visible": "yes", "what": "milk swirling into coffee" } },
+    { "name": "cafe_friends.jpg", "kind": "image", "colour": "#e3d5ca", "size": [1350, 1080], "note": "hostel friends", "truth": { "people": "group", "shot": "medium", "product_visible": "yes", "what": "three friends laughing with cans" } },
+    { "name": "beans_closeup.jpg", "kind": "image", "colour": "#432818", "size": [1080, 1080], "note": "", "truth": { "people": "none", "shot": "detail", "product_visible": "no", "what": "roasted coffee beans" } },
+    { "name": "bottle_pack.jpg", "kind": "image", "colour": "#99582a", "size": [1080, 1350], "note": "", "truth": { "people": "none", "shot": "medium", "product_visible": "yes", "what": "the bottle with its label" } },
+    { "name": "ice_drop.mp4", "kind": "video", "seconds": 3, "colour": "#bb9457", "size": [1080, 1920], "note": "", "truth": { "people": "none", "shot": "detail", "product_visible": "no", "what": "ice cubes dropping into a glass" } }
+  ]
+}

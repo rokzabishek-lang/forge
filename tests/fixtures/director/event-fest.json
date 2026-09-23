@@ -1,0 +1,15 @@
+{
+  "id": "event-fest",
+  "kind": "event",
+  "brief": { "product": "Rhythm Fest 2026 — college music festival", "benefit": "one night, twelve artists", "audience": "students in Hyderabad", "tone": "urgent", "cta": "Tickets close Friday", "seconds": 20, "language": "English" },
+  "music": { "bpm": 124, "seconds": 22, "buildFrom": 7, "dropAt": 10 },
+  "hero": "DSC_1007.jpg",
+  "media": [
+    { "name": "DSC_1001.jpg", "kind": "image", "colour": "#240046", "size": [1350, 1080], "note": "", "truth": { "people": "group", "shot": "wide", "product_visible": "no", "what": "a crowd with hands up under stage lights" } },
+    { "name": "DSC_1007.jpg", "kind": "image", "colour": "#7b2cbf", "size": [1080, 1350], "note": "", "truth": { "people": "one", "shot": "medium", "product_visible": "no", "what": "a DJ with headphones on stage" } },
+    { "name": "DSC_1012.jpg", "kind": "image", "colour": "#c77dff", "size": [1350, 1080], "note": "", "truth": { "people": "none", "shot": "wide", "product_visible": "no", "what": "laser lights over the stage" } },
+    { "name": "DSC_1020.jpg", "kind": "image", "colour": "#ff9e00", "size": [1080, 1350], "note": "", "truth": { "people": "group", "shot": "close", "product_visible": "no", "what": "four friends taking a selfie" } },
+    { "name": "DSC_1033.jpg", "kind": "image", "colour": "#ff5400", "size": [1350, 1080], "note": "", "truth": { "people": "none", "shot": "wide", "product_visible": "no", "what": "fireworks over the campus" } },
+    { "name": "MVI_1040.mp4", "kind": "video", "seconds": 5, "colour": "#3c096c", "size": [1080, 1920], "note": "", "speech": "Hyderabad, are you ready?", "truth": { "people": "one", "shot": "medium", "product_visible": "no", "what": "a singer shouting to the crowd" } }
+  ]
+}

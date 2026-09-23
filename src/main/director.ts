@@ -2,16 +2,19 @@ import sharp from 'sharp'
 import {
   COMPLETION_TIMEOUT_MS,
   DEFAULT_DIRECTOR,
-  DEFAULT_MAX_TOKENS,
   STATUS_TIMEOUT_MS,
   chooseProvider,
   hasModel,
   isLoopback,
+  ollamaAnswer,
   ollamaChatUrl,
+  ollamaRequestBody,
   ollamaTagsUrl,
+  openaiAnswer,
   openaiChatUrl,
   openaiConfigured,
   openaiModelsUrl,
+  openaiRequestBody,
   publicConfig,
   redactKey,
   suggestModel,
@@ -293,45 +296,17 @@ export async function encodeImages(paths: string[]): Promise<string[]> {
   return out
 }
 
-const count = (value: unknown): number | null =>
-  typeof value === 'number' && Number.isFinite(value) ? value : null
-
 /**
- * One structured completion from Ollama.
- *
- * `format` is the schema itself — the server constrains decoding to it, which
- * is the whole reason a plan can be trusted to have a shape (docs/DIRECTOR.md
- * §4). Thinking is off unless the caller asks, because a trace costs seconds
- * on CPU and the schema already has a `reasoning` field where thinking
- * belongs. Sampling is pinned (temperature 0, one candidate, fixed seed) for
- * repeatability on the same machine — knowing that it does not survive a
- * change of machine or quantisation, which is why the plan is saved in the
- * project rather than re-derived (§10.3).
+ * One structured completion from Ollama. The body — the schema as `format`,
+ * thinking off unless asked, pinned sampling — is `ollamaRequestBody`, in
+ * shared/director/provider.ts, so the eval sends exactly the same thing.
  */
 async function completeOllama(
   request: CompletionRequest,
   images: string[],
   config: OllamaConfig
 ): Promise<CompletionResult> {
-  const body = {
-    model: config.model,
-    stream: false,
-    format: request.schema,
-    think: request.think ?? false,
-    // Kept loaded between passes; a cold load is most of the first call.
-    keep_alive: '10m',
-    options: {
-      temperature: 0,
-      seed: 7,
-      top_k: 1,
-      num_ctx: 8192,
-      num_predict: request.maxTokens ?? DEFAULT_MAX_TOKENS
-    },
-    messages: [
-      { role: 'system', content: request.system },
-      { role: 'user', content: request.user, ...(images.length > 0 ? { images } : {}) }
-    ]
-  }
+  const body = ollamaRequestBody(request, images, config.model)
 
   const started = Date.now()
   const response = await fetchWithTimeout(
@@ -351,62 +326,22 @@ async function completeOllama(
     throw new Error(`Ollama returned ${response.status}. ${errorSentence(detail)}`.trim())
   }
 
-  const data = (await response.json()) as {
-    message?: { content?: unknown }
-    prompt_eval_count?: unknown
-    eval_count?: unknown
-    done_reason?: unknown
-  }
-  const text = typeof data.message?.content === 'string' ? data.message.content : ''
-  if (!text.trim()) throw new Error('The model returned an empty answer')
-
-  return {
-    text,
-    provider: 'ollama',
-    model: config.model,
-    promptTokens: count(data.prompt_eval_count),
-    outputTokens: count(data.eval_count),
-    durationMs: Date.now() - started,
-    truncated: data.done_reason === 'length'
-  }
+  const answer = ollamaAnswer(await response.json())
+  return { ...answer, provider: 'ollama', model: config.model, durationMs: Date.now() - started }
 }
 
 /**
- * One structured completion from an OpenAI-shaped server.
- *
- * `response_format: json_schema` with `strict` is the same idea as Ollama's
- * `format`, and LM Studio, llama-server and the hosted APIs all take it.
- * Images travel as data URLs inside the user message, which is the one shape
- * every implementation agrees on. The key, when there is one, goes only to
- * this endpoint and is stripped from anything that comes back as an error.
+ * One structured completion from an OpenAI-shaped server. The body —
+ * `json_schema` strict, images as data URLs — is `openaiRequestBody` in
+ * shared/director/provider.ts. The key, when there is one, goes only to this
+ * endpoint and is stripped from anything that comes back as an error.
  */
 async function completeOpenAi(
   request: CompletionRequest,
   images: string[],
   config: OpenAiConfig
 ): Promise<CompletionResult> {
-  const userContent =
-    images.length > 0
-      ? [
-          { type: 'text', text: request.user },
-          ...images.map((b64) => ({ type: 'image_url', image_url: { url: `data:image/jpeg;base64,${b64}` } }))
-        ]
-      : request.user
-  const body = {
-    model: config.model,
-    stream: false,
-    temperature: 0,
-    seed: 7,
-    max_tokens: request.maxTokens ?? DEFAULT_MAX_TOKENS,
-    response_format: {
-      type: 'json_schema',
-      json_schema: { name: 'plan', strict: true, schema: request.schema }
-    },
-    messages: [
-      { role: 'system', content: request.system },
-      { role: 'user', content: userContent }
-    ]
-  }
+  const body = openaiRequestBody(request, images, config.model)
 
   const started = Date.now()
   try {
@@ -434,23 +369,8 @@ async function completeOpenAi(
       )
     }
 
-    const data = (await response.json()) as {
-      choices?: { message?: { content?: unknown }; finish_reason?: unknown }[]
-      usage?: { prompt_tokens?: unknown; completion_tokens?: unknown }
-    }
-    const choice = data.choices?.[0]
-    const text = typeof choice?.message?.content === 'string' ? choice.message.content : ''
-    if (!text.trim()) throw new Error('The model returned an empty answer')
-
-    return {
-      text,
-      provider: 'openai',
-      model: config.model,
-      promptTokens: count(data.usage?.prompt_tokens),
-      outputTokens: count(data.usage?.completion_tokens),
-      durationMs: Date.now() - started,
-      truncated: choice?.finish_reason === 'length'
-    }
+    const answer = openaiAnswer(await response.json())
+    return { ...answer, provider: 'openai', model: config.model, durationMs: Date.now() - started }
   } catch (err) {
     throw new Error(redactKey(err instanceof Error ? err.message : String(err), config.apiKey))
   }
