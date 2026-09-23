@@ -780,6 +780,12 @@ export interface Project {
    */
   transcripts: Record<string, Transcript>
   /**
+   * Names and words for the transcriber to listen for — the couple's names,
+   * the venue, a product. Sent as Whisper's prompt (transcript.ts
+   * vocabularyPrompt). Optional, so every older project opens unchanged.
+   */
+  vocabulary?: string
+  /**
    * Depth-plane bakes keyed by asset id.
    *
    * Optional so that every project written before parallax existed still loads.

@@ -922,12 +922,24 @@ analysis fails, or a build without vidstab (probed per machine), gets
 spread under their measured bounds, including a clip starting a second into
 its file.
 
-**Transcript editing.** Inline word editing in `TranscriptPanel`
-(`editTranscriptWord(assetId, index, text)`); segments re-derive; caption
-clips regenerate because they are derived from the transcript. A
-*Vocabulary* field (brand and product names) passed to faster-whisper's
-`initial_prompt` — Opus Clip sells this as *Brand Vocabulary*; here it is
-free.
+**Transcript editing — DONE.** The Transcript tab's **Edit**: click a word,
+type, Enter (Esc leaves it; an empty word is taken out). `withWordText`
+(transcript.ts) keeps the word's timing, clears its confidence, keeps every
+index (emphasis references them) and rebuilds the segments, so an added full
+stop ends a sentence there — with the same boundaries the segment ids come out
+the same. Captions read the transcript live, so the correction is in the
+preview's captions at once (seen in the harness: "WELCOME TO PRIYA") and in the
+export's subtitle file (`buildTimelineCaptions`, tested). Words the model was
+unsure of (confidence < 0.5) are marked, since they are the likeliest wrong.
+A **Listen for** field — the couple's names, the venue, a brand — is kept on
+the project and sent as faster-whisper's `initial_prompt` (`vocabularyPrompt`,
+bounded at 600 characters in the renderer and again in main), through a new
+`initialPrompt` parameter on `asr.transcribe`. Opus Clip sells this as *Brand
+Vocabulary*; here it is free. Song lyrics are transcribed without it — a
+couple's names in a lyric prompt would only bias it. Not measured against a
+real model here: the CI sidecar is a bare interpreter without faster-whisper,
+so the prompt's effect on recognition is Whisper's documented behaviour, and
+what is tested is that it arrives.
 
 ---
 

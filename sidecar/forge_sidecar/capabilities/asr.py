@@ -59,6 +59,11 @@ def register(server: Server) -> None:
 
         size = params.get("model") or DEFAULT_MODEL
         language = params.get("language") or None
+        # Names and words to listen for: Whisper treats the prompt as text said
+        # just before the audio, so a name spelled here is far likelier to be
+        # heard as that name (src/shared/transcript.ts vocabularyPrompt).
+        prompt = params.get("initialPrompt")
+        initial_prompt = prompt.strip() if isinstance(prompt, str) and prompt.strip() else None
         # int8 is 2-4x faster on CPU with negligible quality loss for captions.
         compute_type = params.get("computeType") or "int8"
 
@@ -70,6 +75,7 @@ def register(server: Server) -> None:
         segments_iter, info = model.transcribe(
             path,
             language=language,
+            initial_prompt=initial_prompt,
             word_timestamps=True,
             vad_filter=True,
             beam_size=5,

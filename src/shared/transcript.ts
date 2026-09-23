@@ -108,6 +108,50 @@ export function segmentIntoSentences(
   return segments
 }
 
+/* ------------------------------------------------------------- editing */
+
+/**
+ * A word corrected by hand (FIX.md B3).
+ *
+ * The text changes and the timing stays — a misheard name is still said at
+ * the same moment. An empty word is taken out. Indices are NOT renumbered:
+ * they are what emphasis and captions reference, and a gap in them costs
+ * nothing. The segments are rebuilt from the words, because an edit can add
+ * or remove the full stop a sentence ends on; with the same boundaries the
+ * segment ids come out the same. Captions read the transcript live, so they
+ * follow in the preview and the export with nothing else to do. A corrected
+ * word's confidence is unknown rather than the model's.
+ */
+export function withWordText(transcript: Transcript, index: number, text: string): Transcript {
+  const clean = text.replace(/\s+/g, ' ').trim()
+  const at = transcript.words.findIndex((w) => w.index === index)
+  if (at < 0 || transcript.words[at].text === clean) return transcript
+  const words = clean
+    ? transcript.words.map((w, i) => (i === at ? { ...w, text: clean, confidence: null } : w))
+    : transcript.words.filter((_, i) => i !== at)
+  return { ...transcript, words, segments: segmentIntoSentences(words) }
+}
+
+/** Whisper reads at most 224 tokens of prompt; this keeps well inside it. */
+export const VOCABULARY_MAX_CHARS = 600
+
+/**
+ * Names and words to listen for, as the text Whisper is primed with.
+ *
+ * faster-whisper's `initial_prompt` conditions the model on text it treats as
+ * having come just before the audio, so spelling a name there makes it far
+ * likelier to be heard as that name — the couple's names, a venue, a brand.
+ * Commas or new lines separate the terms; nothing given, nothing sent.
+ */
+export function vocabularyPrompt(vocabulary: string | undefined): string | undefined {
+  const terms = (vocabulary ?? '')
+    .split(/[,\n]/)
+    .map((t) => t.replace(/\s+/g, ' ').trim())
+    .filter((t) => t.length > 0)
+  if (terms.length === 0) return undefined
+  return `${terms.join(', ')}.`.slice(0, VOCABULARY_MAX_CHARS)
+}
+
 /* ------------------------------------------------------------- queries */
 
 export function wordsInRange(transcript: Transcript, startMs: number, endMs: number): Word[] {

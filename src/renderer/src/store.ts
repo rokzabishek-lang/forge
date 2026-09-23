@@ -180,7 +180,7 @@ import {
 } from '@shared/director/provider'
 import { spineSchema, type Brief, type SpinePlan, type Tone } from '@shared/director/schema'
 import { validateSpine, type SegmentLayout, type SpineVerdict } from '@shared/director/validate'
-import type { Transcript } from '@shared/transcript'
+import { vocabularyPrompt, withWordText, type Transcript } from '@shared/transcript'
 
 /*
  * Re-exported so every existing import keeps working; the table itself moved to
@@ -912,6 +912,10 @@ interface EditorState {
 
   setJobs: (jobs: Job[]) => void
   transcribeAsset: (assetId: string) => Promise<void>
+  /** Correct one word of an asset's transcript; empty text takes it out. */
+  editTranscriptWord: (assetId: string, index: number, text: string) => void
+  /** The names and words the transcriber is told to listen for. */
+  setVocabulary: (vocabulary: string) => void
   /** Cut a photo into depth planes for parallax. Returns null on failure. */
   bakeParallax: (assetId: string) => Promise<ParallaxBake | null>
   cancelBake: (assetId: string) => void
@@ -4621,7 +4625,9 @@ export const useEditor = create<EditorState>((set, get) => ({
     try {
       const transcript: Transcript = await window.forge.transcribe({
         assetId,
-        path: asset.path
+        path: asset.path,
+        // The couple's names, the venue, a product — spelled for the model.
+        initialPrompt: vocabularyPrompt(project.vocabulary)
       })
       get().update((p) => ({
         ...p,
@@ -4638,6 +4644,28 @@ export const useEditor = create<EditorState>((set, get) => ({
         return { transcribing: next }
       })
     }
+  },
+
+  editTranscriptWord: (assetId, index, text) => {
+    get().update((p) => {
+      const transcript = p.transcripts[assetId]
+      if (!transcript) return p
+      const next = withWordText(transcript, index, text)
+      // Unchanged is no edit — and no history entry for a word left as it was.
+      return next === transcript ? p : { ...p, transcripts: { ...p.transcripts, [assetId]: next } }
+    })
+  },
+
+  setVocabulary: (vocabulary) => {
+    get().update((p) => {
+      const clean = vocabulary.slice(0, 2000)
+      if ((p.vocabulary ?? '') === clean) return p
+      if (clean.trim() === '') {
+        const { vocabulary: _none, ...rest } = p
+        return rest
+      }
+      return { ...p, vocabulary: clean }
+    })
   },
 
   cancelTranscribe: (assetId) => {

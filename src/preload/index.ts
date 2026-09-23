@@ -408,6 +408,8 @@ const api = {
     path: string
     language?: string
     model?: string
+    /** Names and words to listen for (transcript.ts vocabularyPrompt). */
+    initialPrompt?: string
   }): Promise<Transcript> => ipcRenderer.invoke('asr:transcribe', request),
   cancelTranscribe: (assetId: string): Promise<void> => ipcRenderer.invoke('asr:cancel', assetId),
   sidecarStatus: (): Promise<SidecarStatusMessage> => ipcRenderer.invoke('sidecar:status'),

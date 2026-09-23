@@ -46,6 +46,14 @@ an installer ships no assets at all, so "Nothing here." is where most people
 start and the offer has to be in it. See `docs/ASSETS.md`. Nothing in the editor
 needs a pack; they add choices.
 
+**Transcript** — the selected clip's words, sentence by sentence; click one to
+jump there. **Edit** turns every word into something to click and correct —
+Enter keeps it, Esc leaves it, an empty word is taken out — and the captions
+follow at once. A word the transcriber was unsure of is underlined. At the
+bottom, **Listen for** takes names and words (the couple, the venue, a brand)
+for the transcriber to expect, and **Transcribe again with these words** runs
+it again — which replaces any corrections.
+
 **Text** — title templates.
 
 **Auto** — the automations. See §5.

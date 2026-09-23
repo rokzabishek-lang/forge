@@ -16,7 +16,7 @@ import { execFile } from 'node:child_process'
 import { probeMany } from './ffmpeg/probe'
 import { getSidecar } from './sidecar/service'
 import { SIDECAR_METHODS } from '@shared/sidecar/protocol'
-import { segmentIntoSentences, type Transcript, type Word } from '@shared/transcript'
+import { VOCABULARY_MAX_CHARS, segmentIntoSentences, type Transcript, type Word } from '@shared/transcript'
 import { JobQueue } from './queue'
 import { startRender, type RenderOptions } from './render/renderJob'
 import { probeEncoders } from './render/encoders'
@@ -831,11 +831,12 @@ export function registerIpc(getWindow: () => BrowserWindow | null): JobQueue {
   const transcriptions = new Map<string, AbortController>()
 
   ipcMain.handle('asr:transcribe', async (_e, payload: unknown) => {
-    const { assetId, path, language, model } = (payload ?? {}) as {
+    const { assetId, path, language, model, initialPrompt } = (payload ?? {}) as {
       assetId?: unknown
       path?: unknown
       language?: unknown
       model?: unknown
+      initialPrompt?: unknown
     }
     if (typeof assetId !== 'string' || typeof path !== 'string') {
       throw new Error('Transcription needs an asset id and a file path')
@@ -855,7 +856,13 @@ export function registerIpc(getWindow: () => BrowserWindow | null): JobQueue {
         {
           path,
           language: typeof language === 'string' ? language : undefined,
-          model: typeof model === 'string' ? model : undefined
+          model: typeof model === 'string' ? model : undefined,
+          // The project's vocabulary, as Whisper's prompt — bounded here too,
+          // since this is the edge the renderer's data crosses.
+          initialPrompt:
+            typeof initialPrompt === 'string' && initialPrompt.trim()
+              ? initialPrompt.slice(0, VOCABULARY_MAX_CHARS)
+              : undefined
         },
         {
           signal: controller.signal,
