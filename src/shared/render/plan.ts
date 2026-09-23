@@ -532,7 +532,29 @@ function opacityFilter(clip: Clip, staticOpacity: number, fps: number): string |
      */
     return `geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='alpha(X,Y)*(${expression})/255'`
   }
-  return staticOpacity < 1 ? `colorchannelmixer=aa=${staticOpacity.toFixed(3)}` : null
+  // Planar, like every mixer here: packed rgba costs the colours two levels.
+  return staticOpacity < 1 ? inRgb([`colorchannelmixer=aa=${staticOpacity.toFixed(3)}`]) : null
+}
+
+/**
+ * RGB-only filters, run on PLANAR RGB and handed back.
+ *
+ * `colorchannelmixer`, `curves`, `lut3d` and `despill` work in RGB, and given a
+ * yuva420p stream ffmpeg converts for them — to packed `rgba`, and back. That
+ * route loses about two levels: a mid grey through a mixer set to change
+ * nothing came out 124 from 126 on the macOS build, and every balance on the
+ * Windows build 3–4 levels darker than its gains. Through planar `gbrap` the
+ * same round trip is exact (126 in, 126 out, for the mixer, curves, lut3d and
+ * despill alike), and the balance lands on its gains. The preview never lost
+ * those levels, so the file was quietly darker than the screen.
+ *
+ * `back` is what the stream was: a clip's chain carries alpha; the composited
+ * canvas an adjustment layer grades does not.
+ */
+function inRgb(steps: (string | null)[], back: 'yuva420p' | 'yuv420p' = 'yuva420p'): string | null {
+  const real = steps.filter((s): s is string => s !== null)
+  if (real.length === 0) return null
+  return `format=${back === 'yuva420p' ? 'gbrap' : 'gbrp'},${real.join(',')},format=${back}`
 }
 
 function eqFilter(clip: Clip): string | null {
@@ -1105,22 +1127,25 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
      * alpha 0 in and 255 out. Brightness on a clip that does not fill its box
      * turned the see-through bars black, and a sticker became its rectangle.
      * White balance, curves, despill and the look all keep alpha (measured the
-     * same way); only `eq` does not, so only `eq` is wrapped (see below).
+     * same way); only `eq` does not, so only `eq` is wrapped (see below). The
+     * RGB ones run on planar RGB (`inRgb`), where they lose no levels.
      */
     const beforeEq = [
-      // A key's fringe comes out first, before anything grades what is left.
-      key ? despillFilter(key) : null,
-      // Grade after the fit, so it runs at canvas size rather than over every
-      // pixel of a 6000px photograph.
-      // White balance first: correct the light, then grade it.
-      gradeInline ? whiteBalanceFilter(clip.color?.temperature, clip.color?.tint) : null
+      inRgb([
+        // A key's fringe comes out first, before anything grades what is left.
+        key ? despillFilter(key) : null,
+        // Grade after the fit, so it runs at canvas size rather than over every
+        // pixel of a 6000px photograph.
+        // White balance first: correct the light, then grade it.
+        gradeInline ? whiteBalanceFilter(clip.color?.temperature, clip.color?.tint) : null
+      ])
     ].filter((s): s is string => s !== null)
     // An adjustment layer's grade runs on the tracks below, further down; its
     // own chain is never drawn, so nothing may be split off it here.
     const eq = gradeInline && !clip.adjustment ? eqFilter(clip) : null
     const afterEq = [
       // Curves after the sliders, before the look: correct, shape, then style.
-      gradeInline ? curvesFilter(clip.color?.curves) : null,
+      gradeInline ? inRgb([curvesFilter(clip.color?.curves)]) : null,
       // With a mask these move to `finish`, after the shape has been applied.
       ...(mask ? [] : finish)
     ].filter((s): s is string => s !== null)
@@ -1193,11 +1218,11 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
     const applyLook = (input: string, prefix: string): string => {
       const file = escapeFilterPath(lut!.file)
       if (lut!.intensity >= 0.999) {
-        filters.push(`${input}lut3d=file=${file}:interp=tetrahedral[${prefix}r${i}]`)
+        filters.push(`${input}${inRgb([`lut3d=file=${file}:interp=tetrahedral`])}[${prefix}r${i}]`)
       } else {
         const mix = lut!.intensity.toFixed(3)
         filters.push(`${input}split[${prefix}a${i}][${prefix}b${i}]`)
-        filters.push(`[${prefix}b${i}]lut3d=file=${file}:interp=tetrahedral[${prefix}l${i}]`)
+        filters.push(`[${prefix}b${i}]${inRgb([`lut3d=file=${file}:interp=tetrahedral`])}[${prefix}l${i}]`)
         filters.push(
           `[${prefix}a${i}][${prefix}l${i}]blend=all_mode=normal:` +
             `c0_opacity=${mix}:c1_opacity=${mix}:c2_opacity=${mix}:c3_opacity=1[${prefix}r${i}]`
@@ -1237,7 +1262,8 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
       const balance = whiteBalanceFilter(clip.color?.temperature, clip.color?.tint)
       if (balance) {
         const out = nextLabel()
-        filters.push(`${stream}${balance}:${gate}${out}`)
+        // The composite has no alpha; `enable` stays on the mixer itself.
+        filters.push(`${stream}${inRgb([`${balance}:${gate}`], 'yuv420p')}${out}`)
         stream = out
       }
 
@@ -1251,7 +1277,7 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
       const shaped = curvesFilter(clip.color?.curves)
       if (shaped) {
         const out = nextLabel()
-        filters.push(`${stream}${shaped}:${gate}${out}`)
+        filters.push(`${stream}${inRgb([`${shaped}:${gate}`], 'yuv420p')}${out}`)
         stream = out
       }
 
@@ -1260,7 +1286,7 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
         const file = escapeFilterPath(look.file)
         if (look.intensity >= 0.999) {
           const out = nextLabel()
-          filters.push(`${stream}lut3d=file=${file}:interp=tetrahedral:${gate}${out}`)
+          filters.push(`${stream}${inRgb([`lut3d=file=${file}:interp=tetrahedral:${gate}`], 'yuv420p')}${out}`)
           stream = out
         } else {
           const mix = look.intensity.toFixed(3)
@@ -1269,7 +1295,7 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
           const graded = nextLabel()
           const out = nextLabel()
           filters.push(`${stream}split${a}${b}`)
-          filters.push(`${b}lut3d=file=${file}:interp=tetrahedral${graded}`)
+          filters.push(`${b}${inRgb([`lut3d=file=${file}:interp=tetrahedral`], 'yuv420p')}${graded}`)
           // Disabled, blend passes the first input through untouched — which is
           // the ungraded copy, so the layer simply stops outside its own span.
           filters.push(
@@ -1414,9 +1440,10 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
             // usual correspondence between the two.
             [`gblur=sigma=${Math.max(0.1, mask.blur / 2).toFixed(2)}`]
           : [
-              whiteBalanceFilter(clip.color?.temperature, clip.color?.tint),
+              // The copy is opaque (format=yuv420p just below), so back to that.
+              inRgb([whiteBalanceFilter(clip.color?.temperature, clip.color?.tint)], 'yuv420p'),
               eqFilter(clip),
-              curvesFilter(clip.color?.curves)
+              inRgb([curvesFilter(clip.color?.curves)], 'yuv420p')
             ].filter(
               (s): s is string => s !== null
             )

@@ -187,7 +187,8 @@ describe('the plan keys the ungraded, fitted picture and multiplies it into the 
       '[ko1]alphaextract[kn1]',
       '[kn1][kk1]blend=all_mode=multiply[ka1]',
       '[kp1][ka1]alphamerge[kd1]',
-      `[kd1]${despillFilter(DEFAULT_KEY)},colorchannelmixer=`
+      // The despill and the balance on planar RGB, where they lose no levels.
+      `[kd1]format=gbrap,${despillFilter(DEFAULT_KEY)},colorchannelmixer=`
     ]
     let at = -1
     for (const step of steps) {

@@ -170,6 +170,9 @@ describe('the export’s expression', () => {
     // The soft band is a fraction of the keyed half-extent, not the still one.
     expect(e).toContain('ld(3)*0.20000*H')
     expect(e).not.toContain('st(4,')
+    // And across: a keyed width feathers off the keyed width.
+    const across = maskExpression({ ...shape, radius: 0, feather: 0.2 }, motion({ maskWidth: [{ frame: 0, value: 0.1 }, { frame: 30, value: 0.3 }] }))
+    expect(across).toContain('ld(2)*0.20000*W')
   })
 })
 

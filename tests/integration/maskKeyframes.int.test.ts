@@ -32,7 +32,7 @@ beforeAll(async () => {
     'iris-start.png / iris-end.png   an ellipse opening from a dot to most of the frame',
     'split-right.png                 the right half of a split clip: its window starts where the whole clip was',
     'drop-end.png                    a band keyed from the top to the bottom',
-    'soft-end.png                    a soft iris: its edge softens in proportion as it opens'
+    'soft-end.png                    a soft box: its edge softens in proportion as it opens'
   ])
 }, 120_000)
 
@@ -135,10 +135,13 @@ describe('a mask that moves', () => {
   }, 300_000)
 
   it('a soft edge scales with the size it is keyed to', async () => {
-    // Feather is a fraction of the radius: as the iris opens, its soft band
-    // widens with it. Half-way out from the centre of the open iris is inside
-    // the soft band, so the blue is only part-way over the red there.
-    const soft: Mask = { ...window, shape: { ...window.shape, kind: 'ellipse', width: 0.02, height: 0.02, feather: 0.6 } }
+    // A RECTANGLE, because its soft band is measured in pixels off the
+    // half-extent — an ellipse's feather is relative to its radius by
+    // construction and would pass either way. As the box opens, its soft band
+    // widens with it: 0.7 of the way out is inside the band, so the blue is
+    // only part-way over the red there. Keyed off the still width (0.02) the
+    // band would be a pixel wide and the point solid blue.
+    const soft: Mask = { ...window, shape: { ...window.shape, kind: 'rectangle', radius: 0, width: 0.02, height: 0.02, feather: 0.6 } }
     const keyframes: KeyframeTracks = {
       maskWidth: [{ frame: 0, value: 0.02 }, { frame: 29, value: 0.4 }],
       maskHeight: [{ frame: 0, value: 0.02 }, { frame: 29, value: 0.4 }]
