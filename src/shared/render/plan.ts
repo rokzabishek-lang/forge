@@ -15,6 +15,7 @@ import { hasPath, pathExpression } from './path'
 import { hasKeys, keyframeExpression } from './keyframes'
 import { curvesFilter } from './colourCurve'
 import { whiteBalanceFilter } from './whiteBalance'
+import { chromakeyFilter, despillFilter, saneKey } from './chromaKey'
 import { isFullFrameMask, maskExpression } from './mask'
 import { effectiveCrop, safeCrop, type Size } from './crop'
 import { atempoChain, clipSpeed, sourceFramesFor, speedVideoFilter } from './speed'
@@ -1017,7 +1018,17 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
       ...(transition?.incoming ? transition.incoming(context) : [])
     ].filter((s): s is string => s !== null)
 
-    const steps = [
+    /*
+     * The chain comes in two halves, split where a key is taken.
+     *
+     * Everything up to the fitted, yuva420p picture is `prepare`; the grade
+     * and what follows is `rest`. A chroma key has to be measured on the
+     * UNGRADED picture — grading the greens would move the key — so a keyed
+     * clip splits between them (see `keyLabel` below). Unkeyed, the two halves
+     * join into the one chain they always were.
+     */
+    const key = clip.key ? saneKey(clip.key) : null
+    const prepare = [
       // Before anything else: a drawn animation is only as long as its movement,
       // and every step below assumes a stream of exactly `duration` frames.
       asset.frames ? holdFilter(clip, fps) : null,
@@ -1068,7 +1079,11 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
       // the whole timeline once per clip. Measured on 8 clips over a 12s
       // 1080x1920 output: 59.1s in rgba, 29.5s in yuva420p. Same picture, half
       // the time, one word changed.
-      'format=yuva420p',
+      'format=yuva420p'
+    ].filter((s): s is string => s !== null)
+    const rest = [
+      // A key's fringe comes out first, before anything grades what is left.
+      key ? despillFilter(key) : null,
       // Grade after the fit, so it runs at canvas size rather than over every
       // pixel of a 6000px photograph.
       // White balance first: correct the light, then grade it.
@@ -1078,9 +1093,8 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
       gradeInline ? curvesFilter(clip.color?.curves) : null,
       // With a mask these move to `finish`, after the shape has been applied.
       ...(mask ? [] : finish)
-    ]
-      .filter((s): s is string => s !== null)
-      .join(',')
+    ].filter((s): s is string => s !== null)
+    const steps = [...prepare, ...rest].join(',')
 
     /*
      * The LUT cannot live in that chain.
@@ -1096,6 +1110,22 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
      */
     let head = source
     let body = steps
+
+    /*
+     * The key's shape, taken from the ungraded picture.
+     *
+     * `chromakey` REPLACES alpha, so it runs on a copy and only its alpha is
+     * kept, as a shape — multiplied into the clip's own transparency and every
+     * other shape below, never put on in place of them.
+     */
+    let keyLabel: string | null = null
+    if (key) {
+      filters.push(`${source}${prepare.join(',')},split[kv${i}][kc${i}]`)
+      filters.push(`[kc${i}]${chromakeyFilter(key)},alphaextract[kk${i}]`)
+      head = `[kv${i}]`
+      body = rest.join(',')
+      keyLabel = `[kk${i}]`
+    }
     const lut = clip.color?.lut
     const hasLook = Boolean(lut?.file && lut.intensity > 0)
 
@@ -1278,6 +1308,7 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
 
     const matteLabel = clip.matte ? matteLabels.get(clip.matte.clipId) : undefined
     const shapes = [
+      keyLabel,
       stickerLabel,
       matteLabel ?? null,
       mask?.mode === 'reveal' ? shapeLabel : null,

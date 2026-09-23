@@ -1,8 +1,9 @@
 import type { ColorAdjust } from '@shared/timeline'
-import { isNeutralGrade } from '@shared/timeline'
+import { DEFAULT_COLOR, isNeutralGrade } from '@shared/timeline'
 import { isNeutralCurves, sampleCurves } from '@shared/render/colourCurve'
 import { parseCube, type CubeLut } from '@shared/render/cube'
 import { whiteBalanceGains } from '@shared/render/whiteBalance'
+import { keyChroma, saneKey, screenOf, type ChromaKey } from '@shared/render/chromaKey'
 import { mediaUrl } from './media'
 
 /**
@@ -43,6 +44,16 @@ uniform float uContrast;
 uniform float uSaturation;
 // White balance: the same three gains the export hands colorchannelmixer.
 uniform vec3 uGains;
+// Chroma key, in ffmpeg's own units (render/chromaKey.ts): the key's U,V on
+// 0..255, its similarity and blend, one texel for the 3x3 neighbourhood, and
+// the despill amount with which screen it is (0 green, 1 blue).
+uniform float uKeyOn;
+uniform vec2 uKeyUv;
+uniform float uKeySimilarity;
+uniform float uKeyBlend;
+uniform vec2 uTexel;
+uniform float uDespill;
+uniform float uDespillBlue;
 uniform sampler2D uCurves;
 uniform float uHasCurves;
 
@@ -66,6 +77,43 @@ void main() {
   // Undo the premultiply the browser may have applied, so a grade on a
   // semi-transparent sticker does not darken its edges.
   vec3 rgb = src.a > 0.001 ? src.rgb : src.rgb;
+
+  /*
+   * The key, on the UNGRADED picture — ffmpeg's chromakey exactly: BT.601
+   * chroma of each pixel, its distance from the key's chroma averaged over the
+   * 3x3 neighbourhood, then cut at similarity and softened over blend.
+   */
+  float keep = 1.0;
+  if (uKeyOn > 0.5) {
+    float d = 0.0;
+    for (int yo = -1; yo <= 1; yo++) {
+      for (int xo = -1; xo <= 1; xo++) {
+        vec3 c = texture(uImage, vUv + vec2(float(xo), float(yo)) * uTexel).rgb * 255.0;
+        vec2 uv = vec2(
+          128.0 + (-0.1482 * c.r - 0.291 * c.g + 0.4392 * c.b),
+          128.0 + (0.4392 * c.r - 0.3678 * c.g - 0.0714 * c.b)
+        );
+        vec2 duv = uv - uKeyUv;
+        d += sqrt(dot(duv, duv) / (255.0 * 255.0 * 2.0));
+      }
+    }
+    d /= 9.0;
+    keep = uKeyBlend > 0.0001
+      ? clamp((d - uKeySimilarity) / uKeyBlend, 0.0, 1.0)
+      : (d > uKeySimilarity ? 1.0 : 0.0);
+
+    // Despill, ffmpeg's: the screen channel's excess over the mean of the
+    // other two, taken back out by the amount.
+    if (uDespill > 0.0) {
+      if (uDespillBlue < 0.5) {
+        float spill = max(rgb.g - (rgb.r * 0.5 + rgb.b * 0.5), 0.0);
+        rgb.g = max(rgb.g - uDespill * spill, 0.0);
+      } else {
+        float spill = max(rgb.b - (rgb.r * 0.5 + rgb.g * 0.5), 0.0);
+        rgb.b = max(rgb.b - uDespill * spill, 0.0);
+      }
+    }
+  }
 
   // White balance first, in RGB, as the export's colorchannelmixer does —
   // correct the light before grading it (render/whiteBalance.ts).
@@ -105,7 +153,8 @@ void main() {
     graded = mix(graded, looked, uLutMix);
   }
 
-  fragColor = vec4(graded, src.a);
+  // The key multiplies into the picture's own alpha — never replaces it.
+  fragColor = vec4(graded, src.a * keep);
 }`
 
 interface Pass {
@@ -173,6 +222,13 @@ function ensurePass(): Pass | null {
       'uContrast',
       'uSaturation',
       'uGains',
+      'uKeyOn',
+      'uKeyUv',
+      'uKeySimilarity',
+      'uKeyBlend',
+      'uTexel',
+      'uDespill',
+      'uDespillBlue',
       'uCurves',
       'uHasCurves'
     ].map(
@@ -316,6 +372,30 @@ function uploadLut(file: string, lut: CubeLut): void {
   lutSizes.set(file, lut.size)
 }
 
+/** The key's uniforms, from the same functions the export's filter string comes from. */
+function setKey(
+  gl: WebGL2RenderingContext,
+  uniforms: Record<string, WebGLUniformLocation | null>,
+  chroma: ChromaKey | undefined,
+  width: number,
+  height: number
+): void {
+  if (!chroma) {
+    gl.uniform1f(uniforms.uKeyOn, 0)
+    gl.uniform1f(uniforms.uDespill, 0)
+    return
+  }
+  const k = saneKey(chroma)
+  const [u, v] = keyChroma(k.color)
+  gl.uniform1f(uniforms.uKeyOn, 1)
+  gl.uniform2f(uniforms.uKeyUv, u, v)
+  gl.uniform1f(uniforms.uKeySimilarity, k.similarity)
+  gl.uniform1f(uniforms.uKeyBlend, k.blend)
+  gl.uniform2f(uniforms.uTexel, 1 / Math.max(1, width), 1 / Math.max(1, height))
+  gl.uniform1f(uniforms.uDespill, k.despill)
+  gl.uniform1f(uniforms.uDespillBlue, screenOf(k.color) === 'blue' ? 1 : 0)
+}
+
 function setGains(gl: WebGL2RenderingContext, location: WebGLUniformLocation | null, color: ColorAdjust): void {
   const { r, g, b } = whiteBalanceGains(color.temperature, color.tint)
   gl.uniform3f(location, r, g, b)
@@ -413,9 +493,12 @@ export function gradedSource(
   element: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
   color: ColorAdjust | undefined,
   key: string,
-  onReady: () => void = () => undefined
+  onReady: () => void = () => undefined,
+  /** A chroma key on the clip — keyed here, before the grade, as the export does. */
+  chroma?: ChromaKey
 ): CanvasImageSource {
-  if (!color || isNeutralGrade(color)) return element
+  if ((!color || isNeutralGrade(color)) && !chroma) return element
+  color = color ?? DEFAULT_COLOR
 
   // An element that had to fall back to a plain, non-CORS load can never be
   // read by WebGL. Trying anyway throws sixty times a second for no gain.
@@ -436,7 +519,9 @@ export function gradedSource(
   // A video is a new picture every frame; a still only needs drawing once per
   // change of grade.
   const frameKey = contentKey(element)
-  const signature = signatureOf(color, width, height, `${frameKey}|${mix.toFixed(3)}`)
+  // A key changes the picture as surely as a grade does.
+  const keyed = chroma ? JSON.stringify(saneKey(chroma)) : ''
+  const signature = signatureOf(color, width, height, `${frameKey}|${mix.toFixed(3)}|${keyed}`)
   const existing = cache.get(key)
   if (existing && existing.signature === signature) return existing.canvas
 
@@ -469,6 +554,7 @@ export function gradedSource(
   gl.uniform1f(uniforms.uContrast, color.contrast)
   gl.uniform1f(uniforms.uSaturation, color.saturation)
   setGains(gl, uniforms.uGains, color)
+  setKey(gl, uniforms, chroma, width, height)
   uploadCurves(current, color)
 
   gl.clearColor(0, 0, 0, 0)
@@ -552,6 +638,7 @@ export function gradeRegion(
   gl.uniform1f(uniforms.uContrast, color.contrast)
   gl.uniform1f(uniforms.uSaturation, color.saturation)
   setGains(gl, uniforms.uGains, color)
+  setKey(gl, uniforms, undefined, 1, 1)
   uploadCurves(current, color)
 
   gl.clearColor(0, 0, 0, 0)

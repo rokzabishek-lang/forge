@@ -1,4 +1,5 @@
 import { isNeutralBalance } from './render/whiteBalance'
+import type { ChromaKey } from './render/chromaKey'
 import type { MediaKind } from './types'
 import type { KeyframeTracks } from './render/keyframes'
 import { isNeutralCurves, type Curves } from './render/colourCurve'
@@ -446,6 +447,12 @@ export interface Clip {
    * an ordinary, draggable, trimmable clip like everything else.
    */
   adjustment?: boolean
+  /**
+   * A chroma key — green or blue screen — and its despill. Keyed on the
+   * ungraded picture and multiplied into the clip's own alpha; one set of
+   * numbers for the preview and the file (render/chromaKey.ts).
+   */
+  key?: ChromaKey
   /**
    * This clip's sound has been lifted onto an audio track of its own.
    *

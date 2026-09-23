@@ -1261,7 +1261,7 @@ export function Preview(): ReactNode {
     }
 
     const picture = (layer: Layer): CanvasImageSource =>
-      gradedSource(sourceFor(layer), layer.clip.color, layer.clip.id, repaint)
+      gradedSource(sourceFor(layer), layer.clip.color, layer.clip.id, repaint, layer.clip.key)
 
     let sourceFit: ViewTransform = { scale: 1, offsetX: 0, offsetY: 0 }
 
@@ -1433,7 +1433,7 @@ export function Preview(): ReactNode {
               planeShare(motion, motion.amount, plane.depth)
             )
             ctx.drawImage(
-              gradedSource(plane.element, layer.clip.color, `${layer.clip.id}:p${index}`, repaint),
+              gradedSource(plane.element, layer.clip.color, `${layer.clip.id}:p${index}`, repaint, layer.clip.key),
               region.x + rect.sx, region.y + rect.sy, rect.sw, rect.sh,
               ...destination
             )
