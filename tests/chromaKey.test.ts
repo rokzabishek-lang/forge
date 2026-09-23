@@ -234,6 +234,23 @@ describe('the plan keys the ungraded, fitted picture and multiplies it into the 
 
 const source = (path: string): string => readFileSync(resolve(__dirname, '..', path), 'utf8')
 
+describe('the Inspector offers the key where it can work', () => {
+  const inspector = source('src/renderer/src/components/Inspector.tsx')
+  const panel = source('src/renderer/src/components/KeyPanel.tsx')
+
+  it('shows the Key panel only for a keyable clip, between the mask and the colour', () => {
+    const at = inspector.indexOf('{isKeyable(clip, asset ?? undefined) && <KeyPanel clip={clip} />}')
+    expect(at).toBeGreaterThan(inspector.indexOf('<MaskPanel clip={clip} />'))
+    expect(at).toBeLessThan(inspector.indexOf('onClick={() => setColor(clip.id, NEUTRAL_COLOR_PATCH)}'))
+    expect([...inspector.matchAll(/<KeyPanel /g)]).toHaveLength(1)
+  })
+
+  it('starts from the default key and goes straight to picking', () => {
+    expect(panel).toContain('setKey(clip.id, DEFAULT_KEY)')
+    expect(panel).toContain("setPreviewTool('key')")
+  })
+})
+
 describe('the preview keys the same way', () => {
   const grade = source('src/renderer/src/grade.ts')
 
