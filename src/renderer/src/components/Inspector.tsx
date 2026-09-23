@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState, type ReactNode } from 'react'
 import { Download, FolderOpen, Loader2, X } from 'lucide-react'
 import {
-  DEFAULT_COLOR,
+  NEUTRAL_COLOR_PATCH,
   clipEnd,
   formatTimecode,
   isNeutralGrade,
@@ -1027,15 +1027,34 @@ export function Inspector(): ReactNode {
                   </span>
                   {!isNeutralGrade(clip.color) && (
                     <button
-                      onClick={() =>
-                        setColor(clip.id, { ...DEFAULT_COLOR, lut: undefined })
-                      }
+                      onClick={() => setColor(clip.id, NEUTRAL_COLOR_PATCH)}
                       className="rounded px-1.5 py-0.5 text-[10px] text-ink-600 hover:bg-ink-800 hover:text-ink-200"
                     >
                       Reset
                     </button>
                   )}
                 </div>
+                {/*
+                  White balance first, as it is applied: correct the light,
+                  then grade. Warm fixes a blue cloudy ceremony; cool fixes an
+                  orange tungsten reception (render/whiteBalance.ts).
+                */}
+                <Slider
+                  label="Temp"
+                  value={Math.round((clip.color?.temperature ?? 0) * 100)}
+                  min={-100}
+                  max={100}
+                  suffix=""
+                  onChange={(v) => setColor(clip.id, { temperature: v / 100 })}
+                />
+                <Slider
+                  label="Tint"
+                  value={Math.round((clip.color?.tint ?? 0) * 100)}
+                  min={-100}
+                  max={100}
+                  suffix=""
+                  onChange={(v) => setColor(clip.id, { tint: v / 100 })}
+                />
                 <Slider
                   label="Bright"
                   value={Math.round((clip.color?.brightness ?? 0) * 100)}

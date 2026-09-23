@@ -158,6 +158,14 @@ const SHAPES: { name: string; project: Project; range?: { start: number; end: nu
     })
   },
   {
+    // B3's white balance: must stay colorchannelmixer (2013), never become
+    // colortemperature (2021), which is on the blocklist above.
+    name: 'a white balance on a clip',
+    project: project({
+      clips: [clip({ id: 'a', color: { brightness: 0, contrast: 1, saturation: 1, temperature: 0.6, tint: -0.2 } })]
+    })
+  },
+  {
     // B2's range export trims the finished picture and the finished mix; the
     // branch only exists with a range, so without this shape nothing checks it.
     name: 'a range export, so the picture and the mix are trimmed',

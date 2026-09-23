@@ -2,6 +2,7 @@ import type { ColorAdjust } from '@shared/timeline'
 import { isNeutralGrade } from '@shared/timeline'
 import { isNeutralCurves, sampleCurves } from '@shared/render/colourCurve'
 import { parseCube, type CubeLut } from '@shared/render/cube'
+import { whiteBalanceGains } from '@shared/render/whiteBalance'
 import { mediaUrl } from './media'
 
 /**
@@ -40,6 +41,8 @@ uniform float uLutMix;
 uniform float uBrightness;
 uniform float uContrast;
 uniform float uSaturation;
+// White balance: the same three gains the export hands colorchannelmixer.
+uniform vec3 uGains;
 uniform sampler2D uCurves;
 uniform float uHasCurves;
 
@@ -63,6 +66,10 @@ void main() {
   // Undo the premultiply the browser may have applied, so a grade on a
   // semi-transparent sticker does not darken its edges.
   vec3 rgb = src.a > 0.001 ? src.rgb : src.rgb;
+
+  // White balance first, in RGB, as the export's colorchannelmixer does —
+  // correct the light before grading it (render/whiteBalance.ts).
+  rgb = clamp(rgb * uGains, 0.0, 1.0);
 
   /*
    * ffmpeg's eq, exactly: contrast and brightness act on luma as
@@ -165,6 +172,7 @@ function ensurePass(): Pass | null {
       'uBrightness',
       'uContrast',
       'uSaturation',
+      'uGains',
       'uCurves',
       'uHasCurves'
     ].map(
@@ -308,6 +316,11 @@ function uploadLut(file: string, lut: CubeLut): void {
   lutSizes.set(file, lut.size)
 }
 
+function setGains(gl: WebGL2RenderingContext, location: WebGLUniformLocation | null, color: ColorAdjust): void {
+  const { r, g, b } = whiteBalanceGains(color.temperature, color.tint)
+  gl.uniform3f(location, r, g, b)
+}
+
 /* --------------------------------------------------------------- caching */
 
 interface Cached {
@@ -324,6 +337,9 @@ function signatureOf(color: ColorAdjust, width: number, height: number, frame: s
     color.saturation.toFixed(4),
     color.lut?.file ?? '',
     color.lut?.intensity.toFixed(4) ?? '',
+    // White balance changes the picture, so it belongs in the key.
+    (color.temperature ?? 0).toFixed(4),
+    (color.tint ?? 0).toFixed(4),
     /*
      * The curves belong in the signature.
      *
@@ -452,6 +468,7 @@ export function gradedSource(
   gl.uniform1f(uniforms.uBrightness, color.brightness)
   gl.uniform1f(uniforms.uContrast, color.contrast)
   gl.uniform1f(uniforms.uSaturation, color.saturation)
+  setGains(gl, uniforms.uGains, color)
   uploadCurves(current, color)
 
   gl.clearColor(0, 0, 0, 0)
@@ -534,6 +551,7 @@ export function gradeRegion(
   gl.uniform1f(uniforms.uBrightness, color.brightness)
   gl.uniform1f(uniforms.uContrast, color.contrast)
   gl.uniform1f(uniforms.uSaturation, color.saturation)
+  setGains(gl, uniforms.uGains, color)
   uploadCurves(current, color)
 
   gl.clearColor(0, 0, 0, 0)

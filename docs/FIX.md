@@ -763,13 +763,35 @@ Three things the user hit testing `7508d0c`, each traced to its cause:
   forever. Both stamp their frames now, and a canvas that does not is never
   served from the cache (`grade.ts` `canvasContentKey`).
 
+Fifteen mutations over the three, all killed. The frame-rate conversion that
+followed: sixteen, fifteen killed — the survivor was a test of "never read past
+the file" whose clip never reached the end of its file; it does now.
+
 ### B3. Colour, key, masks, motion, transcript
 
-**Temperature and tint.** `ColorAdjust.temperature?` and `tint?` (−1..1) →
-a 3×3 matrix on **`colorchannelmixer`** (2013) — *not* `colortemperature`,
-which merged in 2021 and is blocklisted. The WebGL grade (`grade.ts`)
-multiplies by the identical matrix; parity test on synthetic pixels between
-the matrix maths and ffmpeg's output on a generated frame.
+**First, the crop — DONE.** The survey found `Preview.tsx` drew the raw
+`clip.crop` while the export clamps it, so every B3 comparison would have been
+between two different pictures. `effectiveCrop` (`render/crop.ts`) is what the
+export really cuts; both preview viewports and the plan's `streamSize` use it.
+Rendered: a crop asked for at x=1000 of a 1280-wide source exports from x=880,
+exactly as predicted.
+
+**Temperature and tint — DONE.** `ColorAdjust.temperature?` and `tint?` (−1..1) →
+per-channel gains on **`colorchannelmixer`** (2013) — *not* `colortemperature`,
+which merged in 2021 and is blocklisted. White balance IS a per-channel gain,
+so the gains are the whole matrix; normalised so a grey keeps its luma.
+`render/whiteBalance.ts` is the one function: the export hands the gains to
+the mixer (before the sliders, in a clip's chain, on an adjustment layer with
+`enable`, and inside a grade mask), and the WebGL grade multiplies by the same
+three numbers first. Measured on the bundled binary: the mixer applies the
+gains exactly, keeps `yuva420p`'s alpha, and takes `enable`. Rendered: a grey
+warmed, cooled, tinted magenta and green comes out as the neutral grey times
+the gains within 5 levels, at the same brightness; in the harness the preview
+turns the paper's cream (239, 233, 220) into (255, 225, 159) warm — the same
+arithmetic. Temp and Tint sliders head the Colour section. While there:
+Reset now clears curves and the balance too (`NEUTRAL_COLOR_PATCH`) — it used
+to spread only the three sliders' defaults, so with curves on it did nothing
+and stayed on screen.
 
 **Chroma key.** `Clip.key?: { color, similarity, blend, despill }` →
 `chromakey` (2015) + `despill` (2017) in the clip chain before the overlay.

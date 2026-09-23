@@ -128,7 +128,7 @@ export const MASK_MODE_LABEL: Record<MaskMode, string> = {
 export const MASK_MODE_HINT: Record<MaskMode, string> = {
   reveal: 'Everything outside the shape becomes transparent, so the track below shows through.',
   blur: 'Blurs inside the shape. Invert it for a face in focus against a soft background.',
-  grade: 'The clip’s brightness, contrast, curves and look apply only inside the shape.'
+  grade: 'The clip’s white balance, brightness, contrast, curves and look apply only inside the shape.'
 }
 
 export function defaultMask(mode: MaskMode = 'blur'): Mask {

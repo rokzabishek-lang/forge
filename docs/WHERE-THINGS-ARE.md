@@ -148,7 +148,9 @@ the preview; `Remove` takes the mask off. It sits directly above Colour on
 purpose — in *Colour* mode those sliders apply only inside the shape, and the
 Colour heading says so while that is true.
 
-**Colour** — brightness, contrast, saturation, then **Looks**: seven one-click
+**Colour** — **Temp** and **Tint** first (white balance: warm a blue cloudy
+ceremony, cool an orange tungsten reception), then brightness, contrast,
+saturation, then **Looks**: seven one-click
 grades (Warm Film, Golden Hour, Teal & Orange, Cool Cine, Faded, Bleach Bypass,
 Noir) with an **Intensity** slider once one is on. `or load your own .cube…`
 takes a LUT from any grading tool. You do not need to supply anything.

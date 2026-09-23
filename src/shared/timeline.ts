@@ -1,3 +1,4 @@
+import { isNeutralBalance } from './render/whiteBalance'
 import type { MediaKind } from './types'
 import type { KeyframeTracks } from './render/keyframes'
 import { isNeutralCurves, type Curves } from './render/colourCurve'
@@ -169,6 +170,13 @@ export interface ColorAdjust {
   /** 0..3, a multiplier. 0 is greyscale. */
   saturation: number
   /**
+   * White balance, −1..1 each, applied FIRST: correct the light, then grade.
+   * Temperature + is warm, − cool; tint + magenta, − green. Absent is neutral.
+   * See render/whiteBalance.ts — one set of gains for the preview and the file.
+   */
+  temperature?: number
+  tint?: number
+  /**
    * Per-channel curves — the grading tool, before any look.
    *
    * Lift the shadows, roll off the highlights, put a little blue in the blacks.
@@ -209,11 +217,28 @@ export interface CropRect {
 export const DEFAULT_TRANSFORM: Transform = { x: 0, y: 0, scale: 1, rotation: 0, opacity: 1 }
 export const DEFAULT_COLOR: ColorAdjust = { brightness: 0, contrast: 1, saturation: 1 }
 
+/**
+ * What the Colour section's Reset writes: every field `isNeutralGrade` looks
+ * at, set back to nothing.
+ *
+ * Reset used to spread DEFAULT_COLOR, which has only the three sliders — so a
+ * clip with curves or a white balance kept them, the grade stayed on, and the
+ * Reset button stayed on screen having done nothing.
+ */
+export const NEUTRAL_COLOR_PATCH: Partial<ColorAdjust> = {
+  ...DEFAULT_COLOR,
+  temperature: undefined,
+  tint: undefined,
+  curves: undefined,
+  lut: undefined
+}
+
 /** True when a grade would change nothing, so the render can skip it entirely. */
 export function isNeutralGrade(color: ColorAdjust | undefined): boolean {
   if (!color) return true
   if (color.lut?.file && color.lut.intensity > 0) return false
   if (!isNeutralCurves(color.curves)) return false
+  if (!isNeutralBalance(color.temperature, color.tint)) return false
   return (
     Math.abs(color.brightness) < 0.001 &&
     Math.abs(color.contrast - 1) < 0.001 &&

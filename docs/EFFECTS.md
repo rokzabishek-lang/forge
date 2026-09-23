@@ -2194,3 +2194,13 @@ Measured with a white square on black (`integration/motionAspect.int.test.ts`):
 cap was never what bounded the cost anyway — `factor` already limits the working
 picture to the canvas plus the headroom the deepest zoom needs — so it is gone,
 and one factor scales both sides.
+
+### White balance is `colorchannelmixer`, and it keeps alpha
+
+B3. `colortemperature` merged in 2021 and is on the floor blocklist, so white
+balance is per-channel gains on `colorchannelmixer` (2013). Measured on the
+bundled binary, a `0x808080` grey at 50 % alpha in `yuva420p` through
+`rr=1.208:gg=0.966:bb=0.725`: out comes `98 7a 5b 7f` — 152, 122, 91, alpha
+kept. The grey decodes as 126 on the way in, and 126 × the gains is 152.2,
+121.7, 91.4: the gains are applied exactly. `-filters` lists it `TSC`, so it
+takes `enable` — an adjustment layer needs that — and `eq` is `T.C`.

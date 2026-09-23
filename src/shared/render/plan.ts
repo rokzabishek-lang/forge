@@ -14,6 +14,7 @@ import { lumaAlphaExpression, transitionById, type TransitionDef } from '../tran
 import { hasPath, pathExpression } from './path'
 import { hasKeys, keyframeExpression } from './keyframes'
 import { curvesFilter } from './colourCurve'
+import { whiteBalanceFilter } from './whiteBalance'
 import { isFullFrameMask, maskExpression } from './mask'
 import { effectiveCrop, safeCrop, type Size } from './crop'
 import { atempoChain, clipSpeed, sourceFramesFor, speedVideoFilter } from './speed'
@@ -1070,6 +1071,8 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
       'format=yuva420p',
       // Grade after the fit, so it runs at canvas size rather than over every
       // pixel of a 6000px photograph.
+      // White balance first: correct the light, then grade it.
+      gradeInline ? whiteBalanceFilter(clip.color?.temperature, clip.color?.tint) : null,
       gradeInline ? eqFilter(clip) : null,
       // Curves after the sliders, before the look: correct, shape, then style.
       gradeInline ? curvesFilter(clip.color?.curves) : null,
@@ -1143,6 +1146,14 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
       let stream = current
       let stage = 0
       const nextLabel = (): string => `[aj${i}_${stage++}]`
+
+      // `colorchannelmixer` takes `enable` like `eq` does (measured).
+      const balance = whiteBalanceFilter(clip.color?.temperature, clip.color?.tint)
+      if (balance) {
+        const out = nextLabel()
+        filters.push(`${stream}${balance}:${gate}${out}`)
+        stream = out
+      }
 
       const eq = eqFilter(clip)
       if (eq) {
@@ -1303,7 +1314,11 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
           ? // gblur wants a sigma; people think in radius, and half is the
             // usual correspondence between the two.
             [`gblur=sigma=${Math.max(0.1, mask.blur / 2).toFixed(2)}`]
-          : [eqFilter(clip), curvesFilter(clip.color?.curves)].filter(
+          : [
+              whiteBalanceFilter(clip.color?.temperature, clip.color?.tint),
+              eqFilter(clip),
+              curvesFilter(clip.color?.curves)
+            ].filter(
               (s): s is string => s !== null
             )
 
