@@ -151,7 +151,7 @@ in EFFECTS.md; kept here so they are findable.
 
 Facts that live nowhere else now that the repo exists.
 
-- **Repository:** `https://github.com/rokzabishek-lang/forge` (private)
+- **Repository:** `https://github.com/spyki-a/forge` (private)
 - **CI:** `.github/workflows/ci.yml` — macOS **and Windows**, every push:
   typecheck, the full suite *including* the ffmpeg integration tests, then the
   build. The integration tests are in CI on purpose: a runner's `D:\a\forge\forge`

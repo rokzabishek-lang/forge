@@ -209,7 +209,7 @@ export function buildMenu(
         { label: 'Keyboard Shortcuts', accelerator: 'CmdOrCtrl+/', click: send('shortcuts') },
         {
           label: 'Report an Issue',
-          click: () => void shell.openExternal('https://github.com/rokzabishek-lang/forge/issues')
+          click: () => void shell.openExternal('https://github.com/spyki-a/forge/issues')
         }
       ]
     }

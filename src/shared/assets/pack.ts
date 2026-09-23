@@ -81,7 +81,7 @@ export const BUILT_IN_MANIFEST: PackManifest = {
        * by fetching it before publishing the checksum, which is the whole
        * reason that order exists.
        */
-      url: 'https://github.com/rokzabishek-lang/forge-assets/releases/download/assets-v1/library.tar.gz',
+      url: 'https://github.com/spyki-a/forge-assets/releases/download/assets-v1/library.tar.gz',
       /*
        * Both printed by `scripts/build-pack.mjs`, and both verified against the
        * PUBLISHED file with no credentials before being written here — see
@@ -98,7 +98,7 @@ export const BUILT_IN_MANIFEST: PackManifest = {
       summary: '105 sound effects — quacks, sirens, horns, error chimes',
       group: 'sounds',
       version: 1,
-      url: 'https://github.com/rokzabishek-lang/forge-assets/releases/download/stickers-v1/sfx-meme-sounds.tar.gz',
+      url: 'https://github.com/spyki-a/forge-assets/releases/download/stickers-v1/sfx-meme-sounds.tar.gz',
       sha256: '76423d63302de9ea7a4d06a8d63140450ca997e6e7b00ffe509679596b8007e4',
       bytes: 6_642_078
     },
@@ -108,7 +108,7 @@ export const BUILT_IN_MANIFEST: PackManifest = {
       summary: '63 meme stickers, with transparency and sound',
       group: 'stickers',
       version: 2,
-      url: 'https://github.com/rokzabishek-lang/forge-assets/releases/download/stickers-v1/stickers-epic-fails-accidents.tar.gz',
+      url: 'https://github.com/spyki-a/forge-assets/releases/download/stickers-v1/stickers-epic-fails-accidents.tar.gz',
       sha256: '942e1724bbc19ecf4c7f378d62ff2670a750549683d3847b92f46adb901870a7',
       bytes: 22_738_791
     },
@@ -118,7 +118,7 @@ export const BUILT_IN_MANIFEST: PackManifest = {
       summary: '89 meme stickers, with transparency and sound',
       group: 'stickers',
       version: 2,
-      url: 'https://github.com/rokzabishek-lang/forge-assets/releases/download/stickers-v1/stickers-global-editing-memes.tar.gz',
+      url: 'https://github.com/spyki-a/forge-assets/releases/download/stickers-v1/stickers-global-editing-memes.tar.gz',
       sha256: 'd44e454ef1359a28cf032ceee70136210af2a86d3d574731c79aee454a4abfb0',
       bytes: 26_997_473
     },
@@ -128,7 +128,7 @@ export const BUILT_IN_MANIFEST: PackManifest = {
       summary: '57 meme stickers, with transparency and sound',
       group: 'stickers',
       version: 2,
-      url: 'https://github.com/rokzabishek-lang/forge-assets/releases/download/stickers-v1/stickers-global-memes-and-streamers-2025-2026.tar.gz',
+      url: 'https://github.com/spyki-a/forge-assets/releases/download/stickers-v1/stickers-global-memes-and-streamers-2025-2026.tar.gz',
       sha256: '59e9dece2d8af1e5d08d1c4e24f72cd6636e52eb643142e2d51bb1192e46da5b',
       bytes: 23_729_039
     },
@@ -138,7 +138,7 @@ export const BUILT_IN_MANIFEST: PackManifest = {
       summary: '90 meme stickers, with transparency and sound',
       group: 'stickers',
       version: 2,
-      url: 'https://github.com/rokzabishek-lang/forge-assets/releases/download/stickers-v1/stickers-hindi-meme-punchlines.tar.gz',
+      url: 'https://github.com/spyki-a/forge-assets/releases/download/stickers-v1/stickers-hindi-meme-punchlines.tar.gz',
       sha256: '41612d8ddfdefcdb89c7a555af5654f803acac6d28e341b4fe14e6d19812af60',
       bytes: 20_253_784
     },
@@ -148,7 +148,7 @@ export const BUILT_IN_MANIFEST: PackManifest = {
       summary: '55 meme stickers, with transparency and sound',
       group: 'stickers',
       version: 2,
-      url: 'https://github.com/rokzabishek-lang/forge-assets/releases/download/stickers-v1/stickers-indian-media-and-tv-debates.tar.gz',
+      url: 'https://github.com/spyki-a/forge-assets/releases/download/stickers-v1/stickers-indian-media-and-tv-debates.tar.gz',
       sha256: 'e29ea240d4e8f721a5956ac22fe15b554c3911d3532641a69cbf47b105ffe5c8',
       bytes: 19_729_171
     },
@@ -158,7 +158,7 @@ export const BUILT_IN_MANIFEST: PackManifest = {
       summary: '54 meme stickers, with transparency and sound',
       group: 'stickers',
       version: 2,
-      url: 'https://github.com/rokzabishek-lang/forge-assets/releases/download/stickers-v1/stickers-indian-standup-and-reality-tv.tar.gz',
+      url: 'https://github.com/spyki-a/forge-assets/releases/download/stickers-v1/stickers-indian-standup-and-reality-tv.tar.gz',
       sha256: '2e2c8d40eea52d90016f18ae73e83aa85d3759119f6f8a73967c6adc39264828',
       bytes: 23_643_025
     },
@@ -168,7 +168,7 @@ export const BUILT_IN_MANIFEST: PackManifest = {
       summary: '52 meme stickers, with transparency and sound',
       group: 'stickers',
       version: 2,
-      url: 'https://github.com/rokzabishek-lang/forge-assets/releases/download/stickers-v1/stickers-middle-eastern-and-global-culture.tar.gz',
+      url: 'https://github.com/spyki-a/forge-assets/releases/download/stickers-v1/stickers-middle-eastern-and-global-culture.tar.gz',
       sha256: 'dcd694c760e445c5e9bf51d02b92a39597d76def5aacc361e7515688e07bc067',
       bytes: 31_228_993
     },
@@ -178,7 +178,7 @@ export const BUILT_IN_MANIFEST: PackManifest = {
       summary: '7 meme stickers, with transparency and sound',
       group: 'stickers',
       version: 2,
-      url: 'https://github.com/rokzabishek-lang/forge-assets/releases/download/stickers-v1/stickers-spongebob-cutaways.tar.gz',
+      url: 'https://github.com/spyki-a/forge-assets/releases/download/stickers-v1/stickers-spongebob-cutaways.tar.gz',
       sha256: '4cccd0923960fce996e6395983b2c6dc2755f1c7494abbaff25c8bc84b3e9c32',
       bytes: 438_123
     },
@@ -188,7 +188,7 @@ export const BUILT_IN_MANIFEST: PackManifest = {
       summary: '51 meme stickers, with transparency and sound',
       group: 'stickers',
       version: 2,
-      url: 'https://github.com/rokzabishek-lang/forge-assets/releases/download/stickers-v1/stickers-tech-and-business-titans.tar.gz',
+      url: 'https://github.com/spyki-a/forge-assets/releases/download/stickers-v1/stickers-tech-and-business-titans.tar.gz',
       sha256: '27e821242a662d8ee5908136cabce04affcad8a30e0ba9aba3d14a8c2ed1dc89',
       bytes: 16_983_431
     },
@@ -198,7 +198,7 @@ export const BUILT_IN_MANIFEST: PackManifest = {
       summary: '118 meme stickers, with transparency and sound',
       group: 'stickers',
       version: 2,
-      url: 'https://github.com/rokzabishek-lang/forge-assets/releases/download/stickers-v1/stickers-telugu-memes-and-punchlines.tar.gz',
+      url: 'https://github.com/spyki-a/forge-assets/releases/download/stickers-v1/stickers-telugu-memes-and-punchlines.tar.gz',
       sha256: 'bc7d384f53f3cae0fd8cc724e09e0a6aa94c72473b614b8549d28e1c450ecf10',
       bytes: 39_841_798
     }

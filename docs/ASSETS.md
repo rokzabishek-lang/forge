@@ -187,7 +187,7 @@ changed checksum means changed content rather than a changed clock. Names over
 
 ### Packs are published from a separate, PUBLIC repo
 
-`rokzabishek-lang/forge-assets`, not the source repo.
+`spyki-a/forge-assets`, not the source repo.
 
 The app fetches a pack with a plain `fetch` and no credentials, and it has to
 stay that way: a token that reaches your own assets is a token in every user's
