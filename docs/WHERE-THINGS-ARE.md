@@ -103,7 +103,9 @@ divider in the picture to compare; double-click it for an even split.
 
 Top to bottom. The panel scrolls; the export block at the bottom does not.
 
-**Output** — aspect ratio, loudness, preview mode, captions, then the export
+**Output** — aspect ratio, **frame rate** (24/25/30/50/60 — changing it with
+work in the project converts every clip, and no cut moves by more than half a
+frame), loudness, preview mode, captions, then the export
 itself (`ExportSettings.tsx`, above the Export button):
 **Size** 720p / 1080p / 4K on the chosen aspect; **Codec**, listing only the
 encoders this machine test-encoded with at launch; **Quality** as High /

@@ -25,6 +25,7 @@ import type { EncoderId } from '@shared/render/encode'
 import type { ClipKind } from '@shared/edit/clipKind'
 import { applyRelink } from '@shared/project/relink'
 import { projectFromChoice, type NewProjectChoice } from '@shared/project/newProject'
+import { convertFrame, convertFrameRate } from '@shared/project/frameRate'
 import {
   BUILT_IN_PRESETS,
   isBuiltIn,
@@ -432,6 +433,11 @@ interface EditorState {
   splitAtPlayhead: () => void
   setCrop: (clipId: string, crop: CropRect) => void
   setAspect: (aspect: AspectKey) => void
+  /**
+   * Change the frame rate, converting everything already on the timeline —
+   * one undo. See src/shared/project/frameRate.ts.
+   */
+  setFrameRate: (fps: number) => void
   /** Redraw text, colour cards and titles at the current canvas size. */
   rebakeGenerated: () => Promise<void>
   /**
@@ -1228,6 +1234,34 @@ export const useEditor = create<EditorState>((set, get) => ({
    * whole NLE exists to make correctable — the solve is a guess, and the user
    * fixes it by dragging.
    */
+  setFrameRate: (fps) => {
+    const { project, playhead, rangeIn, rangeOut, zoom, notify } = get()
+    const from = project.settings.fps
+    const next = convertFrameRate(project, fps)
+    if (next === project) return
+    const at = (frame: number): number => convertFrame(frame, from, fps)
+    get().update(() => next)
+    set({
+      // Everything the editor holds in frames moves with the project: the
+      // playhead stays on the same moment, the marks on the same stretch.
+      playhead: at(playhead),
+      rangeIn: rangeIn === null ? null : at(rangeIn),
+      rangeOut: rangeOut === null ? null : at(rangeOut),
+      // A gap and a clipboard are in the old frames; dropped rather than
+      // converted, since neither is worth a second place for this to go wrong.
+      selectedGap: null,
+      clipboard: null
+    })
+    // The same seconds per pixel, so the timeline does not jump in scale.
+    get().setZoom((zoom * from) / fps)
+    // Captions that animate, paper runs and the photo ring are drawn a picture
+    // per frame — at the old rate until they are drawn again.
+    void get().rebakeGenerated()
+    if (project.clips.length > 0) {
+      notify(`Now ${fps} fps. Every clip was converted — no cut moved by more than half a frame.`, 'info')
+    }
+  },
+
   setAspect: (aspect) => {
     set({ aspect })
     const { width, height } = ASPECTS[aspect]

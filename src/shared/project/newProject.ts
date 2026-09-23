@@ -39,6 +39,10 @@ export const NEW_PROJECT_ASPECTS: { key: AspectKey; hint: string }[] = [
 export const NEW_PROJECT_RATES: { fps: number; hint: string }[] = [
   { fps: 30, hint: 'What phones shoot' },
   { fps: 24, hint: 'Filmic' },
+  // PAL: the rate of cameras set up for Europe, India and most of the world —
+  // footage at 25 in a 30 project stutters, a frame repeated every fifth.
+  { fps: 25, hint: 'PAL cameras' },
+  { fps: 50, hint: 'PAL, smooth' },
   { fps: 60, hint: 'Smooth — twice the render' }
 ]
 

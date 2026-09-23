@@ -51,6 +51,7 @@ import {
   withContainerExtension
 } from '@shared/render/exportShape'
 import { ExportSettings } from './ExportSettings'
+import { FRAME_RATES } from '@shared/project/frameRate'
 import { bakeForExport } from '@shared/render/exportBake'
 import { liveBakers } from '../exportBakers'
 import { offlineAssets } from '@shared/project/relink'
@@ -70,6 +71,7 @@ export function Inspector(): ReactNode {
   const project = useEditor((s) => s.project)
   const aspect = useEditor((s) => s.aspect)
   const setAspect = useEditor((s) => s.setAspect)
+  const setFrameRate = useEditor((s) => s.setFrameRate)
   const splitRatio = useEditor((s) => s.splitRatio)
   const setSplitRatio = useEditor((s) => s.setSplitRatio)
   const selectedClipId = useEditor((s) => s.selectedClipId)
@@ -401,6 +403,38 @@ export function Inspector(): ReactNode {
           <div className="mt-1.5 text-[10.5px] leading-snug text-ink-600">
             Changing this re-solves every clip&apos;s reframe. Drag the rectangle in the
             preview to correct it.
+          </div>
+        </div>
+
+        {/*
+          The project's frame rate, changeable with work in it: frames are the
+          model's unit, so every clip is converted by the ratio and no cut
+          moves by more than half a frame (shared/project/frameRate.ts).
+        */}
+        <div>
+          <div className="mb-1.5 text-[11px] text-ink-400">Frame rate</div>
+          <div className="grid grid-cols-5 gap-1">
+            {FRAME_RATES.map((rate) => (
+              <button
+                key={rate}
+                onClick={() => setFrameRate(rate)}
+                title={
+                  rate === 25 || rate === 50
+                    ? `${rate} fps — PAL, what cameras set up for Europe and India shoot`
+                    : `${rate} fps`
+                }
+                className={`rounded px-1 py-1.5 text-[11px] tabular-nums transition-colors ${
+                  project.settings.fps === rate
+                    ? 'bg-flame-500 text-ink-950'
+                    : 'bg-ink-800 text-ink-400 hover:bg-ink-700 hover:text-ink-200'
+                }`}
+              >
+                {rate}
+              </button>
+            ))}
+          </div>
+          <div className="mt-1.5 text-[10.5px] leading-snug text-ink-600">
+            Match the camera: footage at 25 in a 30 project repeats a frame in every five.
           </div>
         </div>
 

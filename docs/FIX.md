@@ -477,12 +477,11 @@ were found that the list did not know about, three of them shipped:
 
 ## Phase B — the other three
 
-> **Where it stands (2026-09-22).** B1 is done (`55094a2`) and its adversarial
+> **Where it stands (2026-09-23).** B1 is done (`55094a2`) and its adversarial
 > review is closed (see the end of B1). A split/trim fix found while planning
-> B2 is pushed (`c5eb1ea`) and now mutation-checked. B2 is STARTED: `src/shared/render/encode.ts` (codec families; the
-> arguments measured working on the Mac binary for x264, x265 and ProRes,
-> including bitrate mode) and `src/main/render/encoders.ts` (the runtime
-> probe) exist and are **not yet wired in**. B3 is mapped, not started.
+> B2 is pushed (`c5eb1ea`) and mutation-checked. **B2 is done** (`7a849c9`,
+> frame rate after it) — codecs, quality, size, range, time left, frame rate;
+> see the end of B2. B3 is mapped, not started.
 >
 > Before building from the line numbers below, note the survey found them
 > stale in several places: the encoder tail is `plan.ts` ~1568, not 1509; the
@@ -644,7 +643,22 @@ dialog filters to `mp4` (`ipc.ts:989`).
   its window.
 - **Time remaining** from progress and elapsed, beside the speed string.
 
-**What was built** (all but frame rate, which is next and last):
+**What was built** — all of it:
+
+- **Frame rate** 24 / 25 / 30 / 50 / 60, in the New Project step and on the
+  Output panel. 25 and 50 are PAL's, what cameras set up for Europe and India
+  shoot — and footage at 25 in a 30 project repeats a frame in every five.
+  Changing it with work in the project converts every frame-valued field by
+  the ratio (`shared/project/frameRate.ts`), from an inventory of the whole
+  model: clip boundaries (start AND end, so shots that touched still touch),
+  in-points, fades, transitions, director trims, keyframes, paths, paper
+  holds, and asset lengths — never transcripts (milliseconds), motion
+  (seconds), or an asset's own rate (a fact about the file). A clip is kept
+  inside its file even at speed, the playhead and marks move with it, and the
+  frame-by-frame pictures are redrawn. A test reads the model and fails if a
+  field typed `Frames` appears that the conversion does not name. Rendered:
+  the same edit at 30 and converted to 25 is the same length, shows the same
+  shot either side of every cut, and sounds the same.
 
 - **Codec, quality, audio, container** as data (`render/encode.ts`), per codec
   FAMILY — ProRes has no CRF, hardware takes a bitrate, x265 reads CRF on a
