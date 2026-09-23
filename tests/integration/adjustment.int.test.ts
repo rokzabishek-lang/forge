@@ -166,7 +166,10 @@ describe('adjustment layers', () => {
       const file = join(out, `look-${intensity}.mp4`)
       await run(FFMPEG, buildRenderPlan({
         project: adjustedProject({
-          color: { brightness: 0, contrast: 1, saturation: 1, lut: { file: cube, intensity } }
+          color: { brightness: 0, contrast: 1, saturation: 1, lut: { file: cube, intensity } },
+          // A key a project may carry although the Inspector never offers one
+          // here: it must not build loose ends on the layer's picture either.
+          key: { color: '#00b140', similarity: 0.12, blend: 0.08, despill: 0.6 }
         }),
         outputPath: file
       }).args, { maxBuffer: 32 * 1024 * 1024 })

@@ -65,8 +65,10 @@ describe('distance and alpha', () => {
   })
 
   it('truncates a soft edge, and cuts hard at blend 0', () => {
-    // Half-way through the blend: 127.5, truncated.
-    expect(keyAlpha(0.15, 0.1, 0.1)).toBe(127)
+    // 100.7 of the way up: truncated to 100, where rounding would say 101. Not
+    // a half — 0.5 of the blend is 127.4999… in floating point and rounds down
+    // too, which is how a first version of this test passed with Math.round.
+    expect(keyAlpha(0.1 + 0.1 * (100.7 / 255), 0.1, 0.1)).toBe(100)
     expect(keyAlpha(0.05, 0.1, 0.1)).toBe(0)
     expect(keyAlpha(0.5, 0.1, 0.1)).toBe(255)
     expect(keyAlpha(0.1, 0.1, 0)).toBe(0)
@@ -109,6 +111,10 @@ describe('the export’s filters', () => {
     // spill = g − (r+b)/2 = 20; all of it out at full strength.
     expect(despillPixel(120, 140, 120, { ...green, despill: 1 })).toEqual([120, 120, 120])
     expect(despillPixel(120, 140, 120, { ...green, despill: 0.5 })).toEqual([120, 130, 120])
+    // The mix is the MEAN of the other two, not either one: 180 − (100+60)/2 = 100.
+    expect(despillPixel(100, 180, 60, { ...green, despill: 1 })).toEqual([100, 80, 60])
+    // Blue the same way: 180 − (60+100)/2 = 100 of spill, 80 left.
+    expect(despillPixel(60, 100, 180, { ...green, color: '#0000ff', despill: 1 })).toEqual([60, 100, 80])
     // Nothing above the mix, nothing taken.
     expect(despillPixel(200, 100, 200, { ...green, despill: 1 })).toEqual([200, 100, 200])
     expect(despillPixel(0, 0, 200, { ...green, color: '#0000ff', despill: 1 })).toEqual([0, 0, 0])

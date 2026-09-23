@@ -67,12 +67,15 @@ describe('an adjustment layer builds nothing on its own picture', () => {
   it('leaves no loose ends for its grade or its look — ffmpeg refuses a graph with one', () => {
     const adjust = {
       adjustment: true,
-      color: { brightness: 0.2, contrast: 1, saturation: 1, lut: { file: '/l/x.cube', intensity: 0.5 } }
+      color: { brightness: 0.2, contrast: 1, saturation: 1, lut: { file: '/l/x.cube', intensity: 0.5 } },
+      // Not offered in the Inspector, but a project can carry one.
+      key: { color: '#00b140', similarity: 0.12, blend: 0.08, despill: 0.6 }
     }
     const graph = graphOf(project(adjust))
-    // Its own input is never drawn, so nothing may be split or looked off it.
+    // Its own input is never drawn, so nothing may be split, keyed or looked off it.
     expect(graph).not.toContain('[qa1]')
     expect(graph).not.toContain('[gs1]')
+    expect(graph).not.toMatch(/chromakey|split=3/)
     // The grade and the look still reach the tracks below.
     expect(graph).toMatch(/\[o0\]eq=brightness=0\.200[^;]*enable=/)
     expect(graph).toContain('lut3d')

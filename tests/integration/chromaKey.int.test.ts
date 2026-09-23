@@ -147,13 +147,17 @@ describe('a keyed clip, rendered', () => {
   }, 300_000)
 
   it('takes the screen’s colour out of what is left, as the model says', async () => {
-    // A grey with green spill that is far enough from the screen to be kept.
+    // A warm grey with green spill, red and blue DIFFERENT so the mix between
+    // them is measured too, and a narrow key so it is kept whole.
     const spill = join(dir, 'source-spill.png')
-    await run(FFMPEG, ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', `color=c=0x788c78:s=${W}x${H}:d=1`, '-frames:v', '1', spill])
+    await run(FFMPEG, ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', `color=c=0x96a06e:s=${W}x${H}:d=1`, '-frames:v', '1', spill])
     const blue = await makeColour(join(dir, 'source-blue-3.mp4'), 'blue', { width: W, height: H }, 1, 30)
-    const before = await pixelAt(await render(project(spill, { w: W, h: H }, { ...key, despill: 0 }, blue), 'spill-kept'), 0.2, W / 2, H / 2, { width: W, height: H })
-    const after = await pixelAt(await render(project(spill, { w: W, h: H }, { ...key, despill: 1 }, blue), 'despill'), 0.2, W / 2, H / 2, { width: W, height: H })
-    const want = despillPixel(before[0], before[1], before[2], { ...key, despill: 1 })
+    const narrow: ChromaKey = { ...key, similarity: 0.05, blend: 0.02 }
+    const before = await pixelAt(await render(project(spill, { w: W, h: H }, { ...narrow, despill: 0 }, blue), 'spill-kept'), 0.2, W / 2, H / 2, { width: W, height: H })
+    const after = await pixelAt(await render(project(spill, { w: W, h: H }, { ...narrow, despill: 1 }, blue), 'despill'), 0.2, W / 2, H / 2, { width: W, height: H })
+    // Red and blue really do differ here, or the mix is not being tested.
+    expect(Math.abs(before[0] - before[2])).toBeGreaterThan(20)
+    const want = despillPixel(before[0], before[1], before[2], { ...narrow, despill: 1 })
     for (let c = 0; c < 3; c++) {
       expect(Math.abs(after[c] - want[c]), `channel ${'rgb'[c]}: got ${after[c]}, want ${want[c].toFixed(1)}`).toBeLessThanOrEqual(5)
     }
