@@ -429,6 +429,34 @@ left out — near-duplicate of slot_03 (slot_03 is sharper)".
 
 ## 5. C2 — Recipes, `spine@2` and the rhythm engine · 5–6 days
 
+> **Built 2026-09-23, first part** — the five recipes as data
+> (`shared/director/recipes/`), the rhythm engine (`rhythm.ts`: `rhythmGrid`,
+> `layout`), tests `directorRecipes` and `directorRhythm` (three worked cases
+> and a 500-ad sweep). As built, differing from the text below where the build
+> taught otherwise:
+> - **Ids are strings**, checked against the registries by a test — `as const`
+>   on the text and look registries makes every nested array readonly.
+> - **The legal cuts are every beat of the song**, not the model's thinned menu
+>   (C0: 7–11 cuts for 6–8 photos); the structural preference is "within ONE
+>   beat", since within half a beat of a beat is only that beat.
+> - **Everything is in beat indices**: at 160 BPM a beat is 11.25 frames, less
+>   than the shortest shot, so the shortest shot there is two beats — a
+>   frame-based fit put boundaries between beats. The hero's floor is counted
+>   in whole beats, rounded up.
+> - **The fit scales the designed ad by one factor** (the hero at its target
+>   and lead, the rest at the curve), then holds any shot that breaks a bound
+>   AT the bound and re-solves: a clip at its footage, a shot at the shortest.
+>   Holding at the minimum rather than failing is the difference between
+>   compressing an ad 4 % and dropping a photo from it.
+> - **A clip is never longer than its footage** — held in the fit, capped in
+>   the snap, and trimmed after it with the ad ending a beat sooner. C0's
+>   black-after-the-clip cannot happen.
+> - **The hero's floor is hard until only the hook and the hero are left**;
+>   before that a shot is dropped. The post-snap repair takes beats from as
+>   many shots as it needs, one at a time.
+> - A calm or premium brief that says wedding (in English, Telugu or Hindi
+>   words) is a wedding without a model.
+
 This is the step that removes the slideshow tell. Everything the research
 found — a shape to the rhythm, hierarchy, motivated cuts, a designed ending,
 type as its own beat, one grade — lives here as rules. It is also where Phase

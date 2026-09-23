@@ -123,8 +123,11 @@ describe('validateSpine — accepts', () => {
     // The ad is as long as the menu's end — which snaps back onto a beat, so 28 s here, not the 30 asked for.
     const adSeconds = ((m.cuts.at(-1)!.frame - m.cuts[0].frame) / fps).toFixed(1)
     expect('rejected' in got && got.rejected).toBe(`The plan stops at ${(m.cuts[1].frame / fps).toFixed(1)}s of a ${adSeconds}s ad — it ended early`)
-    // Just under the line is still early; the default is the line.
-    const early = m.cuts.findIndex((c) => c.frame / m.cuts.at(-1)!.frame >= MIN_COVERAGE) - 1
+    // Between half and three quarters of the ad is still early. Literal numbers, NOT MIN_COVERAGE:
+    // a check computed from the constant moves with it, and passed with the line mutated to 0.5.
+    const ratio = (c: { frame: number }): number => c.frame / m.cuts.at(-1)!.frame
+    const early = m.cuts.findIndex((c) => ratio(c) > 0.55 && ratio(c) < 0.75)
+    expect(early).toBeGreaterThan(0)
     expect('rejected' in validateSpine(plan([segment({ slot: 'slot_01', ends_at: cutId(m, early) })]), m)).toBe(true)
   })
 })
