@@ -69,6 +69,8 @@ describe('the captions follow the correction', () => {
 describe('the vocabulary', () => {
   it('becomes one prompt of the names, whatever separates them', () => {
     expect(vocabularyPrompt('Priya, Arjun,\nTaj  Falaknuma')).toBe('Priya, Arjun, Taj Falaknuma.')
+    // One name per line, no commas at all — how a list is usually pasted.
+    expect(vocabularyPrompt('Priya\nArjun\nTaj Falaknuma')).toBe('Priya, Arjun, Taj Falaknuma.')
     expect(vocabularyPrompt(' , \n ')).toBeUndefined()
     expect(vocabularyPrompt(undefined)).toBeUndefined()
     expect(vocabularyPrompt('x'.repeat(5000))!.length).toBe(VOCABULARY_MAX_CHARS)

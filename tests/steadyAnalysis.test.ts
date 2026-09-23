@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { join } from 'node:path'
 import { emptyProject, type Clip, type MediaAsset, type Project } from '@shared/timeline'
 
 /*
@@ -104,7 +105,9 @@ describe('the analysis before an export', () => {
     const { analyseSteady, steadyFileName } = await import('../src/main/render/steady')
     const { steadyKey } = await import('@shared/render/steady')
     const p = project([{}, {}, { steady: undefined }])
-    const kept = `/cache/${steadyFileName(steadyKey(p.clips[0], 60, p.assets[0], 30))}`
+    // Joined the way the code joins it: on Windows that is `\\cache\\…`, and a
+    // hand-written `/cache/…` passed on the Mac and failed on the runner.
+    const kept = join('/cache', steadyFileName(steadyKey(p.clips[0], 60, p.assets[0], 30)))
     fake.onDisk.add(kept)
     const plans = await analyseSteady(p, '/cache', () => undefined).promise
     // The first was on disk; only the second was analysed; the third is not steady.
