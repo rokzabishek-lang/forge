@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { buildRenderPlan } from '@shared/render/plan'
 import { emptyProject, type Clip, type ColorAdjust, type MediaAsset, type Project } from '@shared/timeline'
 import type { ChromaKey } from '@shared/render/chromaKey'
-import { FFMPEG, run, outputDir, makeColour, pixelAt, saveFrame, writeNote } from './output'
+import { FFMPEG, run, outputDir, makeColour, pixelAt, saveFrame, writeNote, keyScale } from './output'
 
 /*
  * A grade keeps the clip's own transparency.
@@ -85,7 +85,7 @@ const kind = ([r, g, b]: number[]): string =>
 
 async function render(p: Project, name: string): Promise<string> {
   const file = join(dir, `${name}.mp4`)
-  await run(FFMPEG, buildRenderPlan({ project: p, outputPath: file }).args, { maxBuffer: 32 * 1024 * 1024 })
+  await run(FFMPEG, buildRenderPlan({ project: p, outputPath: file, keyScale: await keyScale() }).args, { maxBuffer: 32 * 1024 * 1024 })
   await saveFrame(file, 0.2, join(dir, `${name}.png`))
   return file
 }

@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { buildRenderPlan } from '@shared/render/plan'
 import {
   chromaDistance,
+  chromakeyFilter,
   despillPixel,
   keyAlpha,
   keyChroma,
@@ -10,7 +11,7 @@ import {
   type ChromaKey
 } from '@shared/render/chromaKey'
 import { emptyProject, type Clip, type MediaAsset, type Project } from '@shared/timeline'
-import { FFMPEG, run, outputDir, makeColour, pixelAt, saveFrame, writeNote } from './output'
+import { FFMPEG, run, outputDir, makeColour, pixelAt, saveFrame, writeNote, keyScale } from './output'
 
 /*
  * Chroma key (FIX.md B3), rendered and measured.
@@ -49,6 +50,17 @@ async function patches(vf: string, pixFmt: 'yuv420p' | 'yuva420p'): Promise<Buff
   return stdout as unknown as Buffer
 }
 
+describe('which formula this ffmpeg keys with', () => {
+  it('is one of the two, clearly — the probe lands on a prediction, not between them', async () => {
+    const { keyProbeAlpha, keyProbeArgs, keyScaleFromProbe, KEY_SCALES } = await import('@shared/render/chromaKey')
+    const { stdout } = await run(FFMPEG, keyProbeArgs(), { encoding: 'buffer', maxBuffer: 1 << 20 })
+    const alpha = keyProbeAlpha(stdout as unknown as Buffer)!
+    // Near 94 (the newer formula) or near 186 (the 2018 one), never in between.
+    expect(Math.min(Math.abs(alpha - 94), Math.abs(alpha - 186)), `probe alpha ${alpha}`).toBeLessThanOrEqual(6)
+    expect(KEY_SCALES).toContain(keyScaleFromProbe(alpha))
+  }, 60_000)
+})
+
 describe('the keying model is ffmpeg’s arithmetic', () => {
   const W = PATCHES.length * S
   const centre = (i: number): number => i * S + S / 2
@@ -67,7 +79,9 @@ describe('the keying model is ffmpeg’s arithmetic', () => {
 
   for (const [color, similarity, blend] of [['#00ff00', 0.1, 0], ['#00ff00', 0.1, 0.1], ['#00ff00', 0.2, 0.05], ['#00b140', 0.12, 0.08], ['#0000ff', 0.15, 0.1]] as const) {
     it(`predicts every alpha — key ${color}, similarity ${similarity}, blend ${blend}`, async () => {
-      const out = await patches(`chromakey=color=0x${color.slice(1)}:similarity=${similarity}:blend=${blend}`, 'yuva420p')
+      // Through the export's own filter, at this binary's measured scale: the
+      // model is the newer formula, and the 2018 Windows build measures √2 more.
+      const out = await patches(chromakeyFilter({ color, similarity, blend, despill: 0 }, await keyScale()), 'yuva420p')
       const alphaAt = (x: number): number => out[W * S + 2 * (W / 2) * (S / 2) + (S / 2) * W + x]
       const k = keyChroma(color)
       PATCHES.forEach((hex, i) => {
@@ -117,7 +131,7 @@ function project(screenPath: string, size: { w: number; h: number }, key: Chroma
 
 async function render(p: Project, name: string): Promise<string> {
   const file = join(dir, `${name}.mp4`)
-  await run(FFMPEG, buildRenderPlan({ project: p, outputPath: file }).args, { maxBuffer: 32 * 1024 * 1024 })
+  await run(FFMPEG, buildRenderPlan({ project: p, outputPath: file, keyScale: await keyScale() }).args, { maxBuffer: 32 * 1024 * 1024 })
   await saveFrame(file, 0.2, join(dir, `${name}.png`))
   return file
 }

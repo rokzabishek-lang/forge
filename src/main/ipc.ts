@@ -20,6 +20,7 @@ import { segmentIntoSentences, type Transcript, type Word } from '@shared/transc
 import { JobQueue } from './queue'
 import { startRender, type RenderOptions } from './render/renderJob'
 import { probeEncoders } from './render/encoders'
+import { keyDistanceScale } from './render/keyScale'
 import type { EncodeSpec } from '@shared/render/encode'
 import type { FrameRange } from '@shared/render/exportShape'
 import { runGraphicsSelfTest } from './graphics/tier2'
@@ -930,6 +931,9 @@ export function registerIpc(getWindow: () => BrowserWindow | null): JobQueue {
       preset: request.preset,
       encode: request.encode,
       range: request.range,
+      // Asked only when something is keyed: the probe is one tiny encode, but
+      // an export with no key has no reason to wait for it.
+      keyScale: request.project.clips.some((c) => c.key) ? await keyDistanceScale() : undefined,
       subtitlesPath: captions?.subtitlesPath,
       fontsDir: captions?.fontsDir,
       captionOverlay: request.captionOverlay,

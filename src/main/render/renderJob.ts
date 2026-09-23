@@ -16,6 +16,8 @@ export interface RenderOptions {
   preset?: string
   encode?: EncodeSpec
   range?: FrameRange
+  /** The running ffmpeg's chroma-key distance scale (render/keyScale.ts). */
+  keyScale?: number
   subtitlesPath?: string
   fontsDir?: string
   captionOverlay?: { listPath: string; y: number; height: number }

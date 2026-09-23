@@ -118,13 +118,78 @@ export function saneKey(key: Partial<ChromaKey> | undefined): ChromaKey {
   }
 }
 
-/** The export's key: `chromakey`, whose alpha the plan multiplies into the clip's own. */
-export function chromakeyFilter(key: ChromaKey): string {
+/**
+ * The export's key: `chromakey`, whose alpha the plan multiplies into the clip's own.
+ *
+ * `scale` is how much larger the running ffmpeg measures a distance than the
+ * model does (`keyScaleFromProbe`) — 1 on the macOS build, √2 on the 2018
+ * Windows one. Similarity and blend are both distances, so multiplying them by
+ * it gives `clip((√2·d − √2·s) / (√2·b))`, which is the model's
+ * `clip((d − s) / b)` exactly, and a hard cut at `√2·d > √2·s` is `d > s`.
+ */
+export function chromakeyFilter(key: ChromaKey, scale = 1): string {
   const k = saneKey(key)
+  const s = Number.isFinite(scale) && scale > 0 ? scale : 1
   return (
     `chromakey=color=0x${k.color.slice(1)}` +
-    `:similarity=${k.similarity.toFixed(4)}:blend=${k.blend.toFixed(4)}`
+    `:similarity=${(k.similarity * s).toFixed(4)}:blend=${(k.blend * s).toFixed(4)}`
   )
+}
+
+/**
+ * The two ffmpegs measure a key's distance differently.
+ *
+ * Found by CI, not by reading: the Windows runner keyed far less than the
+ * macOS build at the same settings, and every mismatch was the same factor.
+ * The 2018 snapshot's `chromakey` takes `sqrt(du² + dv²) / 255`; the newer one
+ * divides by a further √2 — `sqrt((du² + dv²) / (255² · 2))`, the model here.
+ * Scaling the model's distance by √2 predicts the Windows numbers exactly:
+ * #00b140 over pure green, model 53, √2 predicts 234, Windows gave 234.
+ *
+ * So the app does not guess which build it has: it keys one patch and reads
+ * the alpha back. `00e000` against a `00ff00` key at similarity 0.05, blend
+ * 0.1 comes out near 94 with the newer formula and near 186 with the old one —
+ * far enough apart that a level of rounding either way cannot confuse them.
+ */
+export const KEY_SCALES = [1, Math.SQRT2] as const
+const PROBE_PIXEL: [number, number, number] = [0, 224, 0]
+const PROBE_KEY: ChromaKey = { color: '#00ff00', similarity: 0.05, blend: 0.1, despill: 0 }
+
+/** The ffmpeg arguments for the probe: one 16×16 patch, keyed, as raw yuva420p. */
+export function keyProbeArgs(): string[] {
+  const hex = PROBE_PIXEL.map((c) => c.toString(16).padStart(2, '0')).join('')
+  return [
+    '-hide_banner', '-loglevel', 'error',
+    '-f', 'lavfi', '-i', `color=c=0x${hex}:s=16x16:d=1`,
+    '-vf', `format=yuv420p,${chromakeyFilter(PROBE_KEY)}`,
+    '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'yuva420p', '-'
+  ]
+}
+
+/**
+ * The probe's alpha at the middle of the patch: yuva420p is Y (16×16), U and V
+ * (8×8 each), then alpha (16×16). Null if the output is not that shape.
+ */
+export function keyProbeAlpha(bytes: ArrayLike<number>): number | null {
+  const alphaAt = 16 * 16 + 2 * 8 * 8
+  if (bytes.length < alphaAt + 16 * 16) return null
+  return bytes[alphaAt + 8 * 16 + 8]
+}
+
+/** Which scale the probe's alpha says this ffmpeg measures with. */
+export function keyScaleFromProbe(alpha: number): number {
+  const [u, v] = pixelChroma(...PROBE_PIXEL)
+  const d = chromaDistance(u, v, keyChroma(PROBE_KEY.color))
+  let best: number = KEY_SCALES[0]
+  let error = Infinity
+  for (const scale of KEY_SCALES) {
+    const off = Math.abs(keyAlpha(d * scale, PROBE_KEY.similarity, PROBE_KEY.blend) - alpha)
+    if (off < error) {
+      error = off
+      best = scale
+    }
+  }
+  return best
 }
 
 /**

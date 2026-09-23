@@ -106,6 +106,12 @@ export interface RenderRequest {
    * case and are ignored when `encode` is given.
    */
   encode?: EncodeSpec
+  /**
+   * How much larger the running ffmpeg measures a chroma-key distance than the
+   * model does — 1 on the macOS build, √2 on the Windows one. Probed by the
+   * main process (render/keyScale.ts); render/chromaKey.ts has the finding.
+   */
+  keyScale?: number
   crf?: number
   preset?: string
   /**
@@ -1148,7 +1154,7 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
      */
     if (key) {
       filters.push(`${source}${prepare.join(',')},split=3[kp${i}][ko${i}][kc${i}]`)
-      filters.push(`[kc${i}]${chromakeyFilter(key)},alphaextract[kk${i}]`)
+      filters.push(`[kc${i}]${chromakeyFilter(key, request.keyScale)},alphaextract[kk${i}]`)
       filters.push(`[ko${i}]alphaextract[kn${i}]`)
       filters.push(`[kn${i}][kk${i}]blend=all_mode=multiply[ka${i}]`)
       filters.push(`[kp${i}][ka${i}]alphamerge[kd${i}]`)

@@ -21,6 +21,23 @@ import ffmpegInstaller from '@ffmpeg-installer/ffmpeg'
 export const FFMPEG: string = ffmpegInstaller.path
 export const run = promisify(execFile)
 
+/**
+ * This binary's chroma-key distance scale, measured the way the app measures
+ * it (render/chromaKey.ts keyScaleFromProbe): 1 on macOS, √2 on the 2018
+ * Windows build. Every render that keys has to pass it, as the app does.
+ */
+let keyScaleOnce: Promise<number> | null = null
+export function keyScale(): Promise<number> {
+  keyScaleOnce ??= (async () => {
+    const { keyProbeAlpha, keyProbeArgs, keyScaleFromProbe } = await import('@shared/render/chromaKey')
+    const { stdout } = await run(FFMPEG, keyProbeArgs(), { encoding: 'buffer', maxBuffer: 1 << 20 })
+    const alpha = keyProbeAlpha(stdout as unknown as Buffer)
+    if (alpha === null) throw new Error('the chroma-key probe returned no picture')
+    return keyScaleFromProbe(alpha)
+  })()
+  return keyScaleOnce
+}
+
 /** `tests/output`, next to the tests rather than in a system temp folder. */
 export const OUTPUT_ROOT = resolve(__dirname, '..', 'output')
 

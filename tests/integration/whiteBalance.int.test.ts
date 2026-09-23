@@ -54,17 +54,27 @@ const luma = ([r, g, b]: number[]): number => 0.2126 * r + 0.7152 * g + 0.0722 *
 describe('white balance, rendered', () => {
   it('comes out as the neutral picture times the preview’s gains', async () => {
     const base = await centre(neutral, 'neutral')
+    /*
+     * Every balance and channel measured first, then judged once, with the whole
+     * table in the message. The Windows runner failed this on one channel — warm
+     * red, 149 against 154.6 — and stopping there hid whether the rest agreed,
+     * which is the difference between a rounding quirk and a different formula.
+     */
+    const rows: string[] = [`neutral ${base.join(',')}`]
+    let worst = 0
+    let dimmest = 0
     for (const [name, temperature, tint] of [['warm', 1, 0], ['cool', -1, 0], ['magenta', 0, 1], ['green', 0, -1]] as const) {
       const got = await centre({ ...neutral, temperature, tint }, name)
       const gains = whiteBalanceGains(temperature, tint)
       const want = [base[0] * gains.r, base[1] * gains.g, base[2] * gains.b]
-      for (let c = 0; c < 3; c++) {
-        // 4:2:0 chroma and two colour-space conversions: a few levels either way.
-        expect(Math.abs(got[c] - want[c]), `${name} channel ${'rgb'[c]}: got ${got[c]}, want ${want[c].toFixed(1)}`).toBeLessThanOrEqual(5)
-      }
-      // And the grey is as bright as it was.
-      expect(Math.abs(luma(got) - luma(base)), `${name} brightness`).toBeLessThanOrEqual(3)
+      rows.push(`${name} got ${got.join(',')} want ${want.map((w) => w.toFixed(1)).join(',')}`)
+      for (let c = 0; c < 3; c++) worst = Math.max(worst, Math.abs(got[c] - want[c]))
+      dimmest = Math.max(dimmest, Math.abs(luma(got) - luma(base)))
     }
+    // 4:2:0 chroma and two colour-space conversions: a few levels either way.
+    expect(worst, rows.join(' | ')).toBeLessThanOrEqual(5)
+    // And the grey is as bright as it was.
+    expect(dimmest, rows.join(' | ')).toBeLessThanOrEqual(3)
   }, 300_000)
 
   it('moves the picture the way it says: warm is redder, cool bluer', async () => {
