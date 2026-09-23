@@ -40,44 +40,49 @@ export interface KindStyle {
 }
 
 /*
- * Six families, not nine colours.
+ * One colour per kind, spread around the wheel.
  *
- * Kinds that are edited the same way share a hue: everything drawn from a spec
- * is violet, everything that is a picture from a file is blue, and sound splits
- * by ROLE because that is the distinction that matters while mixing — music is
- * the bed you duck, an effect is a hit, a voice is the thing everything else
- * gets out of the way of.
+ * These were six families — everything drawn from a spec violet, every picture
+ * blue — and the families turned out to be the problem: a text clip and a
+ * paper clipping side by side read as one purple, a photo and a shot as one
+ * blue. Colour is for FINDING a clip, so each kind gets a hue of its own, and
+ * none is orange, which is the app's accent for the playhead and the selection.
+ *
+ * Neighbours that are close on the wheel are kinds that do not share a lane:
+ * amber and yellow are SFX (audio lanes) and text (picture lanes).
  */
 const STYLES: Record<ClipKind, KindStyle> = {
   video: {
     kind: 'video', label: 'Video',
-    idle: 'border-sky-700/70 bg-sky-800/45 hover:bg-sky-800/65',
-    selected: 'border-sky-300 bg-sky-600/45',
-    dot: 'bg-sky-500'
+    idle: 'border-blue-700/70 bg-blue-800/45 hover:bg-blue-800/65',
+    selected: 'border-blue-300 bg-blue-600/45',
+    dot: 'bg-blue-500'
   },
   image: {
     kind: 'image', label: 'Photo',
-    idle: 'border-cyan-800/70 bg-cyan-900/45 hover:bg-cyan-900/65',
-    selected: 'border-cyan-300 bg-cyan-600/40',
-    dot: 'bg-cyan-500'
+    idle: 'border-teal-700/70 bg-teal-900/45 hover:bg-teal-900/65',
+    selected: 'border-teal-300 bg-teal-600/40',
+    dot: 'bg-teal-500'
   },
   text: {
     kind: 'text', label: 'Text',
-    idle: 'border-violet-700/70 bg-violet-800/45 hover:bg-violet-800/65',
-    selected: 'border-violet-300 bg-violet-600/45',
-    dot: 'bg-violet-500'
+    // Lighter than the rest: Tailwind's dark yellows are brown, and a brown
+    // text clip read as the orange accent.
+    idle: 'border-yellow-500/60 bg-yellow-500/20 hover:bg-yellow-500/30',
+    selected: 'border-yellow-200 bg-yellow-400/40',
+    dot: 'bg-yellow-500'
   },
   sticker: {
     kind: 'sticker', label: 'Sticker',
-    idle: 'border-fuchsia-700/70 bg-fuchsia-800/45 hover:bg-fuchsia-800/65',
-    selected: 'border-fuchsia-300 bg-fuchsia-600/45',
-    dot: 'bg-fuchsia-500'
+    idle: 'border-pink-700/70 bg-pink-800/45 hover:bg-pink-800/65',
+    selected: 'border-pink-300 bg-pink-600/45',
+    dot: 'bg-pink-500'
   },
   graphic: {
     kind: 'graphic', label: 'Graphic',
-    idle: 'border-indigo-700/70 bg-indigo-800/45 hover:bg-indigo-800/65',
-    selected: 'border-indigo-300 bg-indigo-600/45',
-    dot: 'bg-indigo-500'
+    idle: 'border-violet-700/70 bg-violet-800/45 hover:bg-violet-800/65',
+    selected: 'border-violet-300 bg-violet-600/45',
+    dot: 'bg-violet-500'
   },
   music: {
     kind: 'music', label: 'Music',
@@ -93,15 +98,15 @@ const STYLES: Record<ClipKind, KindStyle> = {
   },
   voice: {
     kind: 'voice', label: 'Voice',
-    idle: 'border-teal-700/70 bg-teal-800/45 hover:bg-teal-800/65',
-    selected: 'border-teal-300 bg-teal-600/45',
-    dot: 'bg-teal-500'
+    idle: 'border-lime-700/70 bg-lime-800/45 hover:bg-lime-800/65',
+    selected: 'border-lime-300 bg-lime-600/45',
+    dot: 'bg-lime-500'
   },
   adjustment: {
     kind: 'adjustment', label: 'Adjustment',
-    idle: 'border-rose-700/70 bg-rose-900/40 hover:bg-rose-900/60',
-    selected: 'border-rose-300 bg-rose-600/40',
-    dot: 'bg-rose-500'
+    idle: 'border-red-700/70 bg-red-900/40 hover:bg-red-900/60',
+    selected: 'border-red-300 bg-red-600/40',
+    dot: 'bg-red-500'
   }
 }
 

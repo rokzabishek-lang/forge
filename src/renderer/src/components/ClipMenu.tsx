@@ -129,7 +129,11 @@ export function ClipMenu({
     // `click` so the menu is gone before the thing underneath reacts.
     const away = (): void => onClose()
     const key = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') {
+        // Handled: closing the menu must not also leave full screen.
+        e.preventDefault()
+        onClose()
+      }
     }
     window.addEventListener('pointerdown', away)
     window.addEventListener('keydown', key)

@@ -174,6 +174,15 @@ const api = {
     ipcRenderer.on('menu:command', listener)
     return () => ipcRenderer.removeListener('menu:command', listener)
   },
+  /** Told when the window enters (true) or leaves (false) full screen. */
+  onFullScreen: (cb: (on: boolean) => void): (() => void) => {
+    const listener = (_e: unknown, on: boolean): void => cb(on === true)
+    ipcRenderer.on('window:fullscreen', listener)
+    return () => ipcRenderer.removeListener('window:fullscreen', listener)
+  },
+  exitFullScreen: (): void => {
+    ipcRenderer.send('window:exitFullScreen')
+  },
   onMenuOpen: (cb: (path: string) => void): (() => void) => {
     const listener = (_e: unknown, path: string): void => cb(path)
     ipcRenderer.on('menu:open', listener)

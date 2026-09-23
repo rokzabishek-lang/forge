@@ -69,7 +69,11 @@ const GROUPS: { title: string; keys: [string, string][] }[] = [
 export function Shortcuts({ onClose }: { onClose: () => void }): ReactNode {
   useEffect(() => {
     const key = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') {
+        // Handled: closing this sheet must not also leave full screen.
+        e.preventDefault()
+        onClose()
+      }
     }
     window.addEventListener('keydown', key)
     return () => window.removeEventListener('keydown', key)

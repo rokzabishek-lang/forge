@@ -99,6 +99,17 @@ function createWindow(): void {
   mainWindow.on('ready-to-show', () => mainWindow?.show())
 
   /*
+   * Full screen, told to the renderer so it can offer the way out.
+   *
+   * View → Toggle Full Screen went in and nothing came out: Escape reached
+   * nothing, and on Windows full screen hides the very menu the toggle is in.
+   * The renderer shows an Exit button while this is true, and asks to leave
+   * on an Escape nothing else wanted — see src/shared/fullScreen.ts.
+   */
+  mainWindow.on('enter-full-screen', () => mainWindow?.webContents.send('window:fullscreen', true))
+  mainWindow.on('leave-full-screen', () => mainWindow?.webContents.send('window:fullscreen', false))
+
+  /*
    * Do not let the window take an hour of work with it.
    *
    * There was no `close` handler at all, so closing the window discarded
@@ -244,6 +255,8 @@ app.whenReady().then(() => {
     menuState = { ...EMPTY_MENU_STATE, ...next }
     applyMenu(mainWindow, menuState, recentProjects)
   })
+
+  ipcMain.on('window:exitFullScreen', () => mainWindow?.setFullScreen(false))
 
   ipcMain.on('menu:recent', (_e, path: string) => {
     if (typeof path !== 'string' || path.length === 0) return

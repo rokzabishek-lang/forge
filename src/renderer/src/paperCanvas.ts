@@ -71,6 +71,9 @@ export function paperPreviewCanvas(
   if (!ctx) return null
   ctx.clearRect(0, 0, width, height)
   drawPaperOnto(ctx, spec, width, height, { frame }, canvasMeasure(ctx))
+  // Says the picture changed, so a look over it does not freeze on the first
+  // page (grade.ts canvasContentKey).
+  canvas.dataset.forgeRev = signature
 
   previews.set(clipId, { signature, canvas })
   // Fonts arrive asynchronously; the next draw picks them up. Kicked off after

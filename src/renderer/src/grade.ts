@@ -372,7 +372,25 @@ function contentKey(
 ): string {
   if (element instanceof HTMLVideoElement) return element.currentTime.toFixed(3)
   if (element instanceof HTMLImageElement) return element.src
-  return element.dataset.forgeRev ?? `${element.width}x${element.height}`
+  return canvasContentKey(element.dataset.forgeRev)
+}
+
+let unstamped = 0
+
+/**
+ * The key for a canvas: its stamp, or — with no stamp — a key that never
+ * repeats, so it is never served from the cache.
+ *
+ * The fallback used to be the canvas's SIZE, which never changes. The paper
+ * clippings and the photo ring are drawn onto one canvas frame after frame and
+ * did not stamp it, so the moment a look was applied the grade handed back its
+ * first graded frame forever: the look was there and the picture had frozen —
+ * reported from the app — while the export, which never goes near this, played.
+ * A canvas that cannot say when it changed is regraded every time; a frame of
+ * extra work is a far smaller fault than a picture that stops.
+ */
+export function canvasContentKey(stamp: string | undefined): string {
+  return stamp ?? `unstamped:${++unstamped}`
 }
 
 export function gradedSource(

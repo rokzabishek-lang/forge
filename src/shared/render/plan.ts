@@ -665,10 +665,10 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
    * slice of the full render: a clip straddling the in point keeps its fades,
    * its transition, its keyframes and its motion exactly where they were.
    */
+  // A range over the whole edit needs no special case: it drops no clip and
+  // trims nothing, so it renders exactly the plain export.
   const range =
-    request.range &&
-    request.range.end > request.range.start &&
-    !(request.range.start <= 0 && request.range.end >= fullFrames)
+    request.range && request.range.end > request.range.start
       ? {
           start: Math.max(0, Math.round(request.range.start)),
           end: Math.min(fullFrames, Math.round(request.range.end))

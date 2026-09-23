@@ -8,6 +8,10 @@ working, and both effectively invisible.
 The window is four areas: **left panel**, **preview**, **inspector** (right), and
 **timeline** (bottom).
 
+**Full screen** is View → Toggle Full Screen. The way out is an **Exit full
+screen** button across the top of the window, or **Esc** when nothing else — a
+menu, a picker, a text edit — is using it.
+
 ---
 
 ## Left panel — what goes on the timeline
@@ -208,6 +212,12 @@ its speed and, after its first few seconds, the time left.
 
 Video tracks are listed **highest first**, like every other editor: the track at
 the top of the list draws on top of the picture. Audio sits below.
+
+Clips are **coloured by kind** — video blue, photos teal, text yellow, graphics
+(paper clippings, colour cards, the photo ring) violet, stickers pink, music
+green, sound effects amber, voice lime, adjustment layers red — and the legend
+above the tracks switches a kind's visibility. A selected clip is brighter and
+outlined in its own colour.
 
 `+V` and `+A` add tracks. The eye hides a video track; the speaker mutes an audio
 one — both exclude it from the export.

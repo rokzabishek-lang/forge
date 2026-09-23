@@ -221,6 +221,9 @@ export function carouselPreviewCanvas(
   return existing.canvas
 }
 
+/** How many ring frames have been painted — each one's stamp. */
+let paints = 0
+
 /** Draw one frame and copy it onto the clip's own 2D canvas. */
 async function paint(
   target: HTMLCanvasElement,
@@ -235,6 +238,10 @@ async function paint(
   if (!ctx) return
   ctx.clearRect(0, 0, width, height)
   ctx.drawImage(gl, 0, 0, width, height)
+  // Every paint is a new picture — a new angle, or a ring whose settings just
+  // changed — so each says so, and a look over it never freezes on one frame
+  // (grade.ts canvasContentKey).
+  target.dataset.forgeRev = String(++paints)
 }
 
 export function forgetCarouselPreview(clipId: string): void {

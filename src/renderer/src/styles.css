@@ -1,6 +1,18 @@
 @import "tailwindcss";
 
 /*
+ * Scan the shared code for class names too.
+ *
+ * Tailwind builds only the classes it finds in the files it scans, and it scans
+ * from the renderer's root — so a class written in src/shared was never built.
+ * The timeline's clip colours live in src/shared/edit/clipKind.ts, and not one
+ * of them existed: every clip was the same uncoloured box, and a selected text
+ * or paper clip looked exactly like an unselected one (only clips with sound
+ * showed it, through their waveform). tests/tailwindSources.test.ts keeps it so.
+ */
+@source "../../shared";
+
+/*
  * The palette.
  *
  * Neutral greys rather than blue-tinted ones, layered the way macOS layers its

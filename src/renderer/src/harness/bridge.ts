@@ -602,6 +602,8 @@ export function installHarnessBridge(): void {
     reportSaved: () => undefined,
     onMenuCommand: () => () => undefined,
     onMenuOpen: () => () => undefined,
+    onFullScreen: () => () => undefined,
+    exitFullScreen: () => undefined,
 
     // The browser can open a microphone; only the main process can turn a
     // recording into a WAV, so saving a take is refused with a reason.

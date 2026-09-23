@@ -138,6 +138,29 @@ describe('what a clip is, for the eye', () => {
     expect(one).toEqual(['video', 'sfx'])
     expect(kindsPresent([])).toEqual([])
   })
+
+  it('gives every kind a hue of its own, and none of them the accent', () => {
+    /*
+     * Text and paper clippings were violet and indigo — one purple, side by
+     * side on the timeline — and a photo and a shot were cyan and sky. Colour
+     * is for finding a clip, so no two kinds share a hue; and orange is the
+     * app's accent (the playhead, the selection), so no kind wears it.
+     */
+    const kinds = ['video', 'image', 'text', 'sticker', 'graphic', 'music', 'sfx', 'voice', 'adjustment'] as const
+    const hueOf = (kind: (typeof kinds)[number]): string => /^bg-([a-z]+)-\d+$/.exec(styleFor(kind).dot)?.[1] ?? ''
+    const hues = kinds.map(hueOf)
+    expect(new Set(hues).size, hues.join(', ')).toBe(kinds.length)
+    expect(hues).not.toContain('orange')
+    expect(hues).not.toContain('flame')
+    // Text and graphics, the pair that prompted this, are not neighbours either.
+    expect(['violet', 'indigo', 'purple', 'fuchsia']).not.toContain(hueOf('text'))
+    // And each kind's body, border and swatch are one hue, not a mix.
+    for (const kind of kinds) {
+      const style = styleFor(kind)
+      const used = new Set([...`${style.idle} ${style.selected} ${style.dot}`.matchAll(/-(?:bg|border)?([a-z]+)-\d{2,3}/g)].map((m) => m[1]))
+      expect([...used].filter((h) => h !== 'bg' && h !== 'border'), kind).toEqual([hueOf(kind)])
+    }
+  })
 })
 
 describe('playback inside a marked range', () => {

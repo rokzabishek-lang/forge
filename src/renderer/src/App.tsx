@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { Group, Panel, Separator } from 'react-resizable-panels'
 import { tinykeys } from 'tinykeys'
-import { AlertCircle, Info, X } from 'lucide-react'
+import { AlertCircle, Info, Minimize2, X } from 'lucide-react'
+import { escapeLeavesFullScreen } from '@shared/fullScreen'
 import { projectDuration } from '@shared/timeline'
 import { AUTOSAVE_INTERVAL_MS } from '@shared/project/recovery'
 import { useEditor } from './store'
@@ -103,6 +104,29 @@ export default function App(): ReactNode {
   const setJobs = useEditor((s) => s.setJobs)
   const notify = useEditor((s) => s.notify)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  /** The window is full screen — so the way out has to be on screen too. */
+  const [fullScreen, setFullScreen] = useState(false)
+
+  /*
+   * Out of full screen, by Escape or by the button below.
+   *
+   * Escape is decided after the event has finished travelling: a menu, a
+   * picker, the shortcuts sheet or a text edit that used the key either stops
+   * it or marks it handled, and only an Escape nobody wanted leaves full
+   * screen. See src/shared/fullScreen.ts.
+   */
+  useEffect(() => window.forge.onFullScreen(setFullScreen), [])
+  useEffect(() => {
+    if (!fullScreen) return
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key !== 'Escape') return
+      setTimeout(() => {
+        if (escapeLeavesFullScreen(e, true)) window.forge.exitFullScreen()
+      }, 0)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [fullScreen])
   /**
    * The New Project screen.
    *
@@ -440,6 +464,23 @@ export default function App(): ReactNode {
       )}
 
       {shortcutsOpen && <Shortcuts onClose={() => setShortcutsOpen(false)} />}
+
+      {/*
+        The way out of full screen, where anyone looks for it. On Windows full
+        screen hides the menu bar, so without this the toggle that went in was
+        the only thing that could come out — and it was hidden.
+      */}
+      {fullScreen && (
+        <button
+          onClick={() => window.forge.exitFullScreen()}
+          title="Leave full screen (Esc)"
+          className="absolute left-1/2 top-2 z-50 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-ink-700 bg-ink-900/90 px-3 py-1 text-[11px] text-ink-200 shadow-lg backdrop-blur hover:bg-ink-800"
+        >
+          <Minimize2 size={12} />
+          Exit full screen
+          <span className="text-ink-600">Esc</span>
+        </button>
+      )}
 
       {newOpen && (
         <NewProject

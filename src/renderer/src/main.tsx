@@ -49,6 +49,8 @@ function installFallbackBridge(): void {
     reportSaved: () => undefined,
     onMenuCommand: () => () => undefined,
     onMenuOpen: () => () => undefined,
+    onFullScreen: () => () => undefined,
+    exitFullScreen: () => undefined,
     microphonePermission: async () => false,
     saveVoiceOver: unavailable
   } as unknown as Window['forge']

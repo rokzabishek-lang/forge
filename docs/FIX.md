@@ -712,6 +712,34 @@ Not solved, and said in the interface: the graph composes in 8-bit 4:2:0
 that picture — no generation lost, none gained. A 10-bit pipeline is its own
 piece of work.
 
+### Reported from the app, 2026-09-23 — fixed
+
+Three things the user hit testing `7508d0c`, each traced to its cause:
+
+- **Drag-select "did not select" text or paper clips.** It did — the store had
+  them — but nothing showed it. Tailwind builds only the classes in the files
+  it scans, it scans from the renderer's root, and the clip colours live in
+  `src/shared/edit/clipKind.ts`: not one of them was ever built. Every clip was
+  an uncoloured box, and a selected clip without sound looked like an
+  unselected one (clips with sound showed it through their waveform). The
+  colour coding had never been visible at all. `@source "../../shared"` in
+  `styles.css`, and `tests/tailwindSources.test.ts` fails if any file writing a
+  colour class is outside what Tailwind scans. While there, the user asked for
+  more distinct colours: one hue per kind now (text yellow, graphics violet,
+  stickers pink, video blue, photos teal, voice lime), none of them the
+  accent orange.
+- **Full screen had no way out.** Escape reached nothing, there was no control
+  for it, and on Windows full screen hides the menu the toggle is in. An "Exit
+  full screen" button across the top while full screen, and Escape leaves it
+  when nothing else — a menu, a picker, a text edit — wanted the key
+  (`src/shared/fullScreen.ts`).
+- **A look froze the preview of paper clippings.** The grade caches its output
+  per clip and asks the source what changed; a canvas answered with its SIZE,
+  and the paper and photo-ring canvases, redrawn every frame, never said
+  otherwise — so after a look was applied, the first graded page was served
+  forever. Both stamp their frames now, and a canvas that does not is never
+  served from the cache (`grade.ts` `canvasContentKey`).
+
 ### B3. Colour, key, masks, motion, transcript
 
 **Temperature and tint.** `ColorAdjust.temperature?` and `tint?` (−1..1) →
