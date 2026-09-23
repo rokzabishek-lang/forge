@@ -75,7 +75,10 @@ describe('the export asks the probe', () => {
     expect(ipc).toContain('keyScale: request.project.clips.some((c) => c.key) ? await keyDistanceScale() : undefined')
     const job = readFileSync(resolve(__dirname, '../src/main/render/renderJob.ts'), 'utf8')
     expect(job).toContain('keyScale?: number')
-    expect(job).toContain('buildRenderPlan(options as RenderRequest)')
+    // Both ways a render starts hand the whole options — keyScale with them — to the plan.
+    expect(job).toContain('const plan = buildRenderPlan(request)')
+    expect(job).toContain('return run(options as RenderRequest, onProgress)')
+    expect(job).toContain('run({ ...options, steady } as RenderRequest')
   })
 })
 

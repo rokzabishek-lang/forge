@@ -30,6 +30,8 @@ import { LayoutPanel } from './LayoutPanel'
 import { MaskPanel } from './MaskPanel'
 import { KeyPanel } from './KeyPanel'
 import { CameraPanel } from './CameraPanel'
+import { SteadyToggle } from './SteadyToggle'
+import { canSteady } from '@shared/render/steady'
 import { canMoveCamera } from '@shared/edit/camera'
 import { isKeyable } from '@shared/render/chromaKey'
 import { CarouselPanel } from './CarouselPanel'
@@ -933,6 +935,9 @@ export function Inspector(): ReactNode {
               */}
               {/* Speed belongs next to duration: it is the other way to change one. */}
               <SpeedPanel clip={clip} asset={asset} />
+
+              {/* Footage's steadiness, under its speed. */}
+              {canSteady(clip, asset ?? undefined) && <SteadyToggle clip={clip} />}
 
               {/* A photo's camera move — where Speed would be, which a still has none of. */}
               {canMoveCamera(clip, asset ?? undefined) && <CameraPanel clip={clip} />}

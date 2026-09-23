@@ -16,6 +16,12 @@ export interface RunOptions {
    * a failing render can be copy-pasted into a shell verbatim.
    */
   complete?: boolean
+  /**
+   * Where ffmpeg runs. A filter that writes a file by bare name — vidstab's
+   * analysis — writes it here, so no drive-letter colon ever reaches the
+   * filtergraph parser.
+   */
+  cwd?: string
 }
 
 export interface RunHandle {
@@ -76,7 +82,7 @@ export function runFfmpeg(options: RunOptions): RunHandle {
       : ['-hide_banner', '-nostdin', '-loglevel', 'error', '-y']
     const argv = [...globals, ...args, '-progress', 'pipe:1', '-nostats']
 
-    child = spawn(FFMPEG_PATH, argv, { windowsHide: true })
+    child = spawn(FFMPEG_PATH, argv, { windowsHide: true, ...(options.cwd ? { cwd: options.cwd } : {}) })
 
     let snapshot = EMPTY_PROGRESS
     const stderrLines: string[] = []

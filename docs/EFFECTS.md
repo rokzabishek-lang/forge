@@ -2374,3 +2374,25 @@ so the file was quietly darker than the screen, and white balance's own
 run of RGB filters in `format=gbrap … format=yuva420p` (`gbrp`/`yuv420p` on the
 composite an adjustment layer grades), and `integration/rgbRoute.int.test.ts`
 holds invisible settings to 1 level.
+
+### Steady — vidstab on both builds, measured against deshake
+
+B3. A 720×420 noise texture with a white marker, cropped to 640×360 at an
+offset driven by a few low and high frequency sines — a hand-held wobble with a
+known size — and the marker's centre found in every frame (`integration/steady`):
+
+| | spread across | spread down | time, 4 s at 720p |
+|---|---|---|---|
+| as shot | 7.6 px | 6.0 px | — |
+| `deshake` (defaults) | 4.1 | 4.1 | 1.5 s |
+| `deshake` rx/ry 32 | worse: 7.3 / 13.3 on a grid texture | | |
+| `vidstab` default | 1.4 | 2.4 | 0.8 s (+ analysis) |
+| `vidstab` smoothing 30 | 0.5 | 0.6 | 0.7 s (+ analysis) |
+
+A periodic texture (a grid) fools deshake's block matching — test on noise.
+The 2018 Windows build lists `vidstabdetect` and `vidstabtransform` and runs
+both (CI #83). The analysis must see the frames the render decodes, so it runs
+with the plan's own `-ss/-t` input (`videoInputArgs`), and vidstabtransform goes
+first in the chain, before `setpts`. `deshake` drops the alpha plane like `eq`
+does (0 in, 255 out) — harmless where it sits, on decoded footage before any
+padding exists.

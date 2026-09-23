@@ -8,6 +8,7 @@ import {
   projectDuration
 } from '../timeline'
 import { escapeFilterPath } from '../captions/timeline'
+import { canSteady, steadyFilter, type SteadyPlan } from './steady'
 import { lumaAlphaExpression, transitionById, type TransitionDef } from '../transitions/registry'
 // Geometry shared with the preview, so what is on screen and what is exported
 // cannot drift apart.
@@ -113,6 +114,12 @@ export interface RenderRequest {
    * main process (render/keyScale.ts); render/chromaKey.ts has the finding.
    */
   keyScale?: number
+  /**
+   * How each steady clip is steadied, by clip id: vidstab with the motion file
+   * the main process analysed (render/steady.ts), or deshake. A steady clip
+   * missing from this is steadied with deshake, which needs nothing.
+   */
+  steady?: Record<string, SteadyPlan>
   crf?: number
   preset?: string
   /**
@@ -197,6 +204,17 @@ export function planesFor(clip: Clip, bake: ParallaxBake): ParallaxBake['layers'
  */
 export function planeShare(motion: Clip['motion'], amount: number, depth: number): number {
   return motion?.kind === 'shake' ? anchoredAmount(amount, depth) : planeAmount(amount, depth)
+}
+
+/**
+ * A video clip's input: `duration × speed` of source from its in-point.
+ *
+ * One function because a steady clip's analysis pass (main/render/steady.ts)
+ * has to decode exactly these frames, or the motion it writes down is for
+ * different pictures than the ones it is applied to.
+ */
+export function videoInputArgs(clip: Clip, asset: Pick<MediaAsset, 'path'>, fps: number): string[] {
+  return ['-ss', seconds(clip.inPoint, fps), '-t', seconds(sourceFramesFor(clip), fps), '-i', asset.path]
 }
 
 /**
@@ -810,11 +828,7 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
        * end of the shot.
        */
       // -ss before -i seeks on the input, far faster on long sources.
-      args.push(
-        '-ss', seconds(clip.inPoint, fps),
-        '-t', seconds(sourceFramesFor(clip), fps),
-        '-i', asset.path
-      )
+      args.push(...videoInputArgs(clip, asset, fps))
     }
     videoInputs.push({ clip, index: inputIndex, hasAudio: asset.hasAudio })
     entries.push({ clip, asset, inputIndex })
@@ -1068,6 +1082,13 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
     // An adjustment layer grades what is below it and has no picture to key.
     const key = clip.key && !clip.adjustment ? saneKey(clip.key) : null
     const prepare = [
+      /*
+       * Steadied first, on the frames exactly as decoded — before speed, crop
+       * or fit. vidstab's motion file is indexed by the frames its analysis saw,
+       * which were these (videoInputArgs), and a stabiliser wants the camera's
+       * own frames, not a crop of them.
+       */
+      clip.steady && canSteady(clip, asset) ? steadyFilter(request.steady?.[clip.id] ?? { kind: 'deshake' }) : null,
       // Before anything else: a drawn animation is only as long as its movement,
       // and every step below assumes a stream of exactly `duration` frames.
       asset.frames ? holdFilter(clip, fps) : null,

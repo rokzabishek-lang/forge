@@ -309,6 +309,11 @@ export interface Clip {
    */
   smoothSlow?: boolean
   /**
+   * Take a handheld shake out (render/steady.ts). Footage only; applied in the
+   * export — the preview shows the clip as it was shot.
+   */
+  steady?: boolean
+  /**
    * A shape on the picture, and something that happens only inside it.
    *
    * Distinct from `matte`, which takes its shape from another clip on the

@@ -903,8 +903,24 @@ split still fits its move to its length. Rendered
 clip's at the same moments, for a pan and a shake; in the harness the preview
 reads the same at frames 0/29/30/59 before and after the split.
 
-**Steady.** `deshake` (2013) as a clip toggle. `vidstab` two-pass only if
-both builds carry `libvidstab` — measure Windows.
+**Steady — DONE.** A **Steady** toggle on footage (`SteadyToggle`, under Speed).
+Measured first, on a clip jittered by a known hand-held shake (the marker's
+spread, px across/down): as shot 7.6/6.0, `deshake` 4.1/4.1, `vidstab`
+(smoothing 30) 0.5/0.6 — and vidstab's transform is the faster of the two.
+**Both builds carry libvidstab**: a one-off probe on the Windows runner (CI #83)
+listed both filters, ran the analysis (a 14 KB `VID.STAB 1` file) and the
+transform. So the export runs vidstab in two parts of one job — the analysis
+(`main/render/steady.ts`, the first quarter of the progress bar, one cancel
+for both) over exactly the frames the render decodes (`videoInputArgs`, shared
+with the plan), written by bare name into a cache folder so no drive colon
+reaches the parser and reused by a later export of the same stretch; then the
+render, with `vidstabtransform` first in the clip's chain, before speed, crop
+and fit. `optzoom=1` zooms just enough to hide the moved edge. A clip whose
+analysis fails, or a build without vidstab (probed per machine), gets
+`deshake`. The preview cannot stabilise and the toggle says so. Rendered
+(`integration/steady.int.test.ts`): deshake and vidstab each bring the
+spread under their measured bounds, including a clip starting a second into
+its file.
 
 **Transcript editing.** Inline word editing in `TranscriptPanel`
 (`editTranscriptWord(assetId, index, text)`); segments re-derive; caption

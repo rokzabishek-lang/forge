@@ -141,6 +141,10 @@ repeating them — worth it for a hero shot, and roughly forty times slower to
 export, so not for a whole reel. Stills have no speed control: a photograph has
 no rate to change.
 
+**Steady** (footage, under Speed) — smooths out a handheld shake in the export.
+The export analyses the clip's motion first (the start of its progress bar);
+the preview shows the clip as it was shot.
+
 **Camera** (photos) — a move across the still: **Move** is a push in, a pull
 out or a pan, chosen from the In / Out / Pan rows, with **Amount**; **Shake** is
 a hit that settles, with **Rate** and **Settle** (and **Hold** subject-still when

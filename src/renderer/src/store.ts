@@ -630,6 +630,8 @@ interface EditorState {
    * keys both scale the picture (shared/edit/camera.ts) — and says so.
    */
   setMotion: (clipId: string, motion: Motion | undefined) => void
+  /** Stabilise this clip in the export, or stop (render/steady.ts). */
+  setSteady: (clipId: string, on: boolean) => void
   /** Open the file dialog and put the chosen .cube on this clip. */
   chooseLut: (clipId: string) => Promise<void>
   /** How long a clip stays on screen, in frames. */
@@ -3368,6 +3370,19 @@ export const useEditor = create<EditorState>((set, get) => ({
       })
     }))
     if (dropped) get().notify('Zoom keyframes taken off — a camera move and zoom keys both scale the picture', 'info')
+  },
+
+  setSteady: (clipId, on) => {
+    get().update((p) => ({
+      ...p,
+      clips: p.clips.map((c) => {
+        if (c.id !== clipId) return c
+        if (on) return { ...c, steady: true }
+        // Off means gone, so a project that never used it saves as it did.
+        const { steady: _off, ...rest } = c
+        return rest
+      })
+    }))
   },
 
   animateMask: (clipId, on) => {

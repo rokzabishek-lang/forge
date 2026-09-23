@@ -934,6 +934,8 @@ export function registerIpc(getWindow: () => BrowserWindow | null): JobQueue {
       // Asked only when something is keyed: the probe is one tiny encode, but
       // an export with no key has no reason to wait for it.
       keyScale: request.project.clips.some((c) => c.key) ? await keyDistanceScale() : undefined,
+      // Steady clips' motion analysis, kept between exports (render/steady.ts).
+      steadyDir: join(app.getPath('userData'), 'steady'),
       subtitlesPath: captions?.subtitlesPath,
       fontsDir: captions?.fontsDir,
       captionOverlay: request.captionOverlay,
