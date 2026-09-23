@@ -817,11 +817,19 @@ on its own binary at startup-of-first-key-export and scales Similarity and
 Soften by the answer (`keyScaleFromProbe`, `main/render/keyScale.ts`); the
 render tests use the same probe. EFFECTS.md §25.
 
-**Open: white balance on Windows.** The same CI run had the warm red at 149
-against a predicted 154.6 — 5.6 levels, over the tolerance of 5, since
-09655f2. The check now reports every channel of every balance in one message,
-so the next Windows run says whether that is one channel's rounding or a
-different conversion. Not changed until it has.
+**White balance on Windows — the cause was on both builds.** CI had warm red at
+149 against 154.6 since 09655f2; with every channel reported (CI #79) the whole
+table was uniformly 3–4 levels low. Measured here, the same thing at 2 levels:
+ffmpeg converts yuva420p to PACKED `rgba` for an RGB filter, and that route
+loses levels — a mixer set to 1,1,1 turns a 126 grey into 124. Through planar
+`gbrap` it is exact. Every RGB filter the export uses — the balance, curves,
+the look, despill, and the static opacity control — now runs on planar RGB
+(`inRgb`, plan.ts), and white balance lands on its gains within ~1 level on the
+Mac. A new check (`integration/rgbRoute.int.test.ts`) asks invisible settings
+for 1 level, which the old 5-level tolerance could never see. Measured on the
+Windows runner by a one-off probe (CI #80): warm on the auto route 149,120,89,
+on gbrap 154,122,92 against gains of 154.6,123.7,92.7; a unity mixer on the
+auto route 128 → 125. Both builds green on the planar route.
 
 Four alpha bugs turned up on the way, each with a render check
 (`integration/gradeAlpha.int.test.ts`, `adjustment.int.test.ts`):

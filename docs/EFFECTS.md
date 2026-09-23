@@ -2346,3 +2346,31 @@ quarter to three quarters across lands within a pixel of prediction on every
 frame. A pixel-reading trap on the way: `-ss` returns the first frame AT OR
 AFTER the time, so the middle of a clip's last frame is past it and reads as
 the track below — sample a quarter-frame before the frame instead.
+
+### RGB filters lose two levels on the packed route — run them planar
+
+Every RGB-only filter the export uses — `colorchannelmixer` (white balance, and
+the static opacity control), `curves`, `lut3d`, `despill` — is handed a
+yuva420p stream, and ffmpeg converts for it. It picks PACKED `rgba`, and the
+yuva420p ↔ rgba route loses levels. A mid grey from lavfi, read back as rgb24,
+on the macOS build:
+
+| route | grey |
+|---|---|
+| no filter | 126 |
+| mixer 1,1,1, curves identity, lut3d identity, despill, opacity 0.5 — auto (rgba) | 124 |
+| the same, each after an explicit `format=gbrap` and before `format=yuva420p` | 126 |
+
+The warm balance on the auto route came out 150,120,89 against gains of
+152.2,121.8,91.3; on gbrap 153,122,91. On the Windows build the auto route was
+3–4 levels low in every channel of every balance (CI #79); a one-off probe on
+the runner (CI #80) had a unity mixer turn 128 into 125 on the auto route, and
+the warm balance land at 154,122,92 on gbrap against 154.6,123.7,92.7 — and,
+unlike the Mac, an EXPLICIT `format=rgba` was exact there too, so it is the
+format ffmpeg negotiates for itself that loses the levels. The keyframed
+opacity's `geq` already runs planar and was exact. The preview loses nothing,
+so the file was quietly darker than the screen, and white balance's own
+5-level tolerance was too loose to notice two. `inRgb` in plan.ts wraps each
+run of RGB filters in `format=gbrap … format=yuva420p` (`gbrp`/`yuv420p` on the
+composite an adjustment layer grades), and `integration/rgbRoute.int.test.ts`
+holds invisible settings to 1 level.
