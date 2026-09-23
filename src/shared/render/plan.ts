@@ -515,7 +515,16 @@ function opacityFilter(clip: Clip, staticOpacity: number, fps: number): string |
       timeVar: 'T'
     })
     // The colour planes are passed straight through; only alpha is rewritten.
-    return `geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='${expression}'`
+    /*
+     * Multiplied into the alpha that is there, not written over it.
+     *
+     * `a='value'` REPLACED the clip's alpha with the opacity, so a keyframed
+     * fade on a clip with see-through parts — the bars round a letterboxed
+     * picture, a sticker, a keyed screen — made them solid for its whole
+     * length. Measured: a 4:3 clip over red with an opacity keyframe had
+     * black bars.
+     */
+    return `geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='alpha(X,Y)*(${expression})/255'`
   }
   return staticOpacity < 1 ? `colorchannelmixer=aa=${staticOpacity.toFixed(3)}` : null
 }
@@ -1019,15 +1028,16 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
     ].filter((s): s is string => s !== null)
 
     /*
-     * The chain comes in two halves, split where a key is taken.
+     * The chain comes in halves, split where a key is taken.
      *
      * Everything up to the fitted, yuva420p picture is `prepare`; the grade
-     * and what follows is `rest`. A chroma key has to be measured on the
+     * and what follows come after it. A chroma key has to be measured on the
      * UNGRADED picture — grading the greens would move the key — so a keyed
-     * clip splits between them (see `keyLabel` below). Unkeyed, the two halves
-     * join into the one chain they always were.
+     * clip splits between them (see the key below). Unkeyed and ungraded, the
+     * halves join into the one chain they always were.
      */
-    const key = clip.key ? saneKey(clip.key) : null
+    // An adjustment layer grades what is below it and has no picture to key.
+    const key = clip.key && !clip.adjustment ? saneKey(clip.key) : null
     const prepare = [
       // Before anything else: a drawn animation is only as long as its movement,
       // and every step below assumes a stream of exactly `duration` frames.
@@ -1081,20 +1091,33 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
       // the time, one word changed.
       'format=yuva420p'
     ].filter((s): s is string => s !== null)
-    const rest = [
+    /*
+     * The grade, in three parts, because the middle one drops alpha.
+     *
+     * `eq` takes no pixel format with an alpha plane, so ffmpeg converts in
+     * front of it and every transparent pixel comes out opaque — measured,
+     * alpha 0 in and 255 out. Brightness on a clip that does not fill its box
+     * turned the see-through bars black, and a sticker became its rectangle.
+     * White balance, curves, despill and the look all keep alpha (measured the
+     * same way); only `eq` does not, so only `eq` is wrapped (see below).
+     */
+    const beforeEq = [
       // A key's fringe comes out first, before anything grades what is left.
       key ? despillFilter(key) : null,
       // Grade after the fit, so it runs at canvas size rather than over every
       // pixel of a 6000px photograph.
       // White balance first: correct the light, then grade it.
-      gradeInline ? whiteBalanceFilter(clip.color?.temperature, clip.color?.tint) : null,
-      gradeInline ? eqFilter(clip) : null,
+      gradeInline ? whiteBalanceFilter(clip.color?.temperature, clip.color?.tint) : null
+    ].filter((s): s is string => s !== null)
+    // An adjustment layer's grade runs on the tracks below, further down; its
+    // own chain is never drawn, so nothing may be split off it here.
+    const eq = gradeInline && !clip.adjustment ? eqFilter(clip) : null
+    const afterEq = [
       // Curves after the sliders, before the look: correct, shape, then style.
       gradeInline ? curvesFilter(clip.color?.curves) : null,
       // With a mask these move to `finish`, after the shape has been applied.
       ...(mask ? [] : finish)
     ].filter((s): s is string => s !== null)
-    const steps = [...prepare, ...rest].join(',')
 
     /*
      * The LUT cannot live in that chain.
@@ -1109,23 +1132,47 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
      * a 40%-alpha source, the alpha comes out 0x66 either way.
      */
     let head = source
-    let body = steps
+    let body = [...prepare, ...beforeEq].join(',')
 
     /*
-     * The key's shape, taken from the ungraded picture.
+     * The key, taken from the ungraded picture and put on straight away.
      *
      * `chromakey` REPLACES alpha, so it runs on a copy and only its alpha is
-     * kept, as a shape — multiplied into the clip's own transparency and every
-     * other shape below, never put on in place of them.
+     * kept — multiplied into the clip's own transparency, never put on in place
+     * of it. And it goes on HERE, on the fitted picture, rather than with the
+     * shapes further down: everything after this point — the grade, a turn, an
+     * opacity, a transition's punch-in — then acts on a picture that is already
+     * keyed. As a late shape it met the picture after `finish` had turned it,
+     * and a rotated keyed clip failed the whole export: the stencil was the
+     * box's size and the turned picture was not.
      */
-    let keyLabel: string | null = null
     if (key) {
-      filters.push(`${source}${prepare.join(',')},split[kv${i}][kc${i}]`)
+      filters.push(`${source}${prepare.join(',')},split=3[kp${i}][ko${i}][kc${i}]`)
       filters.push(`[kc${i}]${chromakeyFilter(key)},alphaextract[kk${i}]`)
-      head = `[kv${i}]`
-      body = rest.join(',')
-      keyLabel = `[kk${i}]`
+      filters.push(`[ko${i}]alphaextract[kn${i}]`)
+      filters.push(`[kn${i}][kk${i}]blend=all_mode=multiply[ka${i}]`)
+      filters.push(`[kp${i}][ka${i}]alphamerge[kd${i}]`)
+      head = `[kd${i}]`
+      body = beforeEq.join(',')
     }
+
+    /*
+     * `eq`, with the alpha it would drop handed back.
+     *
+     * The alpha is lifted off before it and merged on after, so the colour is
+     * exactly what `eq` has always produced and only the transparency changes.
+     * Measured at 1080x1920: about 0.03s per second of graded footage, paid
+     * only by a clip whose brightness, contrast or saturation is set.
+     */
+    if (eq) {
+      filters.push(`${head}${body ? `${body},` : ''}split[qa${i}][qb${i}]`)
+      filters.push(`[qa${i}]format=yuva420p,alphaextract[ql${i}]`)
+      filters.push(`[qb${i}]${eq}[qe${i}]`)
+      filters.push(`[qe${i}][ql${i}]alphamerge[qm${i}]`)
+      head = `[qm${i}]`
+      body = ''
+    }
+    body = [body, ...afterEq].filter((s) => s.length > 0).join(',')
     const lut = clip.color?.lut
     const hasLook = Boolean(lut?.file && lut.intensity > 0)
 
@@ -1153,7 +1200,10 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
       return `[${prefix}r${i}]`
     }
 
-    if (hasLook && gradeInline) {
+    // Not on an adjustment layer: its look runs on the tracks below (further
+    // down), and one built here too was left unconnected — ffmpeg refused the
+    // whole graph, so a Grade layer with a look could not export at all.
+    if (hasLook && gradeInline && !clip.adjustment) {
       filters.push(`${head}${body || 'null'}[gs${i}]`)
       head = applyLook(`[gs${i}]`, 'g')
       body = ''
@@ -1308,7 +1358,6 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
 
     const matteLabel = clip.matte ? matteLabels.get(clip.matte.clipId) : undefined
     const shapes = [
-      keyLabel,
       stickerLabel,
       matteLabel ?? null,
       mask?.mode === 'reveal' ? shapeLabel : null,

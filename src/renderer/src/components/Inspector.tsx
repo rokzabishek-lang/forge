@@ -28,6 +28,8 @@ import { maxTransitionFrames, transitionBase } from '@shared/timeline'
 import { LOUDNESS_TARGETS } from '@shared/render/loudness'
 import { LayoutPanel } from './LayoutPanel'
 import { MaskPanel } from './MaskPanel'
+import { KeyPanel } from './KeyPanel'
+import { isKeyable } from '@shared/render/chromaKey'
 import { CarouselPanel } from './CarouselPanel'
 import { PaperPanel } from './PaperPanel'
 import { SpeedPanel } from './SpeedPanel'
@@ -1016,6 +1018,9 @@ export function Inspector(): ReactNode {
                * "colour only inside" after moving them is the wrong order.
                */}
               <MaskPanel clip={clip} />
+
+              {/* Keyed before it is graded, so the key sits above the colour. */}
+              {isKeyable(clip, asset ?? undefined) && <KeyPanel clip={clip} />}
 
               <div className="space-y-1.5 border-t border-ink-850 pt-2">
                 <div className="flex items-center justify-between">

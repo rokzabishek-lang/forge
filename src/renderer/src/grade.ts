@@ -3,7 +3,7 @@ import { DEFAULT_COLOR, isNeutralGrade } from '@shared/timeline'
 import { isNeutralCurves, sampleCurves } from '@shared/render/colourCurve'
 import { parseCube, type CubeLut } from '@shared/render/cube'
 import { whiteBalanceGains } from '@shared/render/whiteBalance'
-import { keyChroma, saneKey, screenOf, type ChromaKey } from '@shared/render/chromaKey'
+import { PIXEL_U, PIXEL_V, keyChroma, saneKey, screenOf, type ChromaKey } from '@shared/render/chromaKey'
 import { mediaUrl } from './media'
 
 /**
@@ -30,6 +30,13 @@ void main() {
   vUv = vec2(aPos.x * 0.5 + 0.5, 0.5 - aPos.y * 0.5);
   gl_Position = vec4(aPos, 0.0, 1.0);
 }`
+
+/** A number as a GLSL float literal — `0` alone would be an int, and an error. */
+const glslFloat = (x: number): string => x.toFixed(6)
+
+/** One row of the shared chroma coefficients, as the shader's dot product. */
+const chromaRow = ([r, g, b]: readonly [number, number, number]): string =>
+  `128.0 + (${glslFloat(r)} * c.r + ${glslFloat(g)} * c.g + ${glslFloat(b)} * c.b)`
 
 const FRAGMENT = `#version 300 es
 precision highp float;
@@ -90,8 +97,8 @@ void main() {
       for (int xo = -1; xo <= 1; xo++) {
         vec3 c = texture(uImage, vUv + vec2(float(xo), float(yo)) * uTexel).rgb * 255.0;
         vec2 uv = vec2(
-          128.0 + (-0.1482 * c.r - 0.291 * c.g + 0.4392 * c.b),
-          128.0 + (0.4392 * c.r - 0.3678 * c.g - 0.0714 * c.b)
+          ${chromaRow(PIXEL_U)},
+          ${chromaRow(PIXEL_V)}
         );
         vec2 duv = uv - uKeyUv;
         d += sqrt(dot(duv, duv) / (255.0 * 255.0 * 2.0));

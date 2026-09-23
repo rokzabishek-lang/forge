@@ -1,12 +1,13 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg'
 import { buildRenderPlan } from '@shared/render/plan'
 import { emptyProject, type Clip, type MediaAsset, type Project } from '@shared/timeline'
+import { outputDir } from './output'
 
 /*
  * Adjustment layers.
@@ -148,6 +149,30 @@ describe('adjustment layers', () => {
     }).args.join(' ')
     expect(graph).toContain('[vmix]')
   })
+
+  it('renders with a look on it, at full strength and part strength', async () => {
+    /*
+     * The graph test below only ever READ the string, and the string was
+     * fine — but a copy of the look was also being built on the layer's own
+     * never-drawn picture and left unconnected, and ffmpeg refuses a graph
+     * with a loose end. A Grade layer with a look could not export at all.
+     */
+    const cube = join(dir, 'white.cube')
+    // Every colour to white: unmistakable in the mean.
+    await writeFile(cube, `LUT_3D_SIZE 2\n${'1 1 1\n'.repeat(8)}`)
+    const out = await outputDir('adjustment-look')
+    const plain = await render({ ...adjustedProject({}), clips: [clip('c-under', 'grey', 'v1')] })
+    for (const intensity of [1, 0.5]) {
+      const file = join(out, `look-${intensity}.mp4`)
+      await run(FFMPEG, buildRenderPlan({
+        project: adjustedProject({
+          color: { brightness: 0, contrast: 1, saturation: 1, lut: { file: cube, intensity } }
+        }),
+        outputPath: file
+      }).args, { maxBuffer: 32 * 1024 * 1024 })
+      expect(await meanAt(file, 1), `intensity ${intensity}`).toBeGreaterThan((await meanAt(plain, 1)) + 30)
+    }
+  }, 120_000)
 
   it('carries a LUT as well as the sliders', () => {
     const graph = buildRenderPlan({

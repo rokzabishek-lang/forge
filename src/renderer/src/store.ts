@@ -18,6 +18,7 @@ import type {
 } from '@shared/timeline'
 import { DEFAULT_COLOR, DEFAULT_TEXT, clipCoversFrame } from '@shared/timeline'
 import type { Mask, MaskShape } from '@shared/render/mask'
+import { saneKey, type ChromaKey } from '@shared/render/chromaKey'
 import { clipSpeed, maxDurationAtSpeed, withClipSpeed } from '@shared/render/speed'
 import type { VoiceId } from '@shared/render/voice'
 import { clampGain } from '@shared/render/audibility'
@@ -180,7 +181,7 @@ import type { Transcript } from '@shared/transcript'
 export { ASPECTS, aspectOf, type AspectKey } from '@shared/render/aspect'
 
 /** What dragging on the preview does. */
-export type PreviewTool = 'select' | 'crop' | 'mask'
+export type PreviewTool = 'select' | 'crop' | 'mask' | 'key'
 
 /** Where material comes from. Only `upload` is built; see SourceBar. */
 export type SourceMode = 'upload' | 'youtube' | 'narration'
@@ -601,6 +602,11 @@ interface EditorState {
     options: Partial<Omit<PipOptions, 'canvas'>> & { radius?: number }
   ) => void
   setMask: (clipId: string, mask: Mask | undefined) => void
+  /**
+   * Key this clip's screen out, change the key, or (undefined) take it off.
+   * One history entry, whatever changed.
+   */
+  setKey: (clipId: string, key: ChromaKey | undefined) => void
   /** Change part of a mask's shape without restating the rest of it. */
   setMaskShape: (clipId: string, patch: Partial<MaskShape>) => void
   /** Open the file dialog and put the chosen .cube on this clip. */
@@ -3268,6 +3274,20 @@ export const useEditor = create<EditorState>((set, get) => ({
     get().update((p) => ({
       ...p,
       clips: p.clips.map((c) => (c.id === clipId ? { ...c, mask } : c))
+    }))
+  },
+
+  setKey: (clipId, key) => {
+    get().update((p) => ({
+      ...p,
+      clips: p.clips.map((c) => {
+        if (c.id !== clipId) return c
+        if (key) return { ...c, key: saneKey(key) }
+        // Off means gone, not a key at zero: a stored key nobody sees would
+        // still cost a split and a chromakey on every frame of the export.
+        const { key: _off, ...rest } = c
+        return rest
+      })
     }))
   },
 

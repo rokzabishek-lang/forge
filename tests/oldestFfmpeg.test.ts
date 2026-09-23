@@ -166,6 +166,23 @@ const SHAPES: { name: string; project: Project; range?: { start: number; end: nu
     })
   },
   {
+    // B3's chroma key with everything that meets it: despill, a graded `eq`
+    // (wrapped to keep alpha), a turn and a keyframed fade (geq's alpha()).
+    // chromakey is 2015 and despill 2017; the Windows CI renders prove it.
+    name: 'a keyed, graded, turned clip with a keyframed fade',
+    project: project({
+      clips: [
+        clip({
+          id: 'a',
+          key: { color: '#00b140', similarity: 0.12, blend: 0.08, despill: 0.6 },
+          color: { brightness: 0.1, contrast: 1.1, saturation: 1.2 },
+          transform: { x: 0, y: 0, scale: 0.9, rotation: 10, opacity: 1 },
+          keyframes: { opacity: [{ frame: 0, value: 0 }, { frame: 30, value: 1 }] } as Clip['keyframes']
+        })
+      ]
+    })
+  },
+  {
     // B2's range export trims the finished picture and the finished mix; the
     // branch only exists with a range, so without this shape nothing checks it.
     name: 'a range export, so the picture and the mix are trimmed',

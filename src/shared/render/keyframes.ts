@@ -99,6 +99,45 @@ export function valueAtAxis(property: KeyedProperty, position: number): number {
   return min + p * (max - min)
 }
 
+/** The smallest stretch of value the curve graph shows, for the two it fits. */
+export const GRAPH_LEAST_SPAN: Partial<Record<KeyedProperty, number>> = { zoom: 0.5, rotation: 30 }
+
+/**
+ * The stretch of a property's axis the curve graph shows, as axis positions.
+ *
+ * Zoom runs to 4× and rotation to half a turn either way, so drawn over their
+ * whole range an ordinary push-in from 1× to 1.3× — or a 10° tilt — was a line
+ * along the floor of the graph, too flat to read and too close to the edge to
+ * grab. For those two the graph fits a window round the keys and the neutral
+ * value, never narrower than `GRAPH_LEAST_SPAN`, with a fifth of it spare
+ * above and below to drag into. Opacity and volume keep their whole range:
+ * opacity's IS the useful range, and volume's has to match the fader and the
+ * clip's level line height for height.
+ */
+export function graphWindow(property: KeyedProperty, keys: Keyframe[]): { lo: number; hi: number } {
+  const least = GRAPH_LEAST_SPAN[property]
+  if (least === undefined) return { lo: 0, hi: 1 }
+  const { min, max, neutral } = PROPERTY_INFO[property]
+  const values = [neutral, ...keys.map((k) => k.value)].filter((v) => Number.isFinite(v))
+  const low = Math.max(min, Math.min(...values))
+  const high = Math.min(max, Math.max(...values))
+  const span = Math.max(high - low, least)
+  const centre = (low + high) / 2
+  let a = centre - span * 0.7
+  let b = centre + span * 0.7
+  // Slid back inside the property's range rather than cut short, so the
+  // window keeps its size against a limit — zoom cannot go under 1×.
+  if (a < min) {
+    b += min - a
+    a = min
+  }
+  if (b > max) {
+    a -= b - max
+    b = max
+  }
+  return { lo: axisPosition(property, Math.max(min, a)), hi: axisPosition(property, b) }
+}
+
 /** A keyed value the way its control reads — volume in dB, as the fader does. */
 export function formatKeyed(property: KeyedProperty, value: number): string {
   if (property === 'volume') return formatDb(value)

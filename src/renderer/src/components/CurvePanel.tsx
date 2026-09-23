@@ -52,9 +52,18 @@ export function CurvePanel(): ReactNode {
             {key}
           </button>
         ))}
-        <div className="ml-auto flex gap-0.5">
-          {kind === 'motion' &&
-            KEYED_PROPERTIES.map((key) => {
+      </div>
+
+      {/*
+        The properties on a row of their own.
+
+        They shared the header with Motion and Colour and were pushed off its
+        right edge at an ordinary window width — Opacity and Volume were
+        simply not there to click. On their own row all four always fit.
+      */}
+      {kind === 'motion' && (
+        <div className="flex shrink-0 flex-wrap gap-0.5 border-b border-ink-850 px-2 py-1">
+          {KEYED_PROPERTIES.map((key) => {
             const has = (clip?.keyframes?.[key]?.length ?? 0) > 0
             return (
               <button
@@ -75,11 +84,11 @@ export function CurvePanel(): ReactNode {
                 {/* A dot rather than a count: which properties move is the
                     question, not how many keys each has. */}
                 {has && <span className="ml-1 text-flame-500">•</span>}
-                </button>
-              )
-            })}
+              </button>
+            )
+          })}
         </div>
-      </div>
+      )}
 
       <div className="min-h-0 flex-1 overflow-y-auto p-2">
         {!clip ? (

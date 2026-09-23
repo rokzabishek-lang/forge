@@ -753,8 +753,10 @@ describe('the sites the review found now ask the shared rules', () => {
 
   it('the curve editor and the keyframe row take their heights from the shared scale', () => {
     const editor = source('src/renderer/src/components/CurveEditor.tsx')
-    expect(editor).toContain('HEIGHT - axisPosition(property, value) * HEIGHT')
-    expect(editor).toContain('valueAtAxis(property, 1 - (e.clientY - box.top) / box.height)')
+    // Through the window the graph shows (keyframes.ts graphWindow), which is
+    // itself a stretch of the same shared scale.
+    expect(editor).toContain('(1 - (axisPosition(property, value) - view.lo) / viewSpan) * plotH')
+    expect(editor).toContain('value: valueAtAxis(property, view.lo + height * viewSpan)')
     // No second, private scale left behind to drift from the shared one.
     expect(editor).not.toMatch(/info\.(min|max)/)
     const row = source('src/renderer/src/components/Keyframes.tsx')

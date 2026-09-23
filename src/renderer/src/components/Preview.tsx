@@ -32,6 +32,7 @@ import { audioRole, clampGain, clipLevelAt, isAudible } from '@shared/render/aud
 import { NO_SCRUB, SCRUB_BURST_MS, scrubStep, type ScrubState } from '@shared/render/scrub'
 import { motionSourceRect } from '@shared/render/motion'
 import { effectiveCrop } from '@shared/render/crop'
+import { pickRegion, pickedColor, saneKey } from '@shared/render/chromaKey'
 import { clipBox, parallaxBakeFor, planeShare } from '@shared/render/plan'
 import { pathAt } from '@shared/render/path'
 import { clockStep, needsReanchor, type ClockAnchor } from '@shared/render/clock'
@@ -313,6 +314,8 @@ export function Preview(): ReactNode {
   const showThirds = useEditor((s) => s.showThirds)
   const showSafe = useEditor((s) => s.showSafe)
   const previewTool = useEditor((s) => s.previewTool)
+  const setPreviewTool = useEditor((s) => s.setPreviewTool)
+  const setKey = useEditor((s) => s.setKey)
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const boxRef = useRef<HTMLDivElement | null>(null)
@@ -1130,7 +1133,22 @@ export function Preview(): ReactNode {
       height: box.height
     }
 
-    const top = layers[layers.length - 1] ?? null
+    /*
+     * Picking a key colour: the clip alone, as it arrived.
+     *
+     * No key, no grade, no mask, nothing over it and nothing faded — the pick
+     * reads the pixel under the click off this canvas, so what is drawn here
+     * has to be the colour ffmpeg's key will actually be measuring. A key
+     * picked through its own key would be picking from the hole it made.
+     */
+    const pickLayer =
+      previewTool === 'key'
+        ? layers.find((l) => l.clip.id === selectedClipId && l.clip.key) ?? null
+        : null
+    const raw = pickLayer !== null
+    const drawn = pickLayer ? [pickLayer] : layers
+
+    const top = drawn[drawn.length - 1] ?? null
     const naturalW = top?.asset.width ?? 16
     const naturalH = top?.asset.height ?? 9
 
@@ -1261,7 +1279,9 @@ export function Preview(): ReactNode {
     }
 
     const picture = (layer: Layer): CanvasImageSource =>
-      gradedSource(sourceFor(layer), layer.clip.color, layer.clip.id, repaint, layer.clip.key)
+      raw
+        ? sourceFor(layer)
+        : gradedSource(sourceFor(layer), layer.clip.color, layer.clip.id, repaint, layer.clip.key)
 
     let sourceFit: ViewTransform = { scale: 1, offsetX: 0, offsetY: 0 }
 
@@ -1275,14 +1295,14 @@ export function Preview(): ReactNode {
       const fit = fitTransform(naturalW, naturalH, leftBox.width, leftBox.height)
       sourceFit = { ...fit, offsetX: fit.offsetX + leftBox.x, offsetY: fit.offsetY + leftBox.y }
 
-      for (const layer of layers) {
+      for (const layer of drawn) {
         if (!ready(layer)) continue
         const w = layer.asset.width ?? naturalW
         const h = layer.asset.height ?? naturalH
         const layerFit = fitTransform(w, h, leftBox.width, leftBox.height)
         // The source viewport shows the whole frame as it is being blended in;
         // where it lands and how tight it is are the output's business.
-        ctx.globalAlpha = layer.transition.alpha
+        ctx.globalAlpha = raw ? 1 : layer.transition.alpha
         ctx.drawImage(
           picture(layer),
           leftBox.x + layerFit.offsetX,
@@ -1335,6 +1355,7 @@ export function Preview(): ReactNode {
       const pendingGrades = project.clips
         .filter(
           (c) =>
+            !raw &&
             c.adjustment &&
             playhead >= c.start &&
             playhead < clipEnd(c) &&
@@ -1349,7 +1370,7 @@ export function Preview(): ReactNode {
         }
       }
 
-      for (const layer of layers) {
+      for (const layer of drawn) {
         flushGradesBelow(trackOrder.get(layer.clip.trackId) ?? 0)
         const w = layer.asset.width ?? naturalW
         const h = layer.asset.height ?? naturalH
@@ -1393,7 +1414,7 @@ export function Preview(): ReactNode {
          */
         const pending = layer.wipe !== undefined && !elementReady(layer.wipe.mask)
         const blend = pending ? layer.wipe!.progress : layer.transition.alpha
-        ctx.globalAlpha = blend * boxOf.opacity * layer.keyed.opacity
+        ctx.globalAlpha = raw ? 1 : blend * boxOf.opacity * layer.keyed.opacity
 
         // A transition offsets the clip from where it rests — the same number
         // the renderer adds to the box inside its overlay expression.
@@ -1433,7 +1454,9 @@ export function Preview(): ReactNode {
               planeShare(motion, motion.amount, plane.depth)
             )
             ctx.drawImage(
-              gradedSource(plane.element, layer.clip.color, `${layer.clip.id}:p${index}`, repaint, layer.clip.key),
+              raw
+                ? plane.element
+                : gradedSource(plane.element, layer.clip.color, `${layer.clip.id}:p${index}`, repaint, layer.clip.key),
               region.x + rect.sx, region.y + rect.sy, rect.sw, rect.sh,
               ...destination
             )
@@ -1522,7 +1545,9 @@ export function Preview(): ReactNode {
          * the word changes the hole in the picture immediately — which is the
          * entire point of the feature — rather than after a file is written.
          */
-        const matteShape = layer.matteClip?.text
+        const matteShape = raw
+          ? null
+          : layer.matteClip?.text
           ? textPreviewCanvas(
               layer.matteClip.id,
               layer.matteClip.text,
@@ -1557,7 +1582,7 @@ export function Preview(): ReactNode {
          * the source element, would put the shape in the wrong place for every
          * clip that is cropped or scaled.
          */
-        const mask = layer.clip.mask
+        const mask = raw ? undefined : layer.clip.mask
         // Grade mode needs the PLAIN picture underneath; if `picture` were the
         // background, everything would already be graded and "only inside"
         // would show nothing at all.
@@ -1590,7 +1615,7 @@ export function Preview(): ReactNode {
          */
         const finished = masked ?? shaped
         const wiped =
-          layer.wipe && !pending
+          layer.wipe && !pending && !raw
             ? wipedSource(
                 `${layer.clip.id}#wipe`,
                 finished ?? picture(layer),
@@ -1653,7 +1678,7 @@ export function Preview(): ReactNode {
 
       // Captions are drawn here rather than only at export: judging a style by
       // rendering a video first is an unusable feedback loop.
-      if (project.captions.enabled) {
+      if (project.captions.enabled && !raw) {
         /*
          * The caption's source clip, chosen the way the EXPORT chooses it.
          *
@@ -1704,6 +1729,8 @@ export function Preview(): ReactNode {
     showThirds,
     showSafe,
     previewTool,
+    // Picking draws the selected clip alone, so which clip that is matters.
+    selectedClipId,
     repaint
   ])
 
@@ -1847,6 +1874,8 @@ export function Preview(): ReactNode {
   // The mask tool needs no layer under the pointer and no split view — the
   // shape belongs to the selected clip wherever its pixels happen to be.
   const showMask = previewTool === 'mask' && selectedClip?.mask !== undefined
+  // Picking a key colour: the click samples the picture, so nothing else may take it.
+  const pickingKey = previewTool === 'key' && selectedClip?.key !== undefined
 
   /*
    * No `splitRatio` condition — that was the bug.
@@ -1926,7 +1955,7 @@ export function Preview(): ReactNode {
         )}
 
         {/* Move, scale and rotate anything else where you can see it. */}
-        {selectedBoxClip && outputRect && !showCrop && !showMask && (
+        {selectedBoxClip && outputRect && !showCrop && !showMask && !pickingKey && (
           <TransformOverlay
             clip={selectedBoxClip}
             frame={outputRect}
@@ -1945,6 +1974,21 @@ export function Preview(): ReactNode {
             mask={selectedClip.mask}
             frame={outputRect}
             canvas={ASPECTS[aspect]}
+          />
+        )}
+
+        {pickingKey && selectedClip && (
+          <KeyPickOverlay
+            canvasRef={canvasRef}
+            onPick={(color) => {
+              if (!color) {
+                notify('Click on the screen itself', 'info')
+                return
+              }
+              setKey(selectedClip.id, { ...saneKey(selectedClip.key), color })
+              setPreviewTool('select')
+            }}
+            onCancel={() => setPreviewTool('select')}
           />
         )}
 
@@ -2023,6 +2067,65 @@ export function Preview(): ReactNode {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+/**
+ * The screen-colour pick: a click on the picture, read off the canvas.
+ *
+ * The canvas is drawing the clip raw while this is up (see `pickLayer` in the
+ * draw loop), so the pixels under the pointer are the clip's own. A few of them
+ * are averaged — a screen is never one colour, and a key taken from one pixel
+ * is a key taken from that pixel's noise.
+ */
+function KeyPickOverlay({
+  canvasRef,
+  onPick,
+  onCancel
+}: {
+  canvasRef: React.RefObject<HTMLCanvasElement | null>
+  onPick: (color: string | null) => void
+  onCancel: () => void
+}): ReactNode {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key !== 'Escape') return
+      // Handled here: the shortcut layer would otherwise deselect the clip too.
+      e.preventDefault()
+      e.stopPropagation()
+      onCancel()
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [onCancel])
+
+  return (
+    <div
+      className="absolute inset-0 z-20 cursor-crosshair"
+      title="Click the screen colour · Esc to cancel"
+      onPointerDown={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        const canvas = canvasRef.current
+        const ctx = canvas?.getContext('2d')
+        if (!canvas || !ctx) return
+        const bounds = canvas.getBoundingClientRect()
+        if (bounds.width === 0 || bounds.height === 0) return
+        const region = pickRegion(
+          ((e.clientX - bounds.left) / bounds.width) * canvas.width,
+          ((e.clientY - bounds.top) / bounds.height) * canvas.height,
+          canvas.width,
+          canvas.height
+        )
+        if (!region) return
+        const { data } = ctx.getImageData(region.x, region.y, region.width, region.height)
+        onPick(pickedColor(data))
+      }}
+    >
+      <span className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-full border border-ink-700 bg-ink-900/95 px-3 py-1 text-[11px] text-ink-200 shadow-lg">
+        Click the screen colour — <span className="text-ink-500">Esc to cancel</span>
+      </span>
     </div>
   )
 }

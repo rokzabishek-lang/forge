@@ -1,8 +1,9 @@
-import { useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import {
   PROPERTY_INFO,
   axisPosition,
   formatKeyed,
+  graphWindow,
   normaliseKeys,
   valueAt,
   valueAtAxis,
@@ -25,6 +26,15 @@ import { keysFromStroke, type Sample } from '@shared/render/curve'
  */
 
 const HEIGHT = 74
+/**
+ * Room round the plot, in pixels.
+ *
+ * A key at the clip's first frame, or at the top or bottom of the window, sat
+ * ON the edge of the box, and the box clips: half the point was cut away and
+ * the half that was left was a sliver to aim at. Inset by more than a point's
+ * half-width, every key is whole and grabbable.
+ */
+const PAD = 7
 /** Below this a press is a click on a point, above it a deliberate drag. */
 const GRAB_RADIUS = 9
 
@@ -45,6 +55,30 @@ export function CurveEditor({
   onScrub: (frame: number) => void
 }): ReactNode {
   const boxRef = useRef<HTMLDivElement | null>(null)
+  /*
+   * The box's real width, kept current.
+   *
+   * Read off the ref during render it was 240 on the first paint and then
+   * whatever the box was when something else happened to re-render — so the
+   * drawing's coordinates and the pointer's could disagree after a resize.
+   */
+  const [width, setWidth] = useState(240)
+  useEffect(() => {
+    const box = boxRef.current
+    if (!box) return
+    const observer = new ResizeObserver(() => setWidth(Math.max(1, box.clientWidth)))
+    observer.observe(box)
+    setWidth(Math.max(1, box.clientWidth))
+    return () => observer.disconnect()
+  }, [])
+  /*
+   * The window, held still while a point is dragged or a line drawn.
+   *
+   * It is fitted to the keys (graphWindow), so it would otherwise refit under
+   * the pointer on every move and the point would run away from the hand.
+   * It settles to the new keys when the button comes up.
+   */
+  const [frozen, setFrozen] = useState<{ lo: number; hi: number } | null>(null)
   const [drawing, setDrawing] = useState(false)
   const [pencil, setPencil] = useState(false)
   /** The stroke in progress, so the line follows the hand at screen rate. */
@@ -54,21 +88,35 @@ export function CurveEditor({
   const info = PROPERTY_INFO[property]
   const span = Math.max(1, durationFrames)
   const points = normaliseKeys(keys, durationFrames)
+  const view = frozen ?? graphWindow(property, points)
+  const viewSpan = Math.max(1e-6, view.hi - view.lo)
+  const plotW = Math.max(1, width - 2 * PAD)
+  const plotH = HEIGHT - 2 * PAD
 
   /*
    * Heights come from the property's own scale — volume on the fader's dB
-   * curve — so a level is at the same height here as on the clip.
+   * curve — so a level is at the same height here as on the clip; zoom and
+   * rotation show the window of it their keys are in.
    */
-  const toX = (frame: number, width: number): number => (frame / span) * width
-  const toY = (value: number): number => HEIGHT - axisPosition(property, value) * HEIGHT
+  const toX = (frame: number): number => PAD + (frame / span) * plotW
+  const toY = (value: number): number =>
+    PAD + (1 - (axisPosition(property, value) - view.lo) / viewSpan) * plotH
 
+  /**
+   * The frame and value under the pointer.
+   *
+   * Height is NOT clamped to the box: a point dragged up past the top keeps
+   * rising, and the window refits round it when it is let go. Clamping would
+   * pin every drag to the window it started in.
+   */
   const fromEvent = (e: { clientX: number; clientY: number }): Sample | null => {
     const box = boxRef.current?.getBoundingClientRect()
     if (!box || box.width < 1) return null
-    const frame = ((e.clientX - box.left) / box.width) * span
+    const frame = ((e.clientX - box.left - PAD) / Math.max(1, box.width - 2 * PAD)) * span
+    const height = 1 - (e.clientY - box.top - PAD) / Math.max(1, box.height - 2 * PAD)
     return {
       frame: Math.max(0, Math.min(span, frame)),
-      value: valueAtAxis(property, 1 - (e.clientY - box.top) / box.height)
+      value: valueAtAxis(property, view.lo + height * viewSpan)
     }
   }
 
@@ -86,23 +134,22 @@ export function CurveEditor({
     ).map((k) => ({ ...k, value: valueAtAxis(property, k.value) }))
 
   /** The curve as a polyline, sampled densely enough to show the easing. */
-  const outline = (width: number): string => {
-    const steps = Math.max(24, Math.min(160, Math.round(width)))
+  const outline = (): string => {
+    const steps = Math.max(24, Math.min(160, Math.round(plotW)))
     const shown = stroke ? fromStroke(stroke) : points
     return Array.from({ length: steps + 1 }, (_, i) => {
       const frame = (i / steps) * span
-      return `${toX(frame, width).toFixed(1)},${toY(
+      return `${toX(frame).toFixed(1)},${toY(
         valueAt(shown, frame, durationFrames, info.neutral)
       ).toFixed(1)}`
     }).join(' ')
   }
 
-  const width = boxRef.current?.clientWidth ?? 240
-
   const startDraw = (e: ReactPointerEvent): void => {
     const first = fromEvent(e)
     if (!first) return
     e.preventDefault()
+    setFrozen(view)
     setDrawing(true)
     strokeRef.current = [first]
     setStrokeView([first])
@@ -118,6 +165,7 @@ export function CurveEditor({
       window.removeEventListener('pointerup', up)
       window.removeEventListener('pointercancel', up)
       setDrawing(false)
+      setFrozen(null)
       const drawn = strokeRef.current
       setStrokeView(null)
       strokeRef.current = []
@@ -132,6 +180,7 @@ export function CurveEditor({
   const startDragPoint = (index: number) => (e: ReactPointerEvent): void => {
     e.preventDefault()
     e.stopPropagation()
+    setFrozen(view)
     const move = (ev: PointerEvent): void => {
       const sample = fromEvent(ev)
       if (!sample) return
@@ -144,6 +193,7 @@ export function CurveEditor({
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
       window.removeEventListener('pointercancel', up)
+      setFrozen(null)
     }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
@@ -158,9 +208,7 @@ export function CurveEditor({
     }
     const sample = fromEvent(e)
     if (!sample) return
-    const near = points.some(
-      (k) => Math.abs(toX(k.frame, width) - toX(sample.frame, width)) < GRAB_RADIUS
-    )
+    const near = points.some((k) => Math.abs(toX(k.frame) - toX(sample.frame)) < GRAB_RADIUS)
     if (near) {
       onScrub(Math.round(sample.frame))
       return
@@ -223,15 +271,15 @@ export function CurveEditor({
         >
           {/* The neutral value, so "no change" is visible rather than implied. */}
           <line
-            x1={0}
-            x2={width}
+            x1={PAD}
+            x2={width - PAD}
             y1={toY(info.neutral)}
             y2={toY(info.neutral)}
             stroke="rgba(255,255,255,0.10)"
             strokeDasharray="3 3"
           />
           <polyline
-            points={outline(width)}
+            points={outline()}
             fill="none"
             stroke={drawing ? 'rgb(249,115,65)' : 'rgba(249,115,65,0.85)'}
             strokeWidth={1.5}
@@ -239,8 +287,8 @@ export function CurveEditor({
           />
           {playheadInside && (
             <line
-              x1={toX(playheadFrame, width)}
-              x2={toX(playheadFrame, width)}
+              x1={toX(playheadFrame)}
+              x2={toX(playheadFrame)}
               y1={0}
               y2={HEIGHT}
               stroke="rgba(255,255,255,0.45)"
@@ -260,7 +308,7 @@ export function CurveEditor({
               }
               title={`Frame ${key.frame} · ${formatKeyed(property, key.value)} — drag to move, double-click to remove`}
               style={{
-                left: `${(key.frame / span) * 100}%`,
+                left: toX(key.frame),
                 top: toY(key.value),
                 transform: 'translate(-50%, -50%) rotate(45deg)'
               }}
@@ -269,9 +317,19 @@ export function CurveEditor({
           ))}
       </div>
 
-      <div className="flex justify-between text-[9px] text-ink-700">
-        <span>{formatKeyed(property, valueAtAxis(property, 0))} · start</span>
-        <span>{formatKeyed(property, valueAtAxis(property, 1))} · end</span>
+      {/*
+        Time along the bottom, and what the graph's height spans in the middle.
+        The two ends used to read "1.00× · start" and "4.00× · end" — the axis
+        limits, printed where they looked like the values at the clip's start
+        and end.
+      */}
+      <div className="flex justify-between gap-2 px-[7px] text-[9px] text-ink-700">
+        <span>clip start</span>
+        <span className="text-ink-600" title="The height of the graph runs from the bottom value to the top one">
+          {formatKeyed(property, valueAtAxis(property, view.lo))} –{' '}
+          {formatKeyed(property, valueAtAxis(property, view.hi))}
+        </span>
+        <span>clip end</span>
       </div>
     </div>
   )

@@ -26,6 +26,8 @@
  * between the two — the export is the one to trust, and both use these numbers.
  */
 
+import type { Clip, MediaAsset } from '../timeline'
+
 export interface ChromaKey {
   /** The screen colour, `#rrggbb`. */
   color: string
@@ -65,10 +67,19 @@ export function keyChroma(color: string): [number, number] {
   return [u, v]
 }
 
+/**
+ * BT.601 limited-range chroma, per RGB channel — swscale's conversion, measured.
+ *
+ * One copy: `pixelChroma` reads these and so does the preview's shader, which
+ * has them written into its source rather than typed out a second time.
+ */
+export const PIXEL_U: readonly [number, number, number] = [-0.1482, -0.291, 0.4392]
+export const PIXEL_V: readonly [number, number, number] = [0.4392, -0.3678, -0.0714]
+
 /** A pixel's chroma the way a picture that arrived as RGB carries it: BT.601 limited range. */
 export function pixelChroma(r: number, g: number, b: number): [number, number] {
-  const u = 128 + (-0.1482 * r - 0.291 * g + 0.4392 * b)
-  const v = 128 + (0.4392 * r - 0.3678 * g - 0.0714 * b)
+  const u = 128 + (PIXEL_U[0] * r + PIXEL_U[1] * g + PIXEL_U[2] * b)
+  const v = 128 + (PIXEL_V[0] * r + PIXEL_V[1] * g + PIXEL_V[2] * b)
   return [Math.round(u), Math.round(v)]
 }
 
@@ -130,6 +141,68 @@ export function despillFilter(key: ChromaKey): string | null {
   const screen = screenOf(k.color)
   const amount = (-k.despill).toFixed(4)
   return `despill=type=${screen}:mix=0.5:expand=0:${screen}=${amount}`
+}
+
+/**
+ * Whether a clip is a picture that can be keyed.
+ *
+ * Footage and photographs. Not the things the app draws itself — a text card,
+ * a clipping, a solid — which have no screen behind them to take out, nor an
+ * adjustment layer, which has no picture of its own at all.
+ */
+export function isKeyable(
+  clip: Pick<Clip, 'adjustment' | 'text' | 'title' | 'paper' | 'carousel' | 'solid'>,
+  asset: Pick<MediaAsset, 'kind' | 'hasVideo'> | undefined
+): boolean {
+  if (clip.adjustment || clip.text || clip.title || clip.paper || clip.carousel || clip.solid) return false
+  return Boolean(asset && asset.hasVideo && (asset.kind === 'video' || asset.kind === 'image'))
+}
+
+/**
+ * The screen colour under a click: the average of the opaque pixels sampled.
+ *
+ * Averaged because a real screen is never one colour — it is lit unevenly and
+ * the camera adds noise — and a key taken from a single pixel is a key taken
+ * from that pixel's noise. `rgba` is canvas `getImageData` order. Pixels that
+ * are mostly see-through belong to whatever is behind the clip, so they do
+ * not count; with none left there is nothing to pick and the answer is null.
+ */
+export function pickedColor(rgba: ArrayLike<number>, minAlpha = 200): string | null {
+  let r = 0
+  let g = 0
+  let b = 0
+  let n = 0
+  for (let i = 0; i + 3 < rgba.length; i += 4) {
+    if (rgba[i + 3] < minAlpha) continue
+    r += rgba[i]
+    g += rgba[i + 1]
+    b += rgba[i + 2]
+    n++
+  }
+  if (n === 0) return null
+  const hex = (v: number): string => Math.round(v / n).toString(16).padStart(2, '0')
+  return `#${hex(r)}${hex(g)}${hex(b)}`
+}
+
+/**
+ * The square of pixels a pick averages, centred on the click and kept inside
+ * the picture — or null for a click that is not on it at all.
+ */
+export function pickRegion(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius = 3
+): { x: number; y: number; width: number; height: number } | null {
+  const cx = Math.floor(x)
+  const cy = Math.floor(y)
+  if (width < 1 || height < 1 || cx < 0 || cy < 0 || cx >= width || cy >= height) return null
+  const x0 = Math.max(0, cx - radius)
+  const y0 = Math.max(0, cy - radius)
+  const x1 = Math.min(width, cx + radius + 1)
+  const y1 = Math.min(height, cy + radius + 1)
+  return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 }
 }
 
 /** The same despill on one pixel, for the preview and the tests. */
