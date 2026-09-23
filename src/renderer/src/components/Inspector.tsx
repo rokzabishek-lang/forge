@@ -29,6 +29,8 @@ import { LOUDNESS_TARGETS } from '@shared/render/loudness'
 import { LayoutPanel } from './LayoutPanel'
 import { MaskPanel } from './MaskPanel'
 import { KeyPanel } from './KeyPanel'
+import { CameraPanel } from './CameraPanel'
+import { canMoveCamera } from '@shared/edit/camera'
 import { isKeyable } from '@shared/render/chromaKey'
 import { CarouselPanel } from './CarouselPanel'
 import { PaperPanel } from './PaperPanel'
@@ -931,6 +933,9 @@ export function Inspector(): ReactNode {
               */}
               {/* Speed belongs next to duration: it is the other way to change one. */}
               <SpeedPanel clip={clip} asset={asset} />
+
+              {/* A photo's camera move — where Speed would be, which a still has none of. */}
+              {canMoveCamera(clip, asset ?? undefined) && <CameraPanel clip={clip} />}
 
               {/* A run of clippings, for the clips that are one. */}
               {clip.paper && <PaperPanel clip={clip} />}

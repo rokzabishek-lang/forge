@@ -30,7 +30,7 @@ import { publishLevels } from '../levels'
 import { fadeGainAt, fadesWithNeighbours } from '@shared/render/audioFade'
 import { audioRole, clampGain, clipLevelAt, isAudible } from '@shared/render/audibility'
 import { NO_SCRUB, SCRUB_BURST_MS, scrubStep, type ScrubState } from '@shared/render/scrub'
-import { motionSourceRect } from '@shared/render/motion'
+import { motionSourceRect, moveAt } from '@shared/render/motion'
 import { effectiveCrop } from '@shared/render/crop'
 import { pickRegion, pickedColor, saneKey } from '@shared/render/chromaKey'
 import { maskAt } from '@shared/render/mask'
@@ -1032,8 +1032,8 @@ export function Preview(): ReactNode {
       return activeVideoClips(project, frame).map(({ clip, asset }) => {
         const element = elementFor(clip, asset)
         const into = frame - clip.start
-        const progress = clip.duration > 1 ? into / (clip.duration - 1) : 0
-        const elapsed = into / project.settings.fps
+        // Where in its camera move — a split clip is a window onto one move.
+        const { progress, seconds: elapsed } = moveAt(clip.motion ?? {}, clip.duration, into, project.settings.fps)
 
         const bake = parallaxBakeFor(project, clip)
         const planes = bake?.layers.map((layer) => ({

@@ -620,7 +620,26 @@ export type MotionMove =
   | 'panUp'
   | 'panDown'
 
-export type Motion =
+/**
+ * Which stretch of its move a clip shows, when the move is shared.
+ *
+ * A move runs across the clip it is on — progress 0 at the first frame, 1 at
+ * the last — which is what lets a photo's Ken Burns fit whatever length the
+ * photo is trimmed to. Split that clip and each half ran the WHOLE move: the
+ * slow push-in started again from wide on the far side of the cut, and a shake
+ * hit twice. A split now gives each half a window onto the one move instead —
+ * `length` frames long, this clip showing it from `from` — so the right half
+ * carries on where the left stopped. Absent means the whole move is this
+ * clip's, as it always was.
+ */
+export interface MotionWindow {
+  from: Frames
+  length: Frames
+}
+
+export type Motion = MotionKind & { window?: MotionWindow }
+
+type MotionKind =
   | { kind: 'kenburns'; direction: MotionMove; amount: number }
   /**
    * Oscillating offset at a held zoom — for impacts, not for whole shots.
@@ -1012,6 +1031,11 @@ export function rebaseAnimation(clip: Clip, delta: Frames): Pick<Clip, 'keyframe
   return out
 }
 
+/** The stretch of its move a clip shows — all of it unless a split said otherwise. */
+export function moveWindow(clip: Pick<Clip, 'motion' | 'duration'>): MotionWindow {
+  return clip.motion?.window ?? { from: 0, length: clip.duration }
+}
+
 export function splitClip(clip: Clip, frame: Frames): [Clip, Clip] | null {
   if (frame <= clip.start || frame >= clipEnd(clip)) return null
   const leftDuration = frame - clip.start
@@ -1028,7 +1052,11 @@ export function splitClip(clip: Clip, frame: Frames): [Clip, Clip] | null {
   const { fadeOut: _tail, ...leftBase } = clip
   const { fadeIn: _head, transitionIn: _incoming, ...rightBase } = clip
 
-  const left: Clip = { ...leftBase, duration: leftDuration }
+  const left: Clip = {
+    ...leftBase,
+    duration: leftDuration,
+    ...(clip.motion ? { motion: { ...clip.motion, window: moveWindow(clip) } } : {})
+  }
   const right: Clip = {
     ...rightBase,
     /*
@@ -1042,6 +1070,8 @@ export function splitClip(clip: Clip, frame: Frames): [Clip, Clip] | null {
      * frame (keyframes.ts normaliseKeys).
      */
     ...rebaseAnimation(clip, -leftDuration),
+    // One move across both halves, the right half carrying on (MotionWindow).
+    ...(clip.motion ? { motion: { ...clip.motion, window: { from: moveWindow(clip).from + leftDuration, length: moveWindow(clip).length } } } : {}),
     id: `${clip.id}-b`,
     start: frame,
     duration: clip.duration - leftDuration,
@@ -1085,6 +1115,14 @@ export function trimStart(clip: Clip, newStart: Frames): Clip {
     // The animation stays on the picture it was drawn against, the same way
     // the in-point keeps the source frame still. See `rebaseAnimation`.
     ...rebaseAnimation(clip, -limited),
+    /*
+     * A shared move keeps its place on the picture, like the keyframes: the
+     * head coming in means this clip starts further into it. An unshared move
+     * still fits the clip, whatever length it is trimmed to.
+     */
+    ...(clip.motion?.window
+      ? { motion: { ...clip.motion, window: { ...clip.motion.window, from: Math.max(0, clip.motion.window.from + limited) } } }
+      : {}),
     start: clip.start + limited,
     duration: clip.duration - limited,
     inPoint: clip.inPoint + Math.round(limited * rate)

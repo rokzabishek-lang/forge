@@ -10,6 +10,7 @@ import type {
   ColorAdjust,
   CropRect,
   MediaAsset,
+  Motion,
   ParallaxBake,
   PathPoint,
   Project,
@@ -17,6 +18,7 @@ import type {
   TextSpec
 } from '@shared/timeline'
 import { DEFAULT_COLOR, DEFAULT_TEXT, clipCoversFrame } from '@shared/timeline'
+import { withMotion, withoutMotionForZoom } from '@shared/edit/camera'
 import {
   withMaskAnimation,
   withMaskEdit,
@@ -310,6 +312,9 @@ function stackOverlay(
  * Dragging a slider over an existing key must not silently reset its easing —
  * the value is what changed, not the shape of the curve leaving it.
  */
+/** Said when zoom keys take a camera move off a clip. */
+const MOVE_TAKEN_OFF = 'Camera move taken off — zoom keys and a camera move both scale the picture'
+
 function keepEase(existing: Keyframe[], frame: number): { ease?: Ease } {
   const previous = existing.find((k) => k.frame === frame)
   return previous?.ease ? { ease: previous.ease } : {}
@@ -620,6 +625,11 @@ interface EditorState {
    * the shape is, at the playhead; off keeps what is on screen there.
    */
   animateMask: (clipId: string, on: boolean) => void
+  /**
+   * The clip's camera move, or none. Takes zoom keyframes off — a move and zoom
+   * keys both scale the picture (shared/edit/camera.ts) — and says so.
+   */
+  setMotion: (clipId: string, motion: Motion | undefined) => void
   /** Open the file dialog and put the chosen .cube on this clip. */
   chooseLut: (clipId: string) => Promise<void>
   /** How long a clip stays on screen, in frames. */
@@ -3061,10 +3071,16 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
 
   setKeyframe: (clipId, property, frame, value, ease) => {
+    let droppedMotion = false
     get().update((p) => ({
       ...p,
-      clips: p.clips.map((c) => {
-        if (c.id !== clipId) return c
+      clips: p.clips.map((original) => {
+        if (original.id !== clipId) return original
+        // Zoom keys and a camera move both scale the picture: the keys win here,
+        // in the same history entry (shared/edit/camera.ts).
+        const cleared = property === 'zoom' ? withoutMotionForZoom(original) : { clip: original, droppedMotion: false }
+        droppedMotion = cleared.droppedMotion
+        const c = cleared.clip
         const at = Math.max(0, Math.min(c.duration, Math.round(frame)))
         const existing = c.keyframes?.[property] ?? []
         // normaliseKeys keeps the later of two keys at one frame, so appending
@@ -3076,19 +3092,26 @@ export const useEditor = create<EditorState>((set, get) => ({
         return { ...c, keyframes: { ...c.keyframes, [property]: next } }
       })
     }))
+    if (droppedMotion) get().notify(MOVE_TAKEN_OFF, 'info')
   },
 
   setKeyframes: (clipId, property, keys) => {
+    let droppedMotion = false
     get().update((p) => ({
       ...p,
-      clips: p.clips.map((c) => {
-        if (c.id !== clipId) return c
+      clips: p.clips.map((original) => {
+        if (original.id !== clipId) return original
+        const cleared =
+          property === 'zoom' && keys.length > 0 ? withoutMotionForZoom(original) : { clip: original, droppedMotion: false }
+        droppedMotion = cleared.droppedMotion
+        const c = cleared.clip
         const next = normaliseKeys(keys, c.duration)
         const tracks = { ...c.keyframes, [property]: next }
         if (next.length === 0) delete tracks[property]
         return { ...c, keyframes: Object.keys(tracks).length > 0 ? tracks : undefined }
       })
     }))
+    if (droppedMotion) get().notify(MOVE_TAKEN_OFF, 'info')
   },
 
   removeKeyframe: (clipId, property, frame) => {
@@ -3331,6 +3354,20 @@ export const useEditor = create<EditorState>((set, get) => ({
         c.id === clipId ? withMaskEdit(c, patch, playhead - c.start) : c
       )
     }))
+  },
+
+  setMotion: (clipId, motion) => {
+    let dropped = false
+    get().update((p) => ({
+      ...p,
+      clips: p.clips.map((c) => {
+        if (c.id !== clipId) return c
+        const result = withMotion(c, motion)
+        dropped = result.droppedZoom
+        return result.clip
+      })
+    }))
+    if (dropped) get().notify('Zoom keyframes taken off — a camera move and zoom keys both scale the picture', 'info')
   },
 
   animateMask: (clipId, on) => {

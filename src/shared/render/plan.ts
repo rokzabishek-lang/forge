@@ -30,6 +30,7 @@ import {
   MOVES,
   anchoredAmount,
   clampAmount,
+  moveExpressions,
   planeAmount
 } from './motion'
 
@@ -227,7 +228,8 @@ function motionFilter(
   const amount = clampAmount(overrideAmount ?? motion.amount)
   const frames = Math.max(2, Math.round(durationFrames))
   // `on` is the output frame index, which is what makes the move linear in time.
-  const progress = `on/${frames - 1}`
+  // A split clip is a window onto one move, so it starts part-way in.
+  const { progress, seconds } = moveExpressions(motion, durationFrames, fps)
   const a = amount.toFixed(4)
 
   /*
@@ -276,7 +278,6 @@ function motionFilter(
     // never exposes an edge.
     const hz = Math.max(1, Math.min(30, motion.hz ?? DEFAULT_SHAKE_HZ))
     const decay = Math.max(0, motion.decay ?? DEFAULT_SHAKE_DECAY)
-    const seconds = `on/${fps}`
     // The same exponential settle the preview applies, written as an expression.
     const envelope = decay > 0 ? `exp(-(${seconds})/${decay.toFixed(4)})` : '1'
     const wobble = (phase: number): string =>

@@ -105,6 +105,38 @@ export function clampAmount(amount: number): number {
   return Math.max(0.01, Math.min(0.5, amount))
 }
 
+/**
+ * Where in its move a clip is, `into` frames after its own first frame.
+ *
+ * The one rule for the preview and the export: progress runs 0..1 across the
+ * move's whole length, and a clip that is a window onto a longer move (a
+ * split, timeline.ts MotionWindow) starts part-way in. `seconds` is the same
+ * position as time, which only a shake reads.
+ */
+export function moveAt(
+  motion: Pick<Motion, 'window'>,
+  durationFrames: number,
+  into: number,
+  fps: number
+): { progress: number; seconds: number } {
+  const from = motion.window?.from ?? 0
+  const length = motion.window?.length ?? durationFrames
+  const frame = from + into
+  return { progress: length > 1 ? frame / (length - 1) : 0, seconds: frame / Math.max(1, fps) }
+}
+
+/** `moveAt` as ffmpeg expressions of `on`, zoompan's output frame index. */
+export function moveExpressions(
+  motion: Pick<Motion, 'window'>,
+  durationFrames: number,
+  fps: number
+): { progress: string; seconds: string } {
+  const from = Math.round(motion.window?.from ?? 0)
+  const length = Math.max(2, Math.round(motion.window?.length ?? durationFrames))
+  const frame = from > 0 ? `(${from}+on)` : 'on'
+  return { progress: `${frame}/${length - 1}`, seconds: `${frame}/${fps}` }
+}
+
 export interface SourceRect {
   sx: number
   sy: number

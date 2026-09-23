@@ -83,6 +83,10 @@ export function convertFrameRate(project: Project, fps: number): Project {
       ) as Clip['keyframes']
     }
     if (clip.path) next.path = clip.path.map((p) => ({ ...p, frame: at(p.frame) }))
+    // A split move's window: where this clip starts in it, and how long it is.
+    if (clip.motion?.window) {
+      next.motion = { ...clip.motion, window: { from: at(clip.motion.window.from), length: len(clip.motion.window.length, 2) } }
+    }
     if (clip.paper) next.paper = { ...clip.paper, holdFrames: len(clip.paper.holdFrames, 1) }
     return next
   })
