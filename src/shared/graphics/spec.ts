@@ -5,7 +5,7 @@
  * clock or unseeded randomness: the export renders frame 431 in isolation, and it
  * must match exactly what the preview showed at frame 431. The moment rendering
  * depends on real time, export and preview diverge and the bug is miserable to
- * find. See docs/PLAN.md §3.
+ * find. See docs/research/architecture-plan-2026-09-11.md §3.
  */
 
 import type { TextSpec } from '../timeline'

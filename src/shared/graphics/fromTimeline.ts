@@ -11,7 +11,7 @@ import { captionTrack } from '../captions/timeline'
  *
  * Only the things ASS genuinely cannot draw end up here. Everything flat and
  * text-shaped stays on tier 1, where libass renders it during the normal encode
- * at no extra cost. See docs/PLAN.md §3b.
+ * at no extra cost. See docs/research/architecture-plan-2026-09-11.md §3b.
  */
 
 export interface GraphicsBuildOptions {

@@ -259,7 +259,7 @@ and the ceiling worth paying for.**
 
 The one exception: if you later fine-tune on your own edit decisions, small models gain the
 most from tuning, and a well-tuned 1B can beat a prompted 8B. Revisit size *after* you have
-the dataset (§ `PLAN.md`), never before.
+the dataset (`research/architecture-plan-2026-09-11.md` §5), never before.
 
 ### 10.2 Schema design — the rule that decides output quality
 

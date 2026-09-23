@@ -151,7 +151,7 @@ This does not exist off the shelf. It is open engineering risk #3.
    the fringe.
 
 **CPU 1080p matting is not interactive.** Preview with MODNet at low resolution; bake final
-with BiRefNet. This is the §2-of-PLAN.md "three speeds" split, made concrete.
+with BiRefNet. This is the §2 of `research/architecture-plan-2026-09-11.md` "three speeds" split, made concrete.
 
 ---
 

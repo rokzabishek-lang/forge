@@ -57,7 +57,7 @@ async function fontsFor(spec: GraphicsSpec): Promise<GraphicsFont[]> {
  * The passes stay separate on purpose. The base render is the well-tested tier-1
  * path and must keep working untouched; if the frame server fails, the failure
  * is isolated to the second pass and the first pass's output is still a valid
- * video. That is the tier-1-as-fallback property from docs/PLAN.md §3b, made
+ * video. That is the tier-1-as-fallback property from docs/research/architecture-plan-2026-09-11.md §3b, made
  * literal.
  */
 export function startTier2Render(

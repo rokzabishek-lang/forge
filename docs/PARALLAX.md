@@ -63,7 +63,7 @@ With planes, preview and render are **the same operation** — "show this
 rectangle of the source, scaled to the output" — so there is no class of bug
 where the export does not match what was on screen. That is worth more than the
 extra fidelity of a warp, and it lands the whole feature on **tier 1**: no
-Chromium pass, no neural net at render time. (See `PLAN.md` §3b — the tier is a
+Chromium pass, no neural net at render time. (See `research/architecture-plan-2026-09-11.md` §3b — the tier is a
 property of the request.)
 
 `shared/render/motion.ts` holds the move table and the arithmetic; the renderer

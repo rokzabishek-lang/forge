@@ -21,7 +21,8 @@ measurements and paper sketches that do not survive a new session.
 | `docs/WHERE-THINGS-ARE.md` | a map of the UI — read before adding a panel nobody can find |
 | `docs/LLM.md` | the LLM design — the plan schema, the passes, what was rejected and why, and what is built |
 | `docs/COMPARISON.md` | Forge against CapCut, Premiere, Resolve, Final Cut and the AI ad tools — every confirmed gap with its file:line, and what each runs on |
-| `docs/FIX.md` | the plan that closes those gaps, in order, with the Windows-floor risks named — then the Director eval, the dressing planner, templates and the market |
+| `docs/FIX.md` | the fix list that closed those gaps — Phases A and B, both DONE, each item with what was actually built — then the agreed summary of Phase C and the record of Phase D (folded into C) |
+| `docs/PLAN.md` | **the current plan: Phase C, the ad-maker** — recipes, eyes, the rhythm engine, sound design, the three.js moments engine — step by step with files, schemas, tests, render checks and an exit bar each. Read before building anything in C |
 | `docs/MARKET.md` | the later part: templates with slots, free packs, then a store — its prerequisites, rights rules, money and risks. Not current work |
 | `docs/STACK.md`, `docs/SIDECAR.md` | architecture and the optional Python capabilities |
 

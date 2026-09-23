@@ -6,7 +6,7 @@
 > detaches, colour has temperature and tint, there is a chroma key, camera
 > moves can be set by hand, the export has codecs, sizes, ranges and frame
 > rates — everything except mask *tracking*. Read FIX.md for what is current.
-> Three research agents on 2026-09-24 took rows from this table as current and
+> Three research agents on 2026-09-23 took rows from this table as current and
 > were wrong three times; the rows they tripped on are marked below. The market
 > side (the other products) is unchanged.
 

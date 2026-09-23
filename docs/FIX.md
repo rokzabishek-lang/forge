@@ -1,23 +1,24 @@
 # The fix list — from the audit to a finished editor
 
 `docs/COMPARISON.md` established what is missing, with a `file:line` for each
-claim. This is the plan to close it, in the order a user hits it, and then
-the two things that come after: measuring the Director on a real model, and
-the pass that dresses its spine. Written to be precise enough to start from
-cold on either machine.
+claim. This is the plan to close it, in the order a user hits it — Phases A
+and B, the editor — and then the ad-maker, Phase C. Written to be precise
+enough to start from cold on either machine.
 
-> **Status, 2026-09-24.** **Phases A and B are complete** — the editor is done;
-> the one piece left out on purpose is mask *tracking* (a later component),
-> and bugs found in real use come after. **Phase C is next, and Phase D now
-> lives inside it**: C is the ad-maker — measure the Director, give it eyes,
-> directing recipes, sound design, a three.js moments engine — and D's
-> dressing is C2 and C3. Phase E (templates and the market) follows.
+> **Status, 2026-09-23.** **Phases A and B are complete** (`b8173de`) — the
+> editor is done; the one piece left out on purpose is mask *tracking* (a
+> later component), and bugs found in real use come after. **Phase C is next,
+> and Phase D now lives inside it**: C is the ad-maker — measure the Director,
+> give it eyes, directing recipes, sound design, a three.js moments engine —
+> and D's dressing is C2 and C3. The section below is the agreed summary;
+> **the precise, step-by-step plan is `docs/PLAN.md`.** Phase E (templates and
+> the market) follows.
 
-**Three facts that shape every item below.**
+**Four facts that shape every item below.**
 
 1. **No fix here needs a new model.** One needs a new *component* — mask
-   tracking needs a tracker (OpenCV, a library, not a model) — and it is the
-   last item in its phase for that reason.
+   tracking needs a tracker (OpenCV, a library, not a model) — and it was
+   deferred out of Phase B for that reason.
 2. **Two ffmpegs.** Anything that emits a filter must be safe on the Windows
    build, a master snapshot from **2018-12-17** (`CLAUDE.md`). Filters named
    below carry their merge year; ones that need measuring on Windows say so.
@@ -42,12 +43,12 @@ cold on either machine.
 |---|---|---|---|---|---|
 | **A** | the editing surface — nine items a CapCut user hits in the first hour | ~9–12 | no | Web Audio (browser API) | none |
 | **B** | audio surface · export shape · colour, key, masks, motion, transcript | ~9–13 | no | OpenCV for mask tracking only | `libx265`/hardware encoders, `vidstab` — measure on Windows |
-| **C** | from a slideshow to a commercial: measure, eyes (the VLM + OpenCV), directing recipes and rhythm, sound design, a three.js moments engine | ~16–22 + ongoing | uses one (the VLM) | OpenCV checks; a sound pack; three.js already bundled | none for the moments engine — it bakes frames |
-| **D** | the dressing planner (pass 2) | ~3–4 (+ sticker index later) | uses one | bge-m3 embeddings for stickers, later | — |
+| **C** | from a slideshow to a commercial: measure, eyes (the VLM + objective checks), directing recipes and rhythm, sound design, a three.js moments engine — **D's dressing is inside it** | ~16–22 + ongoing | uses one (the VLM) | a sound pack; three.js already bundled | none for the moments engine — it bakes frames; every new ffmpeg filter is listed in `PLAN.md` with its merge year |
+| ~~**D**~~ | the dressing planner (pass 2) — **folded into C2 and C3**; kept below for the record | — | — | bge-m3 embeddings for stickers, later (Phase E) | — |
 | **E** | templates with slots; the market around them | design first | no | a server, later | — |
 
 Days are working estimates for one person who knows the codebase, not
-promises. A is deliberately before D: the Director's output lands on this
+promises. A was deliberately before C: the Director's output lands on this
 timeline, and a marketer judges the whole thing by whether they can then
 nudge three clips together.
 
@@ -484,16 +485,22 @@ were found that the list did not know about, three of them shipped:
 
 ## Phase B — the other three
 
-> **Where it stands (2026-09-23).** B1 is done (`55094a2`) and its adversarial
-> review is closed (see the end of B1). A split/trim fix found while planning
-> B2 is pushed (`c5eb1ea`) and mutation-checked. **B2 is done** (`7a849c9`,
-> frame rate after it) — codecs, quality, size, range, time left, frame rate;
-> see the end of B2. B3 is mapped, not started.
+> **Phase B is complete (2026-09-23).** B1 is done (`55094a2`) and its
+> adversarial review is closed (see the end of B1). A split/trim fix found
+> while planning B2 is pushed (`c5eb1ea`) and mutation-checked. **B2 is done**
+> (`7a849c9`, frame rate after it) — codecs, quality, size, range, time left,
+> frame rate; see the end of B2. **B3 is done** (`4261f66`, `c9da0a0`) — the
+> crop, white balance, chroma key, mask keyframes, camera moves, Steady and
+> transcript editing; mask *tracking* is the one item deferred, and it is
+> marked so below.
 >
-> Before building from the line numbers below, note the survey found them
-> stale in several places: the encoder tail is `plan.ts` ~1568, not 1509; the
-> export dialog `ipc.ts` ~998, not 989; the fps default `timeline.ts` ~709, not
-> 656; the dialogue gate `plan.ts` ~1444, not 1419.
+> The line numbers in the items below are the audit's and have drifted twice
+> since; the code they point at is found by name now: the encoder tail is the
+> one call to `encoderArgs(spec, …)` in `plan.ts`; the export dialog is the
+> `filters:` block in the save-dialog handler in `main/ipc.ts`; the fps
+> default is `DEFAULT_SETTINGS.fps` in `timeline.ts`; and the dialogue gate
+> is no longer in `plan.ts` at all — B1 moved it to `isAudible()` /
+> `audioRole()` in `render/audibility.ts`, which `plan.ts` calls.
 >
 > Facts found on the way that are not in the items:
 > - **Listing an encoder is not evidence it works.** `h264_videotoolbox` is in
@@ -625,7 +632,7 @@ against a green gate. One only after a test was added: releasing a take could
 leave its store subscription behind, inert but running on every store change,
 one more per take.
 
-### B2. Export has a shape: frame rate, size, codec, quality, hardware, range
+### B2. Export has a shape: frame rate, size, codec, quality, hardware, range — **DONE**
 
 **Where.** Encoder tail hardcoded at `plan.ts:1509-1516`; three canvases at
 `aspect.ts:9-13`; `fps: 30` written by nothing (`timeline.ts:656`); the save
@@ -774,7 +781,7 @@ Fifteen mutations over the three, all killed. The frame-rate conversion that
 followed: sixteen, fifteen killed — the survivor was a test of "never read past
 the file" whose clip never reached the end of its file; it does now.
 
-### B3. Colour, key, masks, motion, transcript
+### B3. Colour, key, masks, motion, transcript — **DONE** (mask tracking deferred)
 
 **First, the crop — DONE.** The survey found `Preview.tsx` drew the raw
 `clip.crop` while the export clamps it, so every B3 comparison would have been
@@ -881,11 +888,15 @@ real time for every masked second of a reel. Drawing the shape at a fraction
 of the size and scaling it up is the obvious saving (a feathered edge hides
 the scaling); not done yet, and it wants measuring on the Windows build.
 
-**Then tracking**, as the one new component: OpenCV CSRT in the sidecar
-(`opencv-python-headless`, BSD — a library, not a model) → `mask.track`
-returns per-frame boxes → written as mask keyframes the user can then edit.
-Per-frame boxes must be thinned before they are written (as `keysFromStroke`
-thins a drawn curve): every key is another `if` in the per-row curve.
+**Mask tracking — DEFERRED, not built.** The one new component of Phase B:
+OpenCV CSRT in the sidecar (`opencv-python-headless`, BSD — a library, not a
+model) → `mask.track` returns per-frame boxes → written as mask keyframes the
+user can then edit. Per-frame boxes must be thinned before they are written
+(as `keysFromStroke` thins a drawn curve): every key is another `if` in the
+per-row curve. Left out of B on purpose (the user's call, 2026-09-23): it is
+a component nothing else in B or C depends on, and it brings a ~40 MB
+dependency for one feature. It comes back after Phase C, or when real use asks
+for it.
 
 **Camera moves by hand — DONE.** The Inspector's **Camera** section, on photos
 only: a move is a `zoompan`, which holds each input frame for the whole move —
@@ -952,7 +963,11 @@ what is tested is that it arrives.
 
 ## Phase C — from a slideshow to a commercial
 
-Agreed with the user on 2026-09-24, from a research pass (workflow
+> This section is the agreed summary and the reasoning behind it. **The
+> step-by-step plan — files, schemas, tests, render checks, exit criteria per
+> step — is `docs/PLAN.md`.** Build from that; read this for why.
+
+Agreed with the user on 2026-09-23, from a research pass (workflow
 `wf_b3dbcdb3-7bb`: readers over the Director, the toolkit, the sheets, the
 signals and the models, a web sweep of how Apple, Nike, Puma spots, trailers
 and wedding films are cut, then two skeptics — one against the code and the
@@ -1051,37 +1066,45 @@ be shown: a handful of downscaled images is a few thousand tokens, not the
 ~45k a frame-a-second sampling costs. A **look pass** per photo, cached by the
 file so a retry never looks twice, answering from closed lists — who is in it
 (no one / one / a couple / a group), shot type (wide / medium / close /
-detail), mood, product visible, hero strength 1–5 — plus up to twelve words
+detail), mood, product visible, a hero bucket (weak / usable / strong — a
+filter, not a score; the hero is chosen by comparison) — plus up to twelve words
 of what is there, so the copy is about the picture. The spine then reads the
 looks: the model picks the hero from what it saw, and the recipe paces by
 shot type — wides early, close-ups toward the peak, holds on faces.
 
-**OpenCV and ffmpeg are the objective check, beside it.** Sharpness
-(Laplacian variance), exposure (`signalstats`, 2014, safe on both builds),
-orientation, duplicates (a perceptual hash), and for video, cut points
-(`select`'s scene score — `scdet` merged in 2020 and is not safe on the
-Windows build). Where the VLM and a measurement disagree, the measurement
-wins: a small VLM on a downscaled photo cannot see blur. They make a
-**quality gate**: a too-dark, too-soft or duplicate photo is never the hero,
-and the app says what it left out and why. Florence-2 keeps its own job —
-caption placement — and is not part of this.
+**The objective checks are beside it — the user's "small objective vision".**
+Sharpness (Laplacian variance), exposure (mean luma and clipped fraction),
+orientation, duplicates (a perceptual hash) — measured in the sidecar with
+the numpy and scipy already installed (`vision.measure`, `PLAN.md` §4.2), so
+no new dependency; `opencv-python-headless` arrives only with mask tracking,
+later. For video, cut points come from `select`'s scene score (`scdet`
+merged in 2020 and is not safe on the Windows build). Where the VLM and a
+measurement disagree, the measurement wins: a small VLM on a downscaled photo
+cannot see blur. They make a **quality gate**: a too-dark, too-soft or
+duplicate photo is never a hero candidate, and the app says what it left out
+and why. The hero itself is chosen by the spine call with every photo's look
+in view — a comparison, not a rating (`PLAN.md` §4.3). Florence-2 keeps its
+own job — caption placement — and is not part of this.
 
-### C2. Recipes and the rhythm engine — 4–5 days
+### C2. Recipes and the rhythm engine — 5–6 days
 
-Plan format v2: the recipe, the hero, and per shot a choice from short lists —
-a move *including hold still*, a speed (normal / slow on the hero / a ramp
-preset), a text style from a curated shortlist per recipe — and one look for
-the whole ad. The rhythm engine realises the recipe from the beat menu: the
-accelerating curve, holds stolen from neighbours for the hero and the faces,
-cut to black and silence before the end card, the end card's dwell, title
-timing (at least 1.5 s, reading speed). The transition budget varies with the
-input mix, stills against footage — the lesson the reel already paid for
+Plan format v2: the recipe, the hero, one text style and animation for the
+ad, and per shot a weight (quick / normal / hold — never a time), a move
+*including hold still* and a speed (normal / slow / a ramp) from short lists;
+one look for the whole ad, set by the recipe. The rhythm engine realises the
+recipe from the beat menu: the curve, the hero's hold (a multiplier AND a
+floor in seconds — a wedding's emotional hold is six seconds, not a ratio),
+the faces' holds, cut to black and silence before the end card, the end
+card's dwell, title timing (at least 1.5 s, reading speed), and where the two
+or three moments and the one treatment go. The transition budget varies with
+the input mix, stills against footage — the lesson the reel already paid for
 (`AUTOMATION.md` §5b), which the Director's one flat `TRANSITION_SHARE` never
 took. A **coherence check**: one intensity dial across grade, type, sound and
-moments, and a clash table, so legal choices cannot pile up; at most two or
-three moments, none on the hook unless the recipe designs one. Buildable
-pieces here are measured already or safe: speed ramps (`EFFECTS.md` §18),
-freeze frames (`tpad`), J/L cuts (`detachAudio`).
+moments, and a clash table, so legal choices cannot pile up — including a cap
+on hits, not only on moments. Buildable pieces here are measured already or
+safe: speed ramps (`EFFECTS.md` §18), a held frame (`holdFilter`'s own shape,
+as three clips — `tpad` cannot hold a middle frame and resume), J/L cuts
+(`detachAudio`, then a shift). The step is itemised in `PLAN.md` §5.8.
 
 ### C3. Sound design — 2–3 days, and a pack
 
@@ -1098,11 +1121,11 @@ and the export gets that drawing baked to still frames it overlays — so
 preview and export cannot disagree, and the 2018 Windows ffmpeg does not
 matter to these effects at all. Exact frames come from a pre-pass (ffmpeg pulls
 both clips' frames across the moment, as Steady's analysis does). What it
-makes: designed shader transitions (zoom-blur punch, a motion-blurred whip,
-light-leak burn, luma melt — the open gl-transitions collection is the
-starting point), a real 2.5D camera *into* a photo using the depth maps the app
-already bakes, light leaks and flares generated in code rather than stock
-footage, kinetic type. Used for two or three moments an ad, placed by the
+makes: designed shader transitions (a zoom-blur punch, a motion-blurred whip,
+a light-leak burn generated in code rather than from stock footage — the open
+gl-transitions collection is the starting point), a real 2.5D camera *into* a
+photo using the depth maps the app already bakes, and later kinetic type —
+the five kinds `PLAN.md` §7.3 names. Used for two or three moments an ad, placed by the
 recipe — never every cut. Overused, this is exactly what makes automatic
 editors look cheap.
 
@@ -1125,17 +1148,24 @@ photo look like a product shot — what this phase makes reliable is that
 **Open decisions for the user:** who runs C0 (their machine, or localhost for
 the sandbox); the first two recipes; where the sound pack comes from; whether
 a hosted model is acceptable for the copy alone if the local copy fails C0.
+Each has a recommendation in `docs/PLAN.md` §"Decisions".
 
 ---
 
 ## Phase D — the dressing planner (pass 2)
 
-> **Largely folded into Phase C (C2, C3)** since 2026-09-24: the recipe now
-> decides the treatments, the sound and the look, deterministically, and the
-> model chooses among them in the spine's plan v2. What survives from below is
-> the catalogue-from-code idea (the recipe's menus are built from the
-> registries) and the validator's restraint rules (fits its slot, sparse, one
-> look). Kept for the record of what was designed.
+> **Folded into Phase C (C2, C3)** since 2026-09-23, piece by piece
+> (`PLAN.md` §5): the **catalogue from code** is the recipe tests — every
+> style, animation, look, family, move and treatment id a recipe names is
+> checked against its registry; the per-segment **`textStyle`/`animation`**
+> became one whole-ad `style` and `animation` the model picks from the
+> recipe's shortlist (as `captionStyle` was whole-ad here); the
+> **`treatment`** is placed by the rhythm engine, at most one or two per ad
+> from the recipe's kinds, under exactly the validator rules below — fits its
+> slot, never on the hook or the CTA; **`sfx`** became the recipe's sound
+> events (C3), with a cap on hits; the **look** is one adjustment layer at the
+> ad's intensity. Stickers wait for Phase E's semantic index. Kept for the
+> record of what was designed.
 
 The spine says *what* happens when. The planner says *how it looks*, from the
 library the app already has — and it is where that library becomes the

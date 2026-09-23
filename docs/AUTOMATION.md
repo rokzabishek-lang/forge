@@ -2,7 +2,7 @@
 
 Five toggles were requested: captions, 3D props, stock b-roll, transitions, BGM + beat-sync.
 They look like five features. They are one system with five configurations — the same
-relationship the four products have to the Timeline IR (`PLAN.md` §1).
+relationship the four products have to the Timeline IR (`research/architecture-plan-2026-09-11.md` §1).
 
 ---
 
@@ -115,7 +115,7 @@ Your ideas then become **presets**, and a new look is one object rather than new
 | Dream | 0.45 | circle | 60 | fade / fade |
 | Takeover | 0.99 | rect | 0 | fade, hold 1.5s, fade back |
 
-**Render tier per preset** (`PLAN.md` §3b) falls out automatically:
+**Render tier per preset** (`research/architecture-plan-2026-09-11.md` §3b) falls out automatically:
 
 - Hard-edged rect PiP, full-frame hold → **tier 1**, plain ffmpeg overlay
 - Circle or feathered edges → needs an alpha mask → **tier 2**

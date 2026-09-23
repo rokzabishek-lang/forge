@@ -251,7 +251,7 @@ store API ── accounts, listings, search, ratings, reports, entitlements
   not less.
 - **Published templates are human edits with intent.** With the author's
   opt-in, the corpus of templates and the fills buyers kept is the
-  preference data `docs/LLM.md` and `docs/PLAN.md` said to collect before
+  preference data `docs/LLM.md` and `docs/research/architecture-plan-2026-09-11.md` said to collect before
   ever considering a fine-tune — arriving from normal use, labelled by what
   people paid for.
 - **The eval grows on its own.** Each category's top templates are the
