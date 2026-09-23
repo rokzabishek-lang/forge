@@ -707,6 +707,15 @@ finding; three of eight refuted) found four more, all fixed:
   the rejected promise was cached. Forgotten now, and asked again.
 And the floor test now scans a range export's graph, which it had never built.
 
+Forty-three mutations over all of the above, run in a separate git worktree
+(`scripts/mutate.mjs`) so the tree stayed editable: forty killed. Of the three
+that survived, two change nothing and are not tests' faults — a special case
+for a range covering the whole edit (it drops no clip and trims nothing anyway,
+so it was deleted) and the even-size rounding on export canvases (every size
+offered is even already; kept for the next one). The third was a real gap: the
+test that a still caption must not replay the edit's old animation frames used
+a caption that never had any. It has some now, and fails with the bug put back.
+
 Not solved, and said in the interface: the graph composes in 8-bit 4:2:0
 (`format=yuv420p` throughout), so a ProRes export is 10-bit 4:2:2 packaging of
 that picture — no generation lost, none gained. A 10-bit pipeline is its own

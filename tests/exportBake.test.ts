@@ -57,7 +57,10 @@ function landscape(): Project {
     settings: { ...emptyProject().settings, width: 1920, height: 1080, fps: 30 },
     assets: [
       asset('video', { kind: 'video', path: '/media/shot.mp4', hasAudio: true, fps: 30 }),
-      asset('t'), asset('s'), asset('ti'), asset('p'), asset('photo', { path: '/media/photo.jpg' }), asset('r')
+      // The text asset still carries frames from when the caption was animated;
+      // it is not any more, and the export must not replay them.
+      asset('t', { frames: { pattern: '/edit/t.seq/%05d.png', count: 12 } }),
+      asset('s'), asset('ti'), asset('p'), asset('photo', { path: '/media/photo.jpg' }), asset('r')
     ],
     clips: [
       clip({ id: 'shot', assetId: 'video' }),
