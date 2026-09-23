@@ -5,6 +5,8 @@ import { buildRenderPlan, type RenderRequest } from '@shared/render/plan'
 import { runFfmpeg } from '../ffmpeg/run'
 import type { ExecutionHandle } from '../queue'
 import type { TransitionDef } from '@shared/transitions/registry'
+import type { EncodeSpec } from '@shared/render/encode'
+import type { FrameRange } from '@shared/render/exportShape'
 
 export interface RenderOptions {
   project: Project
@@ -12,6 +14,8 @@ export interface RenderOptions {
   canvas?: { width: number; height: number }
   crf?: number
   preset?: string
+  encode?: EncodeSpec
+  range?: FrameRange
   subtitlesPath?: string
   fontsDir?: string
   captionOverlay?: { listPath: string; y: number; height: number }

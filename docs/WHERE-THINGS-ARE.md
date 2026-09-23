@@ -99,7 +99,14 @@ divider in the picture to compare; double-click it for an even split.
 
 Top to bottom. The panel scrolls; the export block at the bottom does not.
 
-**Output** — aspect ratio, preview mode, captions.
+**Output** — aspect ratio, loudness, preview mode, captions, then the export
+itself (`ExportSettings.tsx`, above the Export button):
+**Size** 720p / 1080p / 4K on the chosen aspect; **Codec**, listing only the
+encoders this machine test-encoded with at launch; **Quality** as High /
+Standard / Small or a fixed **Bitrate** in Mbps, with an encode-speed row for
+the software encoders; **Audio** AAC 128/192/256k; **File** .mp4 or .mov
+(ProRes forces .mov); and, when the timeline has in/out marks, **Only between
+the marks**. **Saved settings** below the button carry all of it.
 
 **Captions** — four presets (Pop, Kinetic, Clean, Bold centre), then the *same*
 **Style** and **Animation** libraries the text clips use: all 42 looks and all 9
@@ -192,7 +199,8 @@ second case is how a grid reveal is built, and the panel says so when that is
 what it is doing. Filter the masks by what they DO (grid, blinds, radial…)
 rather than by name.
 
-**Exports** — pinned to the bottom, always reachable.
+**Exports** — pinned to the bottom, always reachable. A running export shows
+its speed and, after its first few seconds, the time left.
 
 ---
 

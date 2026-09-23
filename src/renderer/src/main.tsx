@@ -19,6 +19,7 @@ function installFallbackBridge(): void {
     probe: async () => ({ assets: [], failed: [] }),
     pickMedia: async () => [],
     startRender: unavailable,
+    encoders: async () => [],
     cancelRender: async () => undefined,
     listJobs: async () => [],
     clearFinished: async () => undefined,

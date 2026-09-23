@@ -551,6 +551,8 @@ export function installHarnessBridge(): void {
     onSidecarStatus: () => () => undefined,
 
     startRender: unsupported('Exporting'),
+    // Only the software H.264 the plan falls back to anyway.
+    encoders: async () => [{ id: 'libx264' as const, ok: true }],
     cancelRender: async () => undefined,
     listJobs: async () => [],
     clearFinished: async () => undefined,

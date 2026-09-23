@@ -7,6 +7,8 @@ import type { HelloResult } from '@shared/sidecar/protocol'
 import type { AssetCatalog } from '@shared/assets/catalog'
 import type { PackListing } from '@shared/assets/pack'
 import type { TransitionDef } from '@shared/transitions/registry'
+import type { EncodeSpec, EncoderId } from '@shared/render/encode'
+import type { FrameRange } from '@shared/render/exportShape'
 import type { MusicAnalysis } from '@shared/automation/cutPlan'
 import type { IngestRequest } from '@shared/ingest/args'
 import type {
@@ -64,9 +66,16 @@ const api = {
     canvas?: { width: number; height: number }
     crf?: number
     preset?: string
+    /** Codec, quality, audio and container; absent is H.264 as it always was. */
+    encode?: EncodeSpec
+    /** Only these frames of the edit — the in and out points. */
+    range?: FrameRange
     /** Styled captions the renderer already drew, to composite in the one pass. */
     captionOverlay?: { listPath: string; y: number; height: number }
   }): Promise<Job> => ipcRenderer.invoke('render:start', request),
+  /** Which encoders work on this machine — probed once per launch, by encoding. */
+  encoders: (): Promise<{ id: EncoderId; ok: boolean; reason?: string }[]> =>
+    ipcRenderer.invoke('render:encoders'),
   cancelRender: (id: string): Promise<void> => ipcRenderer.invoke('render:cancel', id),
   listJobs: (): Promise<Job[]> => ipcRenderer.invoke('jobs:list'),
   clearFinished: (): Promise<void> => ipcRenderer.invoke('jobs:clearFinished'),

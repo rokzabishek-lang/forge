@@ -21,6 +21,7 @@ import type { Mask, MaskShape } from '@shared/render/mask'
 import { clipSpeed, maxDurationAtSpeed, withClipSpeed } from '@shared/render/speed'
 import type { VoiceId } from '@shared/render/voice'
 import { clampGain } from '@shared/render/audibility'
+import type { EncoderId } from '@shared/render/encode'
 import type { ClipKind } from '@shared/edit/clipKind'
 import { applyRelink } from '@shared/project/relink'
 import { projectFromChoice, type NewProjectChoice } from '@shared/project/newProject'
@@ -28,6 +29,9 @@ import {
   BUILT_IN_PRESETS,
   isBuiltIn,
   sanePreset,
+  saneChoice,
+  DEFAULT_CHOICE,
+  type EncodeChoice,
   type ExportPreset
 } from '@shared/render/presets'
 import { defaultFadeFrames } from '@shared/render/audioFade'
@@ -811,6 +815,17 @@ interface EditorState {
   loadPresets: () => Promise<void>
   savePreset: (preset: ExportPreset) => Promise<void>
   removePreset: (id: string) => Promise<void>
+  /**
+   * The Output panel's delivery settings — size, codec, quality, audio,
+   * container — kept between exports and between launches. The person's, not
+   * the project's, like the presets: a template bought from someone else must
+   * not arrive carrying their codec.
+   */
+  exportChoice: EncodeChoice
+  setExportChoice: (patch: Partial<EncodeChoice>) => void
+  /** Which encoders work on this machine; null until the probe has answered. */
+  encoders: { id: EncoderId; ok: boolean; reason?: string }[] | null
+  loadEncoders: () => Promise<void>
   select: (clipId: string | null) => void
   /**
    * Add to, remove from, or extend the selection — shift/cmd-click.
@@ -894,6 +909,9 @@ const reported = new Set<string>()
  * repeat what is left, which is what already happens with fewer photographs
  * than cards.
  */
+/** Whether the encoder probe has ANSWERED — a failure leaves it false, to be asked again. */
+let encodersProbed = false
+
 function assetPathsFor(project: Project, ids: string[]): string[] {
   return ids
     .map((id) => project.assets.find((a) => a.id === id)?.path)
@@ -913,6 +931,8 @@ export const useEditor = create<EditorState>((set, get) => ({
   exportRequests: 0,
   recording: null,
   exportPresets: BUILT_IN_PRESETS,
+  exportChoice: DEFAULT_CHOICE,
+  encoders: null,
   rangeIn: null,
   rangeOut: null,
   hiddenKinds: [],
@@ -3986,6 +4006,9 @@ export const useEditor = create<EditorState>((set, get) => ({
         sanePreset(raw as Partial<ExportPreset>, BUILT_IN_PRESETS[0])
       )
       set({ exportPresets: [...BUILT_IN_PRESETS, ...mine.filter((p) => !isBuiltIn(p))] })
+      if (settings.exportChoice && typeof settings.exportChoice === 'object') {
+        set({ exportChoice: saneChoice(settings.exportChoice as Partial<EncodeChoice>) })
+      }
     } catch {
       // A settings file that cannot be read is a reason to use the built-ins,
       // not a reason to say so: nothing the user can act on has happened.
@@ -4000,6 +4023,28 @@ export const useEditor = create<EditorState>((set, get) => ({
     ]
     set({ exportPresets: [...BUILT_IN_PRESETS, ...next] })
     await window.forge.setSetting('exportPresets', next).catch(() => undefined)
+  },
+
+  setExportChoice: (patch) => {
+    const next = saneChoice({ ...get().exportChoice, ...patch })
+    set({ exportChoice: next })
+    void window.forge.setSetting('exportChoice', next).catch(() => undefined)
+  },
+
+  loadEncoders: async () => {
+    // Once per launch in the main process; asking again only reads the cache.
+    if (encodersProbed) return
+    try {
+      set({ encoders: await window.forge.encoders() })
+      encodersProbed = true
+    } catch {
+      /*
+       * No probe is not no export: software H.264 is always there. But a
+       * failure is not an answer, so the next ask — the Export button calls
+       * this again — tries once more rather than settling on H.264 for good.
+       */
+      set({ encoders: [{ id: 'libx264', ok: true }] })
+    }
   },
 
   removePreset: async (id) => {

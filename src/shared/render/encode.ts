@@ -112,9 +112,58 @@ export function encoderInfo(id: EncoderId): EncoderInfo {
 /** The software default everything falls back to, because it is always there. */
 export const FALLBACK_ENCODER: EncoderId = 'libx264'
 
+/**
+ * The encoder an export will actually use, and what to say when it is not the
+ * one that was asked for.
+ *
+ * A preset saved on the Mac names VideoToolbox; opened on the Surface it has to
+ * export anyway. Premiere does the same thing — software instead, with a note —
+ * and says so, because a file that came out slower than expected with no
+ * explanation looks like a fault.
+ */
+export function usableEncoder(
+  wanted: EncoderId,
+  available: readonly { id: EncoderId; ok: boolean; reason?: string }[] | null
+): { encoder: EncoderId; note: string | null } {
+  if (wanted === FALLBACK_ENCODER) return { encoder: wanted, note: null }
+  const found = available?.find((a) => a.id === wanted)
+  if (found?.ok) return { encoder: wanted, note: null }
+  const why = found?.reason ? ` (${found.reason})` : ''
+  return {
+    encoder: FALLBACK_ENCODER,
+    note: `${encoderInfo(wanted).label} is not working on this machine${why}, so this export uses ${encoderInfo(FALLBACK_ENCODER).label} instead.`
+  }
+}
+
+/**
+ * The encoders to offer: software H.264 always, anything else only when the
+ * probe encoded with it on this machine. Listed is not working.
+ */
+export function offeredEncoders(
+  available: readonly { id: EncoderId; ok: boolean }[] | null
+): EncoderInfo[] {
+  return ENCODERS.filter(
+    (e) => e.id === FALLBACK_ENCODER || available?.some((a) => a.id === e.id && a.ok) === true
+  )
+}
+
 export const CRF_RANGE = { min: 14, max: 34 } as const
 export const BITRATE_RANGE = { minKbps: 500, maxKbps: 100_000 } as const
-export const AUDIO_KBPS = [128, 192, 256, 320] as const
+/**
+ * The audio bitrates offered — and NOT 320.
+ *
+ * FIX.md asked for 320, and the bundled encoder cannot deliver it: ffmpeg's own
+ * AAC, asked for 320k on stereo noise, writes 248 kb/s — LESS than the 260 it
+ * writes when asked for 256k (measured, tests/integration/exportShape.int.test.ts).
+ * A setting labelled higher that comes out lower is worse than not offering it.
+ */
+export const AUDIO_KBPS = [128, 192, 256] as const
+
+/** The offered bitrate nearest to one asked for: a stored 320 becomes 256. */
+export function audioKbpsFor(kbps: unknown): number {
+  if (typeof kbps !== 'number' || !Number.isFinite(kbps)) return 192
+  return AUDIO_KBPS.reduce((best, k) => (Math.abs(k - kbps) < Math.abs(best - kbps) ? k : best), 192 as number)
+}
 
 /**
  * Three named qualities, so nobody has to know what a CRF is.
@@ -126,7 +175,7 @@ export const AUDIO_KBPS = [128, 192, 256, 320] as const
 export const QUALITY_PRESETS = [
   { id: 'high', label: 'High', crf: 18 },
   { id: 'standard', label: 'Standard', crf: 20 },
-  { id: 'small', label: 'Small file', crf: 26 }
+  { id: 'small', label: 'Small', crf: 26 }
 ] as const
 
 /**
@@ -219,9 +268,7 @@ export function encoderArgs(spec: EncodeSpec, pixels: number): string[] {
    */
   if (info.family === 'hevc') args.push('-tag:v', 'hvc1')
 
-  const audio = AUDIO_KBPS.includes(spec.audioKbps as (typeof AUDIO_KBPS)[number])
-    ? spec.audioKbps
-    : 192
+  const audio = audioKbpsFor(spec.audioKbps)
   args.push('-c:a', 'aac', '-b:a', `${audio}k`)
 
   // Both containers are QuickTime-family, and both want the index at the front

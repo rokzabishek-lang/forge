@@ -117,8 +117,8 @@ function project(over: Partial<Project>): Project {
 }
 
 /** Every filter graph the plan builds for a project, as one string. */
-function graphOf(p: Project): string {
-  const args = buildRenderPlan({ project: p, outputPath: '/tmp/out.mp4' }).args
+function graphOf(p: Project, range?: { start: number; end: number }): string {
+  const args = buildRenderPlan({ project: p, outputPath: '/tmp/out.mp4', range }).args
   const at = args.indexOf('-filter_complex')
   expect(at).toBeGreaterThan(-1)
   return args[at + 1]
@@ -129,7 +129,7 @@ function graphOf(p: Project): string {
  * where all three bugs were, because it is the part that only appears once a
  * project has more than one of something.
  */
-const SHAPES: { name: string; project: Project }[] = [
+const SHAPES: { name: string; project: Project; range?: { start: number; end: number } }[] = [
   {
     name: 'one clip, no mixing at all',
     project: project({ clips: [clip({ id: 'a' })] })
@@ -156,13 +156,26 @@ const SHAPES: { name: string; project: Project }[] = [
       assets: [{ ...asset('v'), hasAudio: false }],
       clips: [clip({ id: 'a' })]
     })
+  },
+  {
+    // B2's range export trims the finished picture and the finished mix; the
+    // branch only exists with a range, so without this shape nothing checks it.
+    name: 'a range export, so the picture and the mix are trimmed',
+    project: project({
+      clips: [
+        clip({ id: 'a' }),
+        clip({ id: 'b', start: 60, duration: 30, inPoint: 150 }),
+        clip({ id: 'm', assetId: 'm', trackId: 'a1', start: 0, duration: 90 })
+      ]
+    }),
+    range: { start: 20, end: 80 }
   }
 ]
 
 describe('a filter graph runs on the oldest bundled ffmpeg', () => {
-  for (const { name, project: p } of SHAPES) {
+  for (const { name, project: p, range } of SHAPES) {
     it(`uses nothing merged after 2018-12-17 — ${name}`, () => {
-      const graph = graphOf(p)
+      const graph = graphOf(p, range)
       for (const { pattern, since, why } of TOO_NEW) {
         const hit = pattern.exec(graph)
         expect(
@@ -184,5 +197,12 @@ describe('a filter graph runs on the oldest bundled ffmpeg', () => {
     expect(graph).toMatch(/amix=inputs=2:duration=longest:dropout_transition=0,volume=2/)
     expect(graph).toContain('apad,atrim=end=')
     expect(graph).toContain('sidechaincompress')
+  })
+
+  it('reaches the range trims, so the scan above is not of a graph without them', () => {
+    const shape = SHAPES.find((s) => s.range)!
+    const graph = graphOf(shape.project, shape.range)
+    expect(graph).toContain('trim=start=')
+    expect(graph).toContain('atrim=start=')
   })
 })

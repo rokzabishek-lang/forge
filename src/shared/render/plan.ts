@@ -31,7 +31,35 @@ import {
   planeAmount
 } from './motion'
 
+import {
+  DEFAULT_ENCODE,
+  containerFor,
+  encoderArgs,
+  type EncodeSpec,
+  type SpeedPreset
+} from './encode'
+import type { FrameRange } from './exportShape'
+
 export { DEFAULT_SHAKE_DECAY, DEFAULT_SHAKE_HZ, PARALLAX_FLOOR, anchoredAmount, planeAmount } from './motion'
+
+const SPEED_PRESETS: SpeedPreset[] = ['veryfast', 'faster', 'fast', 'medium', 'slow']
+
+/**
+ * The encode a request asks for. The old `crf`/`preset` pair is the spec this
+ * app always used, so a request without `encode` renders byte-for-byte the
+ * arguments it did before.
+ */
+export function encodeSpecFor(request: Pick<RenderRequest, 'encode' | 'crf' | 'preset'>): EncodeSpec {
+  if (request.encode) return request.encode
+  const preset = SPEED_PRESETS.includes(request.preset as SpeedPreset)
+    ? (request.preset as SpeedPreset)
+    : DEFAULT_ENCODE.preset
+  return {
+    ...DEFAULT_ENCODE,
+    quality: { mode: 'crf', crf: request.crf ?? 20 },
+    preset
+  }
+}
 
 /**
  * Compiles a Timeline IR into an ffmpeg invocation.
@@ -68,8 +96,22 @@ export interface RenderRequest {
   resolveAsset?: (relativePath: string) => string
   /** Extra transitions beyond the built-ins, e.g. mask wipes from the catalog. */
   extraTransitions?: TransitionDef[]
+  /**
+   * Codec, quality, audio bitrate and container — see render/encode.ts.
+   *
+   * Absent means the export this app always made: H.264 at `crf`/`preset`
+   * (CRF 20, medium), AAC 192k, MP4. `crf` and `preset` stay for exactly that
+   * case and are ignored when `encode` is given.
+   */
+  encode?: EncodeSpec
   crf?: number
   preset?: string
+  /**
+   * Only frames `[start, end)` of the edit. The graph runs to `end` with every
+   * clip wholly outside dropped, then the output is trimmed from `start` — so
+   * what comes out is exactly that slice of the full render, not a re-edit.
+   */
+  range?: FrameRange
 }
 
 export interface RenderPlan {
@@ -199,8 +241,23 @@ function motionFilter(
   const fit = Math.min(canvas.width / rawW, canvas.height / rawH)
   const headroom = (1 + amount) * 1.05
   const factor = Math.min(1, fit * headroom)
-  const sourceW = Math.min(2560, even(rawW * factor))
-  const sourceH = Math.min(1440, even(rawH * factor))
+  /*
+   * ONE factor for both sides, and no fixed ceiling.
+   *
+   * There was a cap of 2560 wide by 1440 tall, applied to each side on its own.
+   * It assumed a landscape picture: a portrait phone photo in a vertical reel
+   * wants to be taller than 1440, so its height was cut and its width was not,
+   * and a 3024×4032 photo went into the move at 1304×1440 — 21 % too wide. Every
+   * Ken Burns on a tall photo in a 9:16 reel exported stretched, while the
+   * preview showed it right (tests/integration/motionAspect.int.test.ts). The
+   * cap also starved a 4K move, feeding a 2160-wide canvas from at most 1440.
+   *
+   * It was never what bounded the cost anyway: `factor` already limits the
+   * working picture to the canvas plus the zoom's headroom, which is exactly
+   * what the most zoomed-in frame needs and no more.
+   */
+  const sourceW = even(rawW * factor)
+  const sourceH = even(rawH * factor)
   // Pre-scale as well: feeding zoompan the full-size frame costs the same
   // per-frame resampling whatever `s` says.
   const pre = factor < 1 ? `scale=${sourceW}:${sourceH}:flags=bicubic,` : ''
@@ -576,8 +633,48 @@ function mixFilters(labels: string[], out: string, totalSeconds: string): string
   ]
 }
 
+/**
+ * The clips a range export keeps: every one that overlaps `[start, end)`, and
+ * every one those use as their matte.
+ *
+ * A matte is a shape clip that another clip is cut out through
+ * (`clip.matte.clipId`), and it has a span of its own that need not overlap the
+ * range. Dropped by time alone, the picture it shapes would find no matte and be
+ * composited as a plain rectangle — silently, because a missing matte label is
+ * simply skipped. Found by the B2 review.
+ */
+export function clipsForRange(clips: readonly Clip[], range: { start: number; end: number }): Clip[] {
+  const kept = new Set(clips.filter((c) => c.start < range.end && clipEnd(c) > range.start).map((c) => c.id))
+  for (const c of clips) if (kept.has(c.id) && c.matte) kept.add(c.matte.clipId)
+  return clips.filter((c) => kept.has(c.id))
+}
+
 export function buildRenderPlan(request: RenderRequest): RenderPlan {
-  const { project, outputPath } = request
+  const { outputPath } = request
+  const spec = encodeSpecFor(request)
+  const fullFrames = projectDuration(request.project)
+  if (fullFrames <= 0) throw new RenderError('The timeline has no clips to render')
+
+  /*
+   * A range renders the edit up to its OUT point, with every clip wholly
+   * outside it dropped, and trims the front off at the very end.
+   *
+   * Dropping first is what makes a five-second range of a ten-minute edit cost
+   * five seconds of decoding, not ten minutes. Trimming at the end, rather
+   * than re-cutting the clips to fit, is what makes the result exactly that
+   * slice of the full render: a clip straddling the in point keeps its fades,
+   * its transition, its keyframes and its motion exactly where they were.
+   */
+  const range =
+    request.range &&
+    request.range.end > request.range.start &&
+    !(request.range.start <= 0 && request.range.end >= fullFrames)
+      ? {
+          start: Math.max(0, Math.round(request.range.start)),
+          end: Math.min(fullFrames, Math.round(request.range.end))
+        }
+      : null
+  const project: Project = range ? { ...request.project, clips: clipsForRange(request.project.clips, range) } : request.project
   const canvas = request.canvas ?? { width: project.settings.width, height: project.settings.height }
   const width = even(canvas.width)
   const height = even(canvas.height)
@@ -586,15 +683,25 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
   const videoTracks = project.tracks.filter((t) => t.kind === 'video' && !t.hidden)
   if (videoTracks.length === 0) throw new RenderError('The project has no visible video track')
 
-  const totalFrames = projectDuration(project)
-  if (totalFrames <= 0) throw new RenderError('The timeline has no clips to render')
+  /** How far the graph runs — to the out point of a range. */
+  const totalFrames = range ? range.end : fullFrames
+  /** How long the file is. */
+  const outputFrames = range ? range.end - range.start : fullFrames
+  /** The front trimmed off, in the graph's own seconds, or null for none. */
+  const trimFrom = range && range.start > 0 ? seconds(range.start, fps) : null
 
   // Tracks composite bottom-up: index 0 is the backmost layer.
   const videoClips: { clip: Clip; track: Track }[] = []
   for (const track of videoTracks) {
     for (const clip of clipsOnTrack(project, track.id)) videoClips.push({ clip, track })
   }
-  if (videoClips.length === 0) throw new RenderError('The timeline has no clips to render')
+  if (videoClips.length === 0) {
+    throw new RenderError(
+      range
+        ? 'There is no picture between the in and out points — move them over a clip'
+        : 'The timeline has no clips to render'
+    )
+  }
 
   // Mute, solo and hidden all decide who is heard, in one place both the
   // preview and this file ask — see render/audibility.ts.
@@ -1301,7 +1408,10 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
     )
     videoOut = '[vcap]'
   }
-  filters.push(`${videoOut}format=yuv420p[vout]`)
+  // A range's front comes off last, so everything before it was composed on
+  // the full edit's own clock. `trim` and `setpts` are both ancient.
+  const videoTrim = trimFrom === null ? '' : `trim=start=${trimFrom},setpts=PTS-STARTPTS,`
+  filters.push(`${videoOut}${videoTrim}format=yuv420p[vout]`)
 
   /* -------------------------------------------------------------- audio */
 
@@ -1584,11 +1694,24 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
      * is a request to amplify nothing by an unbounded amount.
      */
     const loudness = loudnessFilters(project.settings.loudness, project.settings.sampleRate)
-    if (loudness.length === 0) {
+    /*
+     * A range's front comes off the MIX, before loudness.
+     *
+     * After it, `loudnorm` would have spent the whole stretch before the in
+     * point listening to silence — its dynamic mode rides the gain up through
+     * it — and the range would open on a lurch. Trimmed first, it measures only
+     * what is actually in the file. The silence branch needs no trim: silence
+     * from zero is the same silence, and `-t` bounds it.
+     */
+    const after = [
+      ...(trimFrom === null ? [] : [`atrim=start=${trimFrom}`, 'asetpts=PTS-STARTPTS']),
+      ...loudness
+    ]
+    if (after.length === 0) {
       filters.push(...mixFilters(audioLabels, '[aout]', seconds(totalFrames, fps)))
     } else {
       filters.push(...mixFilters(audioLabels, '[amixed]', seconds(totalFrames, fps)))
-      filters.push(`[amixed]${loudness.join(',')}[aout]`)
+      filters.push(`[amixed]${after.join(',')}[aout]`)
     }
   }
 
@@ -1598,16 +1721,16 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
     '-map', '[aout]',
     // The graph's own duration is authoritative; without this a held audio
     // stream can run past the picture.
-    '-t', seconds(totalFrames, fps),
-    '-c:v', 'libx264',
-    '-crf', String(request.crf ?? 20),
-    '-preset', request.preset ?? 'medium',
-    '-pix_fmt', 'yuv420p',
-    '-c:a', 'aac',
-    '-b:a', '192k',
-    '-movflags', '+faststart',
+    '-t', seconds(outputFrames, fps),
+    ...encoderArgs(spec, width * height),
+    /*
+     * The container named outright, not left to the file's extension: ProRes
+     * cannot go in an MP4, and a name typed as `.mp4` before switching codec
+     * must not be what decides. The renderer fixes the name to match as well.
+     */
+    '-f', containerFor(spec.encoder, spec.container),
     outputPath
   )
 
-  return { args, durationFrames: totalFrames, clips: entries }
+  return { args, durationFrames: outputFrames, clips: entries }
 }

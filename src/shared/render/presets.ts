@@ -14,6 +14,17 @@
  */
 
 import type { AspectKey } from './aspect'
+import {
+  BITRATE_RANGE,
+  audioKbpsFor,
+  ENCODERS,
+  containerFor,
+  type Container,
+  type EncodeSpec,
+  type EncoderId,
+  type SpeedPreset
+} from './encode'
+import { isResolution, type Resolution } from './exportShape'
 
 export interface ExportPreset {
   id: string
@@ -22,7 +33,7 @@ export interface ExportPreset {
   aspect: AspectKey
   /**
    * x264's quality knob — lower is better and bigger. 20 is the app's normal
-   * export, 26 is its draft, and the range either side is what people reach
+   * export, 26 is its Small setting, and the range either side is what people reach
    * for when a platform is strict about size.
    */
   crf: number
@@ -34,6 +45,77 @@ export interface ExportPreset {
   captions: boolean
   /** Added to the file name, so three presets do not overwrite each other. */
   suffix: string
+  /*
+   * B2's delivery choices. A preset file written before them has none of these,
+   * and `sanePreset` fills each from the fallback — the export it always made.
+   */
+  /** 720p, 1080p or 4K, on the aspect's own canvas. */
+  resolution: Resolution
+  encoder: EncoderId
+  /** A target bitrate in kbps, or null for constant quality at `crf`. */
+  bitrateKbps: number | null
+  audioKbps: number
+  container: Container
+}
+
+/**
+ * The delivery half of a preset — what the Output panel holds between exports.
+ *
+ * The aspect, the loudness and the captions belong to the edit itself (the
+ * project), so the panel reads those from the project; a preset carries all of
+ * them because a preset is a whole delivery, applied at once.
+ */
+export type EncodeChoice = Pick<
+  ExportPreset,
+  'resolution' | 'encoder' | 'crf' | 'bitrateKbps' | 'preset' | 'audioKbps' | 'container'
+>
+
+/** The export this app always made: 1080p H.264 at CRF 20, AAC 192k, MP4. */
+export const DEFAULT_CHOICE: EncodeChoice = {
+  resolution: '1080p',
+  encoder: 'libx264',
+  crf: 20,
+  bitrateKbps: null,
+  preset: 'medium',
+  audioKbps: 192,
+  container: 'mp4'
+}
+
+/** Bring a stored choice into range, field by field, from `fallback`. */
+export function saneChoice(raw: Partial<EncodeChoice>, fallback: EncodeChoice = DEFAULT_CHOICE): EncodeChoice {
+  const speeds: SpeedPreset[] = ['veryfast', 'faster', 'fast', 'medium', 'slow']
+  const crf = typeof raw.crf === 'number' && Number.isFinite(raw.crf) ? Math.round(raw.crf) : fallback.crf
+  const encoder = ENCODERS.some((e) => e.id === raw.encoder) ? (raw.encoder as EncoderId) : fallback.encoder
+  const wanted: Container = raw.container === 'mov' || raw.container === 'mp4' ? raw.container : fallback.container
+  return {
+    resolution: isResolution(raw.resolution) ? raw.resolution : fallback.resolution,
+    encoder,
+    crf: Math.max(CRF_MIN, Math.min(CRF_MAX, crf)),
+    bitrateKbps:
+      raw.bitrateKbps === null
+        ? null
+        : typeof raw.bitrateKbps === 'number' && Number.isFinite(raw.bitrateKbps)
+          ? Math.max(BITRATE_RANGE.minKbps, Math.min(BITRATE_RANGE.maxKbps, Math.round(raw.bitrateKbps)))
+          : fallback.bitrateKbps,
+    preset: speeds.includes(raw.preset as SpeedPreset) ? (raw.preset as SpeedPreset) : fallback.preset,
+    audioKbps: typeof raw.audioKbps === 'number' ? audioKbpsFor(raw.audioKbps) : fallback.audioKbps,
+    // ProRes is a QuickTime codec: whatever was stored, it goes in a .mov.
+    container: containerFor(encoder, wanted)
+  }
+}
+
+/** The encoder settings a choice renders with — see render/encode.ts. */
+export function encodeSpecOf(choice: EncodeChoice): EncodeSpec {
+  return {
+    encoder: choice.encoder,
+    quality:
+      choice.bitrateKbps === null
+        ? { mode: 'crf', crf: choice.crf }
+        : { mode: 'bitrate', kbps: choice.bitrateKbps },
+    preset: choice.preset,
+    audioKbps: choice.audioKbps,
+    container: containerFor(choice.encoder, choice.container)
+  }
 }
 
 export const CRF_MIN = 14
@@ -48,6 +130,15 @@ export const CRF_MAX = 34
  * are the three aspect ratios this app exists to serve, at the quality each
  * platform actually wants.
  */
+/** What the three built-ins deliver beyond their aspect: the ordinary export. */
+const DEFAULT_CHOICE_FIELDS = {
+  resolution: DEFAULT_CHOICE.resolution,
+  encoder: DEFAULT_CHOICE.encoder,
+  bitrateKbps: DEFAULT_CHOICE.bitrateKbps,
+  audioKbps: DEFAULT_CHOICE.audioKbps,
+  container: DEFAULT_CHOICE.container
+}
+
 export const BUILT_IN_PRESETS: ExportPreset[] = [
   {
     id: 'builtin-reel',
@@ -59,7 +150,8 @@ export const BUILT_IN_PRESETS: ExportPreset[] = [
     // hotter just means their encoder turns it down, unevenly.
     loudness: -14,
     captions: true,
-    suffix: '-9x16'
+    suffix: '-9x16',
+    ...DEFAULT_CHOICE_FIELDS
   },
   {
     id: 'builtin-feed',
@@ -69,7 +161,8 @@ export const BUILT_IN_PRESETS: ExportPreset[] = [
     preset: 'medium',
     loudness: -14,
     captions: true,
-    suffix: '-1x1'
+    suffix: '-1x1',
+    ...DEFAULT_CHOICE_FIELDS
   },
   {
     id: 'builtin-wide',
@@ -79,7 +172,8 @@ export const BUILT_IN_PRESETS: ExportPreset[] = [
     preset: 'slow',
     loudness: -14,
     captions: false,
-    suffix: '-16x9'
+    suffix: '-16x9',
+    ...DEFAULT_CHOICE_FIELDS
   }
 ]
 
@@ -101,18 +195,16 @@ export function newPresetId(): string {
  * a message about an option nobody set.
  */
 export function sanePreset(raw: Partial<ExportPreset>, fallback: ExportPreset): ExportPreset {
-  const speeds: ExportPreset['preset'][] = ['veryfast', 'faster', 'fast', 'medium', 'slow']
   const aspects: AspectKey[] = ['16:9', '9:16', '1:1']
-  const crf = typeof raw.crf === 'number' && Number.isFinite(raw.crf) ? Math.round(raw.crf) : fallback.crf
+  // The delivery half is sanitised by the same function the Output panel's
+  // stored choice is, so a preset and the panel cannot disagree about a range.
+  const choice = saneChoice(raw, fallback)
 
   return {
     id: typeof raw.id === 'string' && raw.id ? raw.id : fallback.id,
     name: typeof raw.name === 'string' && raw.name.trim() ? raw.name.trim().slice(0, 60) : fallback.name,
     aspect: aspects.includes(raw.aspect as AspectKey) ? (raw.aspect as AspectKey) : fallback.aspect,
-    crf: Math.max(CRF_MIN, Math.min(CRF_MAX, crf)),
-    preset: speeds.includes(raw.preset as ExportPreset['preset'])
-      ? (raw.preset as ExportPreset['preset'])
-      : fallback.preset,
+    ...choice,
     loudness:
       raw.loudness === null
         ? null

@@ -2133,3 +2133,64 @@ The change broke six existing tests in `render.test.ts`, all of which assert
 the MIXER's output label. They now build their fixture with normalisation off,
 because each is about whether two streams reach the mixer or a muted clip is
 dropped before it — not about what is appended afterwards.
+
+## 29. The export's shape — codecs, bitrates, and a stretch nobody saw
+
+B2 (docs/FIX.md). Everything here was measured on the bundled macOS binary;
+the Windows one cannot be measured from a Mac, so the app probes itself there.
+
+### Listed is not working
+
+`h264_videotoolbox` is in `ffmpeg -encoders` on the bundled macOS build and
+then fails to open a compression session (`-12908`), even with `-allow_sw 1` —
+at least inside the development sandbox, which may be the cause and may not.
+So nothing is offered on the strength of the list: `main/render/encoders.ts`
+encodes ten real frames with each listed candidate, using `encoderArgs` itself
+— the arguments the export will run — and offers only what succeeded. Cached
+for the process.
+
+`libx264`, `libx265` and `prores_ks` all encode with the arguments in
+`render/encode.ts`, bitrate mode included. ProRes lands as `apch`
+`yuv422p10le` in QuickTime. The container is named with `-f`, never left to the
+extension: an MP4 cannot hold ProRes, and a name typed as `.mp4` before
+switching codec must not be what decides.
+
+### AAC at 320k writes less than at 256k
+
+ffmpeg's native AAC encoder, on stereo white noise (the hardest thing to
+compress, so a target is actually spent):
+
+| asked | written |
+|---|---|
+| 192k | 195 kb/s |
+| 256k | 260 kb/s |
+| 320k | **248 kb/s** |
+
+Pink noise at 320k: 244. So 320 is not offered — a setting labelled higher that
+comes out lower is worse than no setting — and a stored 320 maps to 256
+(`audioKbpsFor`). A sine at any setting writes ~74 kb/s, which is why a pure
+tone cannot test this.
+
+### A bitrate test needs a picture that costs something
+
+A clean `testsrc2` at 320×240 needs about 0.6 Mbps even at CRF 14, so a 2 Mbps
+cap never binds and a "bitrate is respected" test passes for the wrong reason.
+Moving noise at 720p (`testsrc2` + `noise=alls=40:allf=t`) spends whatever it
+is given.
+
+### The camera move stretched tall photos
+
+`kenBurnsFilter` runs its move at a working size capped for speed — and the cap
+was `min(2560, w)` × `min(1440, h)`, each side on its own. That assumes a
+landscape picture. A 3024×4032 phone photo in a 1080×1920 reel wants a working
+height of ~1738 (canvas fit × zoom headroom); the height was cut to 1440 and the
+width was not, so the photo went into `zoompan` at 1304×1440 — 0.906 instead of
+0.75, **21 % too wide** — and came out stretched. Every Ken Burns on a tall
+photo in a vertical reel, which is the wedding reel. The preview never went
+through this path, so it looked right on screen.
+
+Measured with a white square on black (`integration/motionAspect.int.test.ts`):
+20.6 % out of square at 9:16, 137 % at 4K, and the landscape control fine. The
+cap was never what bounded the cost anyway — `factor` already limits the working
+picture to the canvas plus the headroom the deepest zoom needs — so it is gone,
+and one factor scales both sides.

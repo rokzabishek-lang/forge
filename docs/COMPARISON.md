@@ -142,7 +142,7 @@ speed-corrected window of the source (`ClipWaveform.tsx:85-87`).
 | **autosave / crash recovery** | **✗** — only ⌘S writes; no close guard even when dirty (`index.ts:126-133`) | ✓ drafts autosave | ✓ 15-min autosave + cloud | ✓ live save, database | ✓ continuous |
 | **File menu, Save As, Recent** | **✗** — no Electron `Menu`; Save/Open are undiscoverable hotkeys; `newProject` never called | ✓ project home | ✓ | ✓ | ✓ |
 | project file | versioned JSON with migration hook; unknown fields survive | undocumented JSON drafts ~ | binary, one-way | database | library bundle |
-| **export choices** | **partial** — always `libx264 CRF 20/26, AAC 192k, mp4`; three 1080-class canvases; a Draft toggle (`plan.ts:1509-1516`, `aspect.ts:9-13`) | res 480p–4K/8K ✓~, fps, bitrate, format | Media Encoder presets | Deliver page, custom presets | Share presets + Compressor |
+| **export choices** | **✓ mostly (B2)** — H.264 / H.265 / ProRes and hardware encoders, offered only when a test encode works here; CRF presets or a bitrate; AAC 128–256k; mp4 or mov; 720p / 1080p / 4K; in–out range. Frame rate still fixed at the project's (`render/encode.ts`, `render/exportShape.ts`, `components/ExportSettings.tsx`) | res 480p–4K/8K ✓~, fps, bitrate, format | Media Encoder presets | Deliver page, custom presets | Share presets + Compressor |
 | **project frame rate** | **✗ fixed at 30** — nothing writes `settings.fps` (`timeline.ts:656`) | ✓ | ✓ | ✓ | ✓ |
 | hardware encoding | ✗ software libx264 | ✓ toggle ~ | ✓ NVENC/VCN/QSV/VideoToolbox | ✓ | ✓ media engine |
 | background export queue with cancel | ✓ — and a cancel leaves no truncated file behind (`run.ts:130-157`) | modal ~ | ✓ Media Encoder | ✓ render queue | ✓ background |

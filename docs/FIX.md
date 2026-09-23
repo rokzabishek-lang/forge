@@ -644,6 +644,74 @@ dialog filters to `mp4` (`ipc.ts:989`).
   its window.
 - **Time remaining** from progress and elapsed, beside the speed string.
 
+**What was built** (all but frame rate, which is next and last):
+
+- **Codec, quality, audio, container** as data (`render/encode.ts`), per codec
+  FAMILY — ProRes has no CRF, hardware takes a bitrate, x265 reads CRF on a
+  scale 5 higher — and the plan's tail is `encoderArgs(spec)` plus `-f` naming
+  the container, so a `.mp4` name cannot put ProRes in an MP4. No spec renders
+  byte-for-byte the old fixed block.
+- **Only encoders that work are offered.** `probeEncoders()` test-encodes each
+  listed candidate with the export's own arguments, once per launch; a preset
+  naming one this machine cannot run falls back to H.264 with a note. Measured
+  here: x264, x265, ProRes work; VideoToolbox is listed and fails. The Windows
+  build probes itself — nothing about it is assumed.
+- **Size** is a multiplier on the aspect (720p, 1080p, 4K), not new `ASPECTS`
+  entries, which `aspectOf` would have confused by ratio.
+- **An export draws its own cards** (`render/exportBake.ts`): text, colour
+  cards and titles at the export's canvas and SHAPE — 4K words at 4K — and
+  paper and photo-ring runs in its shape but no bigger than the canvas, into
+  files of the export's own, returned as a copy of the project. The edit is
+  never written to.
+- **Range** drops every clip wholly outside it, runs the graph to the out
+  point and trims the front off the finished picture and the finished MIX —
+  before `loudnorm`, which would otherwise have spent the stretch before the
+  in point riding its gain up through silence. Rendered: a `[20,70)` range of
+  red|green|blue opens on red, passes green, ends on blue, lasts 50 frames, and
+  its green second is the full render's green second to within a dB.
+- **Time remaining** in the job row, withheld until the first 2 % and three
+  seconds, when an estimate still swings wildly.
+- **Saved settings carry all of it**, and old preset files fill the new fields
+  with the export they always made.
+
+Found on the way, and fixed:
+- **Presets never applied their own loudness or captions.** They stored both;
+  the export used whatever the project was set to. Applied to the rendered copy
+  only, so exporting the wide cut without captions does not turn them off for
+  the reel. (Saved settings were added during Phase A; this was their bug.)
+- **The Draft checkbox could be stale** — missing from the export callback's
+  dependencies, so the button exported with whatever it had been when the edit
+  last changed. Draft itself has since been **removed** at the user's request —
+  a half-size, CRF-26 render beside a real size choice was one control too many;
+  720p is the quick export now.
+- **Every Ken Burns on a tall photo in a vertical reel exported stretched 21 %
+  wide.** The move's working size was capped at 2560 × 1440 per side, which
+  assumes landscape. The preview never used that path. EFFECTS.md §29.
+- **AAC 320k is not offered**: the bundled encoder writes 248 kb/s for it, less
+  than the 260 it writes for 256k. EFFECTS.md §29.
+
+Then an adversarial review of the whole of B2 (four finders, a sceptic per
+finding; three of eight refuted) found four more, all fixed:
+- **A 16:9 edit through the 9:16 preset letterboxed its titles.** The export
+  drew generated cards at the PROJECT's canvas; a "bigger than the canvas" test
+  compared pixel area, and 1920×1080 and 1080×1920 are the same area. Older than
+  B2. Rendered: black above and below the card before, red edge to edge after
+  (`integration/exportBake.int.test.ts`).
+- **Pressing Export edited the project.** Each redrawn card was an `update()`:
+  an undo entry per card, the redo stack wiped, the project marked unsaved.
+  Also older than B2, and the reason the export now bakes into a copy.
+- **A range dropped a matte** its footage was cut out through, when the shape
+  clip's own span lay outside the range; the footage exported as a plain
+  rectangle. `clipsForRange` keeps what a kept clip uses.
+- **One failed encoder probe hid every encoder but H.264** until restart —
+  the rejected promise was cached. Forgotten now, and asked again.
+And the floor test now scans a range export's graph, which it had never built.
+
+Not solved, and said in the interface: the graph composes in 8-bit 4:2:0
+(`format=yuv420p` throughout), so a ProRes export is 10-bit 4:2:2 packaging of
+that picture — no generation lost, none gained. A 10-bit pipeline is its own
+piece of work.
+
 ### B3. Colour, key, masks, motion, transcript
 
 **Temperature and tint.** `ColorAdjust.temperature?` and `tint?` (−1..1) →

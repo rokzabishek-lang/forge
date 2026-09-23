@@ -53,8 +53,10 @@ function run(args: string[]): Promise<{ ok: boolean; stdout: string; stderr: str
 export function listedEncoders(output: string): Set<string> {
   const names = new Set<string>()
   for (const line of output.split('\n')) {
-    // " V....D libx264   libx264 H.264 / AVC ..." — flags, then the name.
-    const found = /^\s[VAS][.A-Z]{5}\s+(\S+)/.exec(line)
+    // " V....D libx264   libx264 H.264 / AVC ..." — flags, then the name. The
+    // legend above the list (" V..... = Video") has the same shape up to the
+    // name, so a name has to start like one.
+    const found = /^\s[VAS][.A-Z]{5}\s+(\w[\w-]*)/.exec(line)
     if (found) names.add(found[1])
   }
   return names
@@ -63,32 +65,43 @@ export function listedEncoders(output: string): Set<string> {
 let cached: Promise<EncoderAvailability[]> | null = null
 
 export function probeEncoders(): Promise<EncoderAvailability[]> {
-  cached ??= (async () => {
-    const listing = await run(['-hide_banner', '-encoders'])
-    const listed = listing.ok ? listedEncoders(listing.stdout) : new Set<string>()
-    const dir = await mkdtemp(join(tmpdir(), 'forge-encoders-'))
-    try {
-      const results: EncoderAvailability[] = []
-      // One at a time: hardware sessions are a scarce resource, and two probes
-      // contending for one encoder can make both fail.
-      for (const { id } of ENCODERS) {
-        if (!listed.has(id)) {
-          results.push({ id, ok: false, reason: 'not in this build' })
-          continue
-        }
-        const out = join(dir, `${id}.${containerFor(id, 'mp4')}`)
-        const attempt = await run(probeArgs(id, out))
-        const size = await stat(out).then((s) => s.size, () => 0)
-        results.push(
-          attempt.ok && size > 0
-            ? { id, ok: true }
-            : { id, ok: false, reason: attempt.stderr.trim().split('\n').pop() || 'the test encode failed' }
-        )
-      }
-      return results
-    } finally {
-      await rm(dir, { recursive: true, force: true }).catch(() => undefined)
-    }
-  })()
+  cached ??= probe().catch((err: unknown) => {
+    /*
+     * A probe that could not run at all — no writable temp folder on a locked
+     * profile, a full disk at first launch — is not an answer about the
+     * encoders. Cached, it would have hidden every encoder but H.264 until the
+     * app restarted; forgotten, the next ask tries again.
+     */
+    cached = null
+    throw err
+  })
   return cached
+}
+
+async function probe(): Promise<EncoderAvailability[]> {
+  const listing = await run(['-hide_banner', '-encoders'])
+  const listed = listing.ok ? listedEncoders(listing.stdout) : new Set<string>()
+  const dir = await mkdtemp(join(tmpdir(), 'forge-encoders-'))
+  try {
+    const results: EncoderAvailability[] = []
+    // One at a time: hardware sessions are a scarce resource, and two probes
+    // contending for one encoder can make both fail.
+    for (const { id } of ENCODERS) {
+      if (!listed.has(id)) {
+        results.push({ id, ok: false, reason: 'not in this build' })
+        continue
+      }
+      const out = join(dir, `${id}.${containerFor(id, 'mp4')}`)
+      const attempt = await run(probeArgs(id, out))
+      const size = await stat(out).then((s) => s.size, () => 0)
+      results.push(
+        attempt.ok && size > 0
+          ? { id, ok: true }
+          : { id, ok: false, reason: attempt.stderr.trim().split('\n').pop() || 'the test encode failed' }
+      )
+    }
+    return results
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => undefined)
+  }
 }

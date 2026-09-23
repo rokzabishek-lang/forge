@@ -19,6 +19,9 @@ import { SIDECAR_METHODS } from '@shared/sidecar/protocol'
 import { segmentIntoSentences, type Transcript, type Word } from '@shared/transcript'
 import { JobQueue } from './queue'
 import { startRender, type RenderOptions } from './render/renderJob'
+import { probeEncoders } from './render/encoders'
+import type { EncodeSpec } from '@shared/render/encode'
+import type { FrameRange } from '@shared/render/exportShape'
 import { runGraphicsSelfTest } from './graphics/tier2'
 import { transitionsFromMasks, type TransitionDef } from '@shared/transitions/registry'
 import type { MaskTag } from '@shared/transitions/classify'
@@ -60,6 +63,8 @@ interface ExportRequest {
   canvas?: { width: number; height: number }
   crf?: number
   preset?: string
+  encode?: EncodeSpec
+  range?: FrameRange
   /** Styled captions the renderer baked, ready to composite in the one pass. */
   captionOverlay?: { listPath: string; y: number; height: number }
 }
@@ -923,6 +928,8 @@ export function registerIpc(getWindow: () => BrowserWindow | null): JobQueue {
       canvas: request.canvas,
       crf: request.crf,
       preset: request.preset,
+      encode: request.encode,
+      range: request.range,
       subtitlesPath: captions?.subtitlesPath,
       fontsDir: captions?.fontsDir,
       captionOverlay: request.captionOverlay,
@@ -944,6 +951,16 @@ export function registerIpc(getWindow: () => BrowserWindow | null): JobQueue {
       }
     )
   })
+
+  /*
+   * Which encoders work HERE, probed with the export's own arguments.
+   *
+   * Listed is not working: on the bundled macOS build `h264_videotoolbox` is in
+   * `-encoders` and then fails to open a session. And the Windows binary is a
+   * different build that cannot be measured from anywhere but itself. So each
+   * candidate encodes ten real frames, once per launch — see render/encoders.ts.
+   */
+  ipcMain.handle('render:encoders', () => probeEncoders())
 
   ipcMain.handle('render:cancel', (_e, id: unknown) => {
     if (typeof id !== 'string') throw new Error('Cancel expects a job id')
@@ -1055,10 +1072,14 @@ export function registerIpc(getWindow: () => BrowserWindow | null): JobQueue {
   ipcMain.handle('dialog:exportPath', async (_e, suggested: unknown) => {
     const window = getWindow()
     if (!window) return null
+    const path = typeof suggested === 'string' ? suggested : 'export.mp4'
+    // The suggested name's own container first, so the dialog opens on it.
+    const mp4 = { name: 'MP4 video', extensions: ['mp4'] }
+    const mov = { name: 'QuickTime movie', extensions: ['mov'] }
     const result = await dialog.showSaveDialog(window, {
       title: 'Export video',
-      defaultPath: typeof suggested === 'string' ? suggested : 'export.mp4',
-      filters: [{ name: 'MP4 video', extensions: ['mp4'] }]
+      defaultPath: path,
+      filters: /\.mov$/i.test(path) ? [mov, mp4] : [mp4, mov]
     })
     return result.canceled ? null : (result.filePath ?? null)
   })

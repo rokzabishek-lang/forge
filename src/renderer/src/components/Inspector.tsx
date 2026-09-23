@@ -5,6 +5,7 @@ import {
   clipEnd,
   formatTimecode,
   isNeutralGrade,
+  projectDuration,
   type TextSpec
 } from '@shared/timeline'
 import { ASPECTS, useEditor, type AspectKey } from '../store'
@@ -34,11 +35,24 @@ import { TextStylePicker } from './TextStylePicker'
 import { TextAnimationPicker } from './TextAnimationPicker'
 import { Slider } from './Slider'
 import {
+  encodeSpecOf,
   isBuiltIn,
   newPresetId,
   pathForPreset,
+  saneChoice,
   type ExportPreset
 } from '@shared/render/presets'
+import { encoderInfo, usableEncoder } from '@shared/render/encode'
+import {
+  exportCanvas,
+  exportRange,
+  formatRemaining,
+  timeRemainingMs,
+  withContainerExtension
+} from '@shared/render/exportShape'
+import { ExportSettings } from './ExportSettings'
+import { bakeForExport } from '@shared/render/exportBake'
+import { liveBakers } from '../exportBakers'
 import { offlineAssets } from '@shared/project/relink'
 import { faderPosition, formatDb, gainAtPosition } from '@shared/render/audibility'
 import { useEffect, useMemo, useMemo as useMemoLocal, useState as useLocalState } from 'react'
@@ -165,7 +179,9 @@ export function Inspector(): ReactNode {
     void ensureFont(style.fontFamily)
   }, [style.fontFamily, ensureFont, catalogLoaded])
   const [exporting, setExporting] = useState(false)
-  const [draft, setDraft] = useState(false)
+  /** Export only between the in and out marks, when there are any. */
+  const [useRange, setUseRange] = useState(true)
+  const exportChoice = useEditor((s) => s.exportChoice)
   const exportPresets = useEditor((s) => s.exportPresets)
   const savePreset = useEditor((s) => s.savePreset)
   const removePreset = useEditor((s) => s.removePreset)
@@ -192,7 +208,11 @@ export function Inspector(): ReactNode {
    * silently overwrite the first — they are both named after the project.
    */
   const onExport = useCallback(async (preset?: ExportPreset) => {
-    if (project.clips.length === 0) {
+    // Read at the moment of the click, not from the closure: the export is of
+    // the edit as it is NOW, and the in/out marks are not project state.
+    const state = useEditor.getState()
+    const current = state.project
+    if (current.clips.length === 0) {
       notify('Add something to the timeline first', 'info')
       return
     }
@@ -205,7 +225,7 @@ export function Inspector(): ReactNode {
      * clip actually uses count: a stale pool entry nothing references does not
      * affect the render.
      */
-    const missing = offlineAssets(project)
+    const missing = offlineAssets(current)
     if (missing.length > 0) {
       notify(
         `Cannot export — ${missing.length} file${missing.length === 1 ? ' is' : 's are'} missing: ` +
@@ -214,40 +234,71 @@ export function Inspector(): ReactNode {
       )
       return
     }
+    // Only the marks, when that was asked for. Marks that enclose nothing are
+    // refused rather than quietly exporting all ten minutes instead.
+    const marked = useRange ? exportRange(state.rangeIn, state.rangeOut, projectDuration(current)) : null
+    if (marked === 'empty') {
+      notify('The in and out points mark nothing — move them apart, or untick “Only between the marks”', 'info')
+      return
+    }
     setExporting(true)
     try {
+      /*
+       * The delivery: the preset's when exporting through one, otherwise the
+       * panel's. An encoder this machine cannot run falls back to software
+       * with a note, as Premiere does — a preset saved on the Mac naming
+       * VideoToolbox still has to export on the Surface.
+       */
+      const choice = preset ? saneChoice(preset) : state.exportChoice
+      await state.loadEncoders()
+      const { encoder, note } = usableEncoder(choice.encoder, useEditor.getState().encoders)
+      if (note) notify(note, 'info')
+      const spec = encodeSpecOf({ ...choice, encoder })
+
       const wanted: AspectKey = preset?.aspect ?? aspect
+      const canvas = exportCanvas(wanted, choice.resolution)
       const suggested =
-        `${project.name || 'Untitled'}-${wanted.replace(':', 'x')}${draft ? '-draft' : ''}.mp4`
+        `${current.name || 'Untitled'}-${wanted.replace(':', 'x')}${marked ? '-range' : ''}.${spec.container}`
       const chosen = await window.forge.chooseExportPath(suggested)
       if (!chosen) return
-      const outputPath = preset ? pathForPreset(chosen, preset) : chosen
+      // The container's extension, whatever the name was typed with.
+      const outputPath = withContainerExtension(preset ? pathForPreset(chosen, preset) : chosen, spec.container)
 
       /*
-       * Draft halves the canvas, which is a quarter of the pixels.
-       *
-       * The render cost is pixel-bound in the filter graph, not in the encoder:
-       * measured on 8 clips over 12s, 29.5s at 1080x1920 against 8.0s at
-       * 540x960. Nothing else moved the needle — the encoder preset made no
-       * difference, filter threading made no difference, and replacing the
-       * overlay chain with concat was ten times SLOWER.
-       */
-      const full = ASPECTS[preset?.aspect ?? aspect]
-      const canvas = draft
-        ? { width: Math.round(full.width / 2 / 2) * 2, height: Math.round(full.height / 2 / 2) * 2 }
-        : { width: full.width, height: full.height }
-
-      /*
-       * Draw the generated cards to disk, here, once.
+       * Draw the generated cards to disk, here, once — for THIS export.
        *
        * Text, colour cards and titles are drawn live in the preview from their
        * spec, so editing them never touches a file — which is what made typing
        * instant. The PNGs still have to exist for ffmpeg, and this is the one
-       * moment they genuinely matter. Baking on the way out means the files
-       * always match the words on screen, without a disk write behind every
-       * keystroke.
+       * moment they genuinely matter. They are drawn at the export's own
+       * canvas and shape, into files of the export's own, and come back as a
+       * copy of the project: the edit is not written to, so exporting adds no
+       * undo steps, does not mark the project unsaved, and does not leave a
+       * portrait paper run playing in a landscape preview. See exportBake.ts.
        */
-      await useEditor.getState().rebakeGenerated()
+      const baked = await bakeForExport(useEditor.getState().project, canvas, liveBakers, (clip, err) =>
+        notify(
+          `A card could not be redrawn, so its last picture is used: ${err instanceof Error ? err.message : String(err)}`,
+          'info'
+        )
+      )
+
+      /*
+       * A preset's loudness and captions, for THIS export only.
+       *
+       * Presets always stored both and the export never applied either, so
+       * "Reel (-14 LUFS, captions)" exported at whatever the project happened
+       * to be set to. Applied to the copy that is rendered, not to the edit:
+       * exporting a wide cut without captions must not switch them off for
+       * the reel.
+       */
+      const exported = preset
+        ? {
+            ...baked,
+            settings: { ...baked.settings, loudness: preset.loudness ?? undefined },
+            captions: { ...baked.captions, enabled: preset.captions }
+          }
+        : baked
 
       /*
        * Styled captions, drawn here rather than by a second render pass.
@@ -257,29 +308,29 @@ export function Inspector(): ReactNode {
        * held for as long as it is on screen. Everything else about the export is
        * unchanged, which is the point: one pass, one encode.
        */
-      const captionOverlay = captionNeedsCanvas(style)
-        ? (await bakeCaptions(useEditor.getState().project, canvas).catch((err) => {
-            // A bake that fails must not lose the export. Falling back means
-            // captions come out flat rather than styled, which is visible and
-            // recoverable; a failed export is neither.
-            notify(
-              `Captions could not be drawn, so they will be burned in plain: ${
-                err instanceof Error ? err.message : String(err)
-              }`,
-              'info'
-            )
-            return null
-          })) ?? undefined
-        : undefined
+      const captionOverlay =
+        exported.captions.enabled && captionNeedsCanvas(style)
+          ? (await bakeCaptions(exported, canvas).catch((err) => {
+              // A bake that fails must not lose the export. Falling back means
+              // captions come out flat rather than styled, which is visible and
+              // recoverable; a failed export is neither.
+              notify(
+                `Captions could not be drawn, so they will be burned in plain: ${
+                  err instanceof Error ? err.message : String(err)
+                }`,
+                'info'
+              )
+              return null
+            })) ?? undefined
+          : undefined
 
       await window.forge.startRender({
-        // The rebake repointed assets at freshly written files, so the project
-        // captured before it is already out of date.
-        project: useEditor.getState().project,
+        // The copy pointing at the export's freshly drawn cards.
+        project: exported,
         outputPath,
         canvas,
-        crf: draft ? 26 : (preset?.crf ?? 20),
-        preset: preset?.preset ?? 'medium',
+        encode: spec,
+        range: marked ?? undefined,
         captionOverlay: captionOverlay
           ? {
               listPath: captionOverlay.listPath,
@@ -293,7 +344,9 @@ export function Inspector(): ReactNode {
     } finally {
       setExporting(false)
     }
-  }, [project, aspect, notify])
+    // `useRange` has to be here: a callback that closes over a stale toggle
+    // exports with whatever it was when the edit last changed.
+  }, [aspect, notify, useRange, style])
 
   /*
    * The File > Export… menu item, which cannot call this directly.
@@ -670,24 +723,9 @@ export function Inspector(): ReactNode {
           )}
         </div>
 
-        <label className="mb-1.5 flex cursor-pointer items-start gap-2 rounded p-1 hover:bg-ink-850">
-          <input
-            type="checkbox"
-            checked={draft}
-            onChange={(e) => setDraft(e.target.checked)}
-            className="mt-0.5 shrink-0 accent-flame-500"
-          />
-          <span className="min-w-0">
-            <span className="block text-[11px] text-ink-200">
-              Draft — half size, about 4x faster
-            </span>
-            <span className="mt-0.5 block text-[10px] leading-snug text-ink-600">
-              {draft
-                ? `${Math.round(ASPECTS[aspect].width / 2 / 2) * 2}x${Math.round(ASPECTS[aspect].height / 2 / 2) * 2} — for checking the edit, not for posting.`
-                : `${ASPECTS[aspect].width}x${ASPECTS[aspect].height}. Render cost is pixel-bound, so half size is a quarter of the work.`}
-            </span>
-          </span>
-        </label>
+        <div className="mb-3">
+          <ExportSettings aspect={aspect} useRange={useRange} setUseRange={setUseRange} />
+        </div>
 
         <button
           onClick={() => void onExport()}
@@ -695,7 +733,7 @@ export function Inspector(): ReactNode {
           className="flex w-full items-center justify-center gap-1.5 rounded bg-flame-500 px-2 py-2 text-[12px] font-medium text-ink-950 transition-colors hover:bg-flame-400 disabled:opacity-50"
         >
           {exporting ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
-          {draft ? 'Export draft' : 'Export'}
+          Export
         </button>
 
         {/*
@@ -716,18 +754,19 @@ export function Inspector(): ReactNode {
               onClick={() => {
                 const name = window.prompt(
                   'Name these settings',
-                  `${ASPECTS[aspect].label} ${draft ? 'draft' : 'final'}`
+                  `${ASPECTS[aspect].label} ${exportChoice.resolution} ${encoderInfo(exportChoice.encoder).label}`
                 )
                 if (!name) return
+                // Everything the panel shows, as it shows it — a preset that
+                // saved less than was on screen would export something else.
                 void savePreset({
                   id: newPresetId(),
                   name,
                   aspect,
-                  crf: draft ? 26 : 20,
-                  preset: 'medium',
+                  ...exportChoice,
                   loudness: project.settings.loudness ?? null,
                   captions: project.captions.enabled,
-                  suffix: `-${aspect.replace(':', 'x')}`
+                  suffix: `-${aspect.replace(':', 'x')}-${exportChoice.resolution}`
                 })
               }}
               className="rounded px-1.5 py-0.5 text-[10px] text-ink-400 hover:bg-ink-800 hover:text-ink-200"
@@ -741,8 +780,10 @@ export function Inspector(): ReactNode {
                 <button
                   onClick={() => void onExport(item)}
                   disabled={exporting}
-                  title={`${item.aspect} · CRF ${item.crf} · ${item.preset}${
-                    item.loudness === null ? '' : ` · ${item.loudness} LUFS`
+                  title={`${item.aspect} · ${item.resolution} · ${encoderInfo(item.encoder).label} · ${
+                    item.bitrateKbps === null ? `CRF ${item.crf}` : `${item.bitrateKbps / 1000} Mbps`
+                  } · .${item.container}${item.loudness === null ? '' : ` · ${item.loudness} LUFS`}${
+                    item.captions ? ' · captions' : ''
                   }`}
                   className="flex min-w-0 flex-1 items-center gap-1.5 rounded bg-ink-850 px-2 py-1 text-left text-[11px] text-ink-300 transition-colors hover:bg-ink-800 hover:text-ink-100 disabled:opacity-50"
                 >
@@ -1649,7 +1690,18 @@ export function Inspector(): ReactNode {
                 </div>
                 <div className="mt-1 flex justify-between text-[10px] text-ink-600">
                   <span className="capitalize">{job.status}</span>
-                  <span>{job.speed ?? `${Math.round(job.progress * 100)}%`}</span>
+                  <span className="tabular-nums">
+                    {job.speed ?? `${Math.round(job.progress * 100)}%`}
+                    {/*
+                      Time left, from the rate so far. Recomputed on every
+                      progress report, which is what re-renders this row.
+                    */}
+                    {job.status === 'running' &&
+                      (() => {
+                        const left = timeRemainingMs(job.progress, job.startedAt, Date.now())
+                        return left === null ? null : ` · ${formatRemaining(left)}`
+                      })()}
+                  </span>
                 </div>
                 {job.error && (
                   <div className="mt-1 line-clamp-3 text-[10px] leading-snug text-red-400">{job.error}</div>
