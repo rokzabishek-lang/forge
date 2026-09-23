@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { FRAME_RATES, convertFrame, convertFrameRate } from '@shared/project/frameRate'
+import { NEW_PROJECT_RATES } from '@shared/project/newProject'
 import { clipEnd, emptyProject, type Clip, type MediaAsset, type Project } from '@shared/timeline'
 import { sourceFramesFor } from '@shared/render/speed'
 
@@ -134,5 +135,28 @@ describe('changing the frame rate', () => {
     for (const field of declared) {
       expect(converter.includes(field), `${field} is typed Frames but frameRate.ts never mentions it`).toBe(true)
     }
+  })
+})
+
+describe('the rates are offered where the rate is chosen', () => {
+  it('New Project offers exactly the rates the Output panel converts between', () => {
+    expect(NEW_PROJECT_RATES.map((r) => r.fps).sort((a, b) => a - b)).toEqual([...FRAME_RATES])
+    // 30 stays first — what phones shoot, and the default.
+    expect(NEW_PROJECT_RATES[0].fps).toBe(30)
+  })
+
+  it('changing it in the editor converts the project and moves the playhead and marks with it', () => {
+    const store = readFileSync(resolve(__dirname, '../src/renderer/src/store.ts'), 'utf8')
+    const at = store.indexOf('  setFrameRate: (fps) => {')
+    expect(at).toBeGreaterThan(-1)
+    const action = store.slice(at, store.indexOf('\n  },\n', at))
+    expect(action).toContain('const next = convertFrameRate(project, fps)')
+    expect(action).toContain('get().update(() => next)')
+    expect(action).toContain('playhead: at(playhead),')
+    expect(action).toContain('rangeIn: rangeIn === null ? null : at(rangeIn),')
+    expect(action).toContain('rangeOut: rangeOut === null ? null : at(rangeOut),')
+    expect(action).toContain('void get().rebakeGenerated()')
+    const inspector = readFileSync(resolve(__dirname, '../src/renderer/src/components/Inspector.tsx'), 'utf8')
+    expect(inspector).toContain('onClick={() => setFrameRate(rate)}')
   })
 })
