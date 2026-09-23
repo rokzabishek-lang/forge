@@ -502,9 +502,9 @@ were found that the list did not know about, three of them shipped:
 > - **`Preview.tsx` builds its crop without `crop.ts`**, so the preview and the
 >   export can disagree on an odd-sized crop — upstream of every B3 filter.
 >   Fix it before B3.
-> - **Still not rebased on a split:** `clip.motion` is normalised over the
->   whole clip, so each half of a split replays the full camera move; text
->   animations likewise. Keyframes and the motion path ARE rebased now.
+> - **Still not rebased on a split:** text animations replay on each half.
+>   Keyframes, the motion path and — since B3 — the camera move are rebased
+>   (`MotionWindow`, below).
 
 ### B1. The audio surface: gain, solo, meters, detach, video-track mute, voice-over — **DONE**
 
@@ -880,11 +880,28 @@ returns per-frame boxes → written as mask keyframes the user can then edit.
 Per-frame boxes must be thinned before they are written (as `keysFromStroke`
 thins a drawn curve): every key is another `if` in the per-row curve.
 
-**Camera moves by hand.** An Inspector *Motion* section: the twelve moves,
-amount, shake (amount, rate, decay, anchor), parallax when a bake exists →
-`setMotion(clipId, motion | undefined)`. Rule: a camera move and zoom
-keyframes are exclusive — choosing one clears the other, and the panel says
-so — because both scale the picture and the render would compound them.
+**Camera moves by hand — DONE.** The Inspector's **Camera** section, on photos
+only: a move is a `zoompan`, which holds each input frame for the whole move —
+right for a still, and it would multiply the frames of footage (video has zoom
+keyframes). None / Move / Shake / Depth (Depth only when the photo has
+separated depth planes); the twelve moves as In / Out / Pan rows; Amount (Depth
+capped at the bake's fill band); a shake's Rate, Settle and — when the bake
+found a subject — whether to hold the subject still. `setMotion`; the rules
+are `shared/edit/camera.ts`. A move and zoom keyframes are exclusive: choosing
+a move takes the zoom keys off, writing a zoom key takes the move off, each in
+one history entry with a notice, because both scale the picture and the plan
+would take the move and silently ignore the keys.
+
+Fixed with it, from the Phase B list above: a move ran 0..1 across its clip,
+so each half of a split ran the whole move — a pan restarted from the left
+past the cut, a shake hit twice. A split now gives each half a window onto
+one move (`MotionWindow` { from, length } on the move); `moveAt` and
+`moveExpressions` (render/motion.ts) are the one rule for the preview and the
+export; a head trim and a frame-rate change carry the window; a clip never
+split still fits its move to its length. Rendered
+(`integration/splitMove.int.test.ts`): the right half's frames equal the whole
+clip's at the same moments, for a pan and a shake; in the harness the preview
+reads the same at frames 0/29/30/59 before and after the split.
 
 **Steady.** `deshake` (2013) as a clip toggle. `vidstab` two-pass only if
 both builds carry `libvidstab` — measure Windows.

@@ -141,6 +141,14 @@ repeating them — worth it for a hero shot, and roughly forty times slower to
 export, so not for a whole reel. Stills have no speed control: a photograph has
 no rate to change.
 
+**Camera** (photos) — a move across the still: **Move** is a push in, a pull
+out or a pan, chosen from the In / Out / Pan rows, with **Amount**; **Shake** is
+a hit that settles, with **Rate** and **Settle** (and **Hold** subject-still when
+the photo has a depth cut-out); **Depth** runs the move on the photo's depth
+planes when they exist. A move and Zoom keyframes both scale the picture, so
+choosing one takes the other off and says so. A split keeps one move across
+both halves, and the panel says which half this is.
+
 **Mask** — the numbers behind the shape on the picture: which shape, what
 happens inside it (**Blur** / **Colour** / **Show**), blur amount, feather,
 width, height, angle, and **Invert**. `Edit on picture` toggles the handles in

@@ -143,7 +143,12 @@ npm run pack:win    # electron-builder — must run ON Windows, see below
 ```
 
 CI runs typecheck, the **full** suite including the ffmpeg integration tests,
-and the build, on macOS **and** Windows for every push. The integration tests are
+and the build, on **Windows** for every push — macOS joins on a `v*` tag or a
+manual run (`a2be321`, runner cost), so the Mac is covered by running the suite
+locally. **Read the result after every push**: it is at
+github.com/spyki-a/forge/actions (the `gh` CLI cannot reach GitHub from the
+sandbox), and a failure's message is in its annotations without signing in.
+CI was red on Windows for a day in B3 before anyone looked. The integration tests are
 in CI deliberately: a runner's `D:\a\forge\forge` path is exactly the shape that
 breaks filter arguments.
 
