@@ -1285,12 +1285,23 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
     ].filter((s): s is string => s !== null)
 
     if (shapes.length > 0) {
-      let stencil = shapes[0]
-      for (let s = 1; s < shapes.length; s++) {
+      /*
+       * The clip's OWN alpha is the first shape, and the rest multiply into it.
+       *
+       * `alphamerge` REPLACES alpha. With only the shapes in the stencil, a
+       * clip's own transparency was thrown away the moment it had one: the
+       * see-through bars a fit leaves around a picture that does not fill its
+       * box came back solid black, and a transparent PNG went opaque inside its
+       * mask. Measured: a 4:3 clip over red with a reveal mask — the side bars
+       * were 0,0,0 where they should have been the red below.
+       */
+      filters.push(`${head}${body || 'null'},split[mb${i}][mo${i}]`)
+      filters.push(`[mo${i}]format=yuva420p,alphaextract[ma${i}]`)
+      let stencil = `[ma${i}]`
+      for (let s = 0; s < shapes.length; s++) {
         filters.push(`${stencil}${shapes[s]}blend=all_mode=multiply[cs${i}_${s}]`)
         stencil = `[cs${i}_${s}]`
       }
-      filters.push(`${head}${body || 'null'}[mb${i}]`)
       filters.push(`[mb${i}]${stencil}alphamerge[mm${i}]`)
       head = `[mm${i}]`
       body = ''

@@ -2204,3 +2204,15 @@ bundled binary, a `0x808080` grey at 50 % alpha in `yuva420p` through
 kept. The grey decodes as 126 on the way in, and 126 × the gains is 152.2,
 121.7, 91.4: the gains are applied exactly. `-filters` lists it `TSC`, so it
 takes `enable` — an adjustment layer needs that — and `eq` is `T.C`.
+
+### A mask used to throw away the clip's own alpha
+
+Found while planning B3's chroma key, which has the same shape of problem.
+Every alpha shape — sticker matte, clip matte, reveal mask, luma wipe — was
+multiplied into one stencil and put on with `alphamerge`, which REPLACES alpha.
+The clip's own transparency was never one of the shapes. Measured: a 4:3 blue
+clip fitted into 16:9 over a red track, reveal mask covering the frame — the
+fit's see-through side bars came out 0,0,0 where they should have shown the
+red; without the mask they did. A half-transparent PNG went opaque the same
+way. The clip's own alpha (`split`, `alphaextract`) is now the first shape and
+everything multiplies into it (`integration/maskOwnAlpha.int.test.ts`).
