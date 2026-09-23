@@ -1301,7 +1301,9 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
        * be, and alphamerge never sees a mismatch.
        */
       filters.push(`${head}${body ? `${body},` : ''}split[mv${i}][mg${i}]`)
-      filters.push(`[mg${i}]format=gray,geq=lum='${maskExpression(mask.shape)}'[ms${i}]`)
+      // A moving mask's centre and size are curves of the clip's own time.
+      const motion = { keyframes: clip.keyframes, fps, durationFrames: clip.duration }
+      filters.push(`[mg${i}]format=gray,geq=lum='${maskExpression(mask.shape, motion)}'[ms${i}]`)
       head = `[mv${i}]`
       body = ''
       shapeLabel = `[ms${i}]`

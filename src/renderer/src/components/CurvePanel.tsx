@@ -1,5 +1,12 @@
 import { useState, type ReactNode } from 'react'
-import { KEYED_PROPERTIES, PROPERTY_INFO, normaliseKeys, type KeyedProperty } from '@shared/render/keyframes'
+import {
+  KEYED_PROPERTIES,
+  MASK_PROPERTIES,
+  PROPERTY_INFO,
+  normaliseKeys,
+  type KeyedProperty
+} from '@shared/render/keyframes'
+import { maskFieldOf } from '@shared/render/mask'
 import { ColourCurve } from './ColourCurve'
 import { CurveEditor } from './CurveEditor'
 import { useEditor } from '../store'
@@ -37,6 +44,16 @@ export function CurvePanel(): ReactNode {
   const setColor = useEditor((s) => s.setColor)
 
   const clip = project.clips.find((c) => c.id === selectedClipId) ?? null
+  /*
+   * The mask's four tracks join the tabs when the clip has a mask — its centre
+   * and size as curves, the same keys the Mask panel's Animate sets. A mask
+   * track picked on another clip falls back to Zoom rather than a tab that is
+   * not there.
+   */
+  const offered = [...KEYED_PROPERTIES, ...(clip?.mask ? MASK_PROPERTIES : [])]
+  const shown = offered.includes(property) ? property : 'zoom'
+  const field = maskFieldOf(shown)
+  const rest = field && clip?.mask ? clip.mask.shape[field] : undefined
 
   return (
     <div className="flex h-full min-h-0 flex-col border-l border-ink-850 bg-ink-900">
@@ -63,7 +80,7 @@ export function CurvePanel(): ReactNode {
       */}
       {kind === 'motion' && (
         <div className="flex shrink-0 flex-wrap gap-0.5 border-b border-ink-850 px-2 py-1">
-          {KEYED_PROPERTIES.map((key) => {
+          {offered.map((key) => {
             const has = (clip?.keyframes?.[key]?.length ?? 0) > 0
             return (
               <button
@@ -75,7 +92,7 @@ export function CurvePanel(): ReactNode {
                     : `${PROPERTY_INFO[key].label} — nothing keyed yet`
                 }
                 className={`rounded px-1.5 py-0.5 text-[10px] transition-colors ${
-                  property === key
+                  shown === key
                     ? 'bg-ink-800 text-ink-200'
                     : 'text-ink-500 hover:bg-ink-850 hover:text-ink-300'
                 }`}
@@ -103,11 +120,12 @@ export function CurvePanel(): ReactNode {
         ) : (
           <>
             <CurveEditor
-              property={property}
-              keys={normaliseKeys(clip.keyframes?.[property] ?? [], clip.duration)}
+              property={shown}
+              rest={rest}
+              keys={normaliseKeys(clip.keyframes?.[shown] ?? [], clip.duration)}
               durationFrames={clip.duration}
               playheadFrame={Math.round(playhead - clip.start)}
-              onChange={(next) => setKeyframes(clip.id, property, next)}
+              onChange={(next) => setKeyframes(clip.id, shown, next)}
               onScrub={(frame) => setPlayhead(clip.start + frame)}
             />
             <p className="mt-2 text-[10px] leading-snug text-ink-600">

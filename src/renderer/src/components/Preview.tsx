@@ -33,6 +33,7 @@ import { NO_SCRUB, SCRUB_BURST_MS, scrubStep, type ScrubState } from '@shared/re
 import { motionSourceRect } from '@shared/render/motion'
 import { effectiveCrop } from '@shared/render/crop'
 import { pickRegion, pickedColor, saneKey } from '@shared/render/chromaKey'
+import { maskAt } from '@shared/render/mask'
 import { clipBox, parallaxBakeFor, planeShare } from '@shared/render/plan'
 import { pathAt } from '@shared/render/path'
 import { clockStep, needsReanchor, type ClockAnchor } from '@shared/render/clock'
@@ -1582,7 +1583,8 @@ export function Preview(): ReactNode {
          * the source element, would put the shape in the wrong place for every
          * clip that is cropped or scaled.
          */
-        const mask = raw ? undefined : layer.clip.mask
+        // The mask as it stands at this frame — a moving one is keyed.
+        const mask = raw ? undefined : maskAt(layer.clip, playhead - layer.clip.start)
         // Grade mode needs the PLAIN picture underneath; if `picture` were the
         // background, everything would already be graded and "only inside"
         // would show nothing at all.
@@ -1971,7 +1973,8 @@ export function Preview(): ReactNode {
         {showMask && selectedClip?.mask && outputRect && (
           <MaskOverlay
             clip={selectedClip}
-            mask={selectedClip.mask}
+            // Where the shape is NOW, so a drag starts from what is on screen.
+            mask={maskAt(selectedClip, playhead - selectedClip.start) ?? selectedClip.mask}
             frame={outputRect}
             canvas={ASPECTS[aspect]}
           />

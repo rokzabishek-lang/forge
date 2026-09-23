@@ -17,7 +17,13 @@ import type {
   TextSpec
 } from '@shared/timeline'
 import { DEFAULT_COLOR, DEFAULT_TEXT, clipCoversFrame } from '@shared/timeline'
-import type { Mask, MaskShape } from '@shared/render/mask'
+import {
+  withMaskAnimation,
+  withMaskEdit,
+  withoutMaskKeys,
+  type Mask,
+  type MaskShape
+} from '@shared/render/mask'
 import { saneKey, type ChromaKey } from '@shared/render/chromaKey'
 import { clipSpeed, maxDurationAtSpeed, withClipSpeed } from '@shared/render/speed'
 import type { VoiceId } from '@shared/render/voice'
@@ -609,6 +615,11 @@ interface EditorState {
   setKey: (clipId: string, key: ChromaKey | undefined) => void
   /** Change part of a mask's shape without restating the rest of it. */
   setMaskShape: (clipId: string, patch: Partial<MaskShape>) => void
+  /**
+   * Animate the mask's centre and size, or stop. On sets a key for each where
+   * the shape is, at the playhead; off keeps what is on screen there.
+   */
+  animateMask: (clipId: string, on: boolean) => void
   /** Open the file dialog and put the chosen .cube on this clip. */
   chooseLut: (clipId: string) => Promise<void>
   /** How long a clip stays on screen, in frames. */
@@ -3035,7 +3046,13 @@ export const useEditor = create<EditorState>((set, get) => ({
       ...p,
       clips: p.clips.map((c) =>
         c.id === clipId
-          ? { ...c, transform: patch.transform, mask: patch.mask ?? undefined }
+          ? {
+              ...c,
+              transform: patch.transform,
+              mask: patch.mask ?? undefined,
+              // Whatever mask this leaves is a new one; the old keys go with the old.
+              keyframes: withoutMaskKeys(c.keyframes)
+            }
           : c
       )
     }))
@@ -3264,7 +3281,10 @@ export const useEditor = create<EditorState>((set, get) => ({
     get().update((p) => ({
       ...p,
       clips: p.clips.map((c) =>
-        c.id === clipId ? { ...c, transform: { ...c.transform, ...transform }, mask } : c
+        c.id === clipId
+          ? // A new mask: the old one's keys would steer it.
+            { ...c, transform: { ...c.transform, ...transform }, mask, keyframes: withoutMaskKeys(c.keyframes) }
+          : c
       )
     }))
     notify('Picture in picture — drag it anywhere on the preview', 'info')
@@ -3273,7 +3293,16 @@ export const useEditor = create<EditorState>((set, get) => ({
   setMask: (clipId, mask) => {
     get().update((p) => ({
       ...p,
-      clips: p.clips.map((c) => (c.id === clipId ? { ...c, mask } : c))
+      clips: p.clips.map((c) => {
+        if (c.id !== clipId) return c
+        /*
+         * Changing the mode or the kind keeps the animation — it is the same
+         * mask. Removing it, or putting one on where there was none, does not:
+         * leftover keys would steer whatever mask came next.
+         */
+        if (mask && c.mask) return { ...c, mask }
+        return { ...c, mask, keyframes: withoutMaskKeys(c.keyframes) }
+      })
     }))
   },
 
@@ -3292,15 +3321,23 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
 
   setMaskShape: (clipId, patch) => {
+    const playhead = get().playhead
     get().update((p) => ({
       ...p,
       clips: p.clips.map((c) =>
         // A shape patch on a clip with no mask yet would otherwise write a
-        // half-built mask with no mode on it.
-        c.id === clipId && c.mask
-          ? { ...c, mask: { ...c.mask, shape: { ...c.mask.shape, ...patch } } }
-          : c
+        // half-built mask with no mode on it — withMaskEdit leaves it alone.
+        // A number that is animated takes a key at the playhead instead.
+        c.id === clipId ? withMaskEdit(c, patch, playhead - c.start) : c
       )
+    }))
+  },
+
+  animateMask: (clipId, on) => {
+    const playhead = get().playhead
+    get().update((p) => ({
+      ...p,
+      clips: p.clips.map((c) => (c.id === clipId ? withMaskAnimation(c, on, playhead - c.start) : c))
     }))
   },
 

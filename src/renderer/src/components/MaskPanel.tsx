@@ -1,10 +1,13 @@
 import { type ReactNode } from 'react'
-import { Circle, Minus, Square } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Circle, Diamond, Minus, Square } from 'lucide-react'
 import type { Clip } from '@shared/timeline'
 import {
   MASK_MODE_HINT,
   MASK_MODE_LABEL,
   defaultMask,
+  isMaskAnimated,
+  maskAt,
+  maskKeyFrames,
   type MaskKind,
   type MaskMode
 } from '@shared/render/mask'
@@ -33,7 +36,23 @@ export function MaskPanel({ clip }: { clip: Clip }): ReactNode {
   const setMaskShape = useEditor((s) => s.setMaskShape)
   const setPreviewTool = useEditor((s) => s.setPreviewTool)
   const previewTool = useEditor((s) => s.previewTool)
-  const mask = clip.mask
+  const animateMask = useEditor((s) => s.animateMask)
+  const playhead = useEditor((s) => s.playhead)
+  const setPlayhead = useEditor((s) => s.setPlayhead)
+  /*
+   * The mask as it stands at the playhead. The sliders read this, and a slider
+   * moved on an animated mask keys the playhead (store: setMaskShape) — so what
+   * they show and what they change are the same moment.
+   */
+  const frame = playhead - clip.start
+  const mask = maskAt(clip, frame)
+  const animated = isMaskAnimated(clip.keyframes)
+  const keys = animated ? maskKeyFrames(clip.keyframes) : []
+  const onKey = keys.includes(Math.round(frame))
+  // Writes go to the STORED mask (`clip.mask`); `mask` is only what shows now.
+  // Spreading `mask` into setMask would bake this frame's keyed values in.
+  const previous = [...keys].reverse().find((k) => k < Math.round(frame))
+  const next = keys.find((k) => k > Math.round(frame))
 
   if (!mask) {
     return (
@@ -89,6 +108,61 @@ export function MaskPanel({ clip }: { clip: Clip }): ReactNode {
         </div>
       </div>
 
+      {/*
+        Animate: the centre and size follow keys, like any keyframed value.
+
+        Off is the mask as it always was. On puts a key where the shape is,
+        and from then on moving or resizing it — on the picture or with the
+        sliders — keys the playhead. Turning it off keeps what is on screen.
+      */}
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => animateMask(clip.id, !animated)}
+          title={
+            animated
+              ? 'Stop animating — the shape stays as it is at the playhead'
+              : 'Animate the shape: move or resize it at different moments and it follows'
+          }
+          className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] transition-colors ${
+            animated ? 'bg-flame-500 font-medium text-ink-950' : 'bg-ink-800 text-ink-300 hover:bg-ink-700 hover:text-ink-100'
+          }`}
+        >
+          <Diamond size={10} strokeWidth={2.2} className={onKey ? 'fill-current' : ''} />
+          {animated ? 'Animated' : 'Animate'}
+        </button>
+        {animated && (
+          <>
+            <span className="text-[9.5px] text-ink-600">
+              {keys.length} {keys.length === 1 ? 'key' : 'keys'}
+            </span>
+            <div className="ml-auto flex items-center">
+              <button
+                onClick={() => previous !== undefined && setPlayhead(clip.start + previous)}
+                disabled={previous === undefined}
+                title="The mask's previous key"
+                className="rounded p-0.5 text-ink-500 hover:bg-ink-800 hover:text-ink-200 disabled:opacity-30"
+              >
+                <ChevronLeft size={12} />
+              </button>
+              <button
+                onClick={() => next !== undefined && setPlayhead(clip.start + next)}
+                disabled={next === undefined}
+                title="The mask's next key"
+                className="rounded p-0.5 text-ink-500 hover:bg-ink-800 hover:text-ink-200 disabled:opacity-30"
+              >
+                <ChevronRight size={12} />
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+      {animated && (
+        <p className="text-[9.5px] leading-snug text-ink-600">
+          Move the playhead, then move or resize the shape: it keys there and glides between keys.
+          Its curves are in the graph beside the timeline.
+        </p>
+      )}
+
       {/* Shape. */}
       <div className="flex items-center gap-1">
         {KINDS.map(({ id, label, icon: Icon }) => (
@@ -112,7 +186,7 @@ export function MaskPanel({ clip }: { clip: Clip }): ReactNode {
         {MODES.map((mode) => (
           <button
             key={mode}
-            onClick={() => setMask(clip.id, { ...mask, mode })}
+            onClick={() => setMask(clip.id, { ...clip.mask!, mode })}
             title={MASK_MODE_HINT[mode]}
             className={`flex-1 truncate rounded px-1 py-0.5 text-[10px] transition-colors ${
               mask.mode === mode
@@ -133,7 +207,7 @@ export function MaskPanel({ clip }: { clip: Clip }): ReactNode {
           min={0}
           max={120}
           suffix="px"
-          onChange={(v) => setMask(clip.id, { ...mask, blur: v })}
+          onChange={(v) => setMask(clip.id, { ...clip.mask!, blur: v })}
         />
       )}
 

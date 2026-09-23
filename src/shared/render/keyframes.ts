@@ -32,7 +32,21 @@ import { MAX_GAIN, faderPosition, formatDb, gainAtPosition } from './audibility'
  * `keyframeExpression` already compiles exactly that. A second mechanism for
  * the same shape would be two things to keep in step.
  */
-export type KeyedProperty = 'zoom' | 'rotation' | 'opacity' | 'volume'
+export type KeyedProperty =
+  | 'zoom'
+  | 'rotation'
+  | 'opacity'
+  | 'volume'
+  /*
+   * A mask's centre and half-extents (render/mask.ts), as fractions of the
+   * clip's box. They ride with the clip's other tracks so everything that
+   * already moves keyframes — a split, a head trim, a frame-rate change —
+   * moves these too, without being told about masks.
+   */
+  | 'maskX'
+  | 'maskY'
+  | 'maskWidth'
+  | 'maskHeight'
 
 /** How the value LEAVES this key, which is the convention every NLE uses. */
 export type Ease = 'linear' | 'hold' | 'smooth'
@@ -46,7 +60,11 @@ export interface Keyframe {
 
 export type KeyframeTracks = Partial<Record<KeyedProperty, Keyframe[]>>
 
+/** The clip's own properties — the Inspector's keyframe rows and the graph's first tabs. */
 export const KEYED_PROPERTIES: KeyedProperty[] = ['zoom', 'rotation', 'opacity', 'volume']
+
+/** The mask's, offered only on a clip that has a mask. */
+export const MASK_PROPERTIES: KeyedProperty[] = ['maskX', 'maskY', 'maskWidth', 'maskHeight']
 
 /** Label, neutral value and range, so the UI does not hold a second copy. */
 export const PROPERTY_INFO: Record<
@@ -61,7 +79,17 @@ export const PROPERTY_INFO: Record<
    * curve editor, the keyframe lane and the curve panel all read their range
    * from here, so this one number is what lets an envelope lift a quiet clip.
    */
-  volume: { label: 'Volume', neutral: 1, min: 0, max: MAX_GAIN, step: 0.01, suffix: '' }
+  volume: { label: 'Volume', neutral: 1, min: 0, max: MAX_GAIN, step: 0.01, suffix: '' },
+  /*
+   * `neutral` is only a default for these: a mask track's resting value is
+   * the mask's own shape, and every caller that knows the clip passes that.
+   * The ranges are the overlay's — a centre inside the box, a half-extent up
+   * to twice it.
+   */
+  maskX: { label: 'Mask X', neutral: 0.5, min: 0, max: 1, step: 0.005, suffix: '' },
+  maskY: { label: 'Mask Y', neutral: 0.5, min: 0, max: 1, step: 0.005, suffix: '' },
+  maskWidth: { label: 'Mask W', neutral: 0.25, min: 0.005, max: 2, step: 0.005, suffix: '' },
+  maskHeight: { label: 'Mask H', neutral: 0.25, min: 0.005, max: 2, step: 0.005, suffix: '' }
 }
 
 /** Which of these describe sound rather than picture. */
@@ -100,7 +128,15 @@ export function valueAtAxis(property: KeyedProperty, position: number): number {
 }
 
 /** The smallest stretch of value the curve graph shows, for the two it fits. */
-export const GRAPH_LEAST_SPAN: Partial<Record<KeyedProperty, number>> = { zoom: 0.5, rotation: 30 }
+export const GRAPH_LEAST_SPAN: Partial<Record<KeyedProperty, number>> = {
+  zoom: 0.5,
+  rotation: 30,
+  // A mask following someone across a shot moves a fraction of the frame.
+  maskX: 0.2,
+  maskY: 0.2,
+  maskWidth: 0.2,
+  maskHeight: 0.2
+}
 
 /**
  * The stretch of a property's axis the curve graph shows, as axis positions.
@@ -113,12 +149,19 @@ export const GRAPH_LEAST_SPAN: Partial<Record<KeyedProperty, number>> = { zoom: 
  * above and below to drag into. Opacity and volume keep their whole range:
  * opacity's IS the useful range, and volume's has to match the fader and the
  * clip's level line height for height.
+ *
+ * `rest` is the value with no keys — the property's neutral unless the caller
+ * knows better, as it does for a mask, whose rest is the mask's own shape.
  */
-export function graphWindow(property: KeyedProperty, keys: Keyframe[]): { lo: number; hi: number } {
+export function graphWindow(
+  property: KeyedProperty,
+  keys: Keyframe[],
+  rest: number = PROPERTY_INFO[property].neutral
+): { lo: number; hi: number } {
   const least = GRAPH_LEAST_SPAN[property]
   if (least === undefined) return { lo: 0, hi: 1 }
-  const { min, max, neutral } = PROPERTY_INFO[property]
-  const values = [neutral, ...keys.map((k) => k.value)].filter((v) => Number.isFinite(v))
+  const { min, max } = PROPERTY_INFO[property]
+  const values = [rest, ...keys.map((k) => k.value)].filter((v) => Number.isFinite(v))
   const low = Math.max(min, Math.min(...values))
   const high = Math.min(max, Math.max(...values))
   const span = Math.max(high - low, least)
@@ -142,6 +185,10 @@ export function graphWindow(property: KeyedProperty, keys: Keyframe[]): { lo: nu
 export function formatKeyed(property: KeyedProperty, value: number): string {
   if (property === 'volume') return formatDb(value)
   if (property === 'rotation') return `${Math.round(value)}${PROPERTY_INFO.rotation.suffix}`
+  // As the mask panel reads them: the centre across the box, the size as a
+  // share of the box's full width or height (a half-extent of 0.5 is 100%).
+  if (property === 'maskX' || property === 'maskY') return `${Math.round(value * 100)}%`
+  if (property === 'maskWidth' || property === 'maskHeight') return `${Math.round(value * 200)}%`
   return `${value.toFixed(2)}${PROPERTY_INFO[property].suffix}`
 }
 

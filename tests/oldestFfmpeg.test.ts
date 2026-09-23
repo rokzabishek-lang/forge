@@ -183,6 +183,22 @@ const SHAPES: { name: string; project: Project; range?: { start: number; end: nu
     })
   },
   {
+    // B3's moving mask: keyed curves in the mask's geq, held with st()/ld().
+    name: 'a mask whose centre and size are keyed',
+    project: project({
+      clips: [
+        clip({
+          id: 'a',
+          mask: { mode: 'reveal', blur: 0, shape: { kind: 'rectangle', x: 0.5, y: 0.5, width: 0.3, height: 0.3, rotation: 10, feather: 0.1, radius: 0.2, invert: false } },
+          keyframes: {
+            maskX: [{ frame: 0, value: 0.3 }, { frame: 30, value: 0.7 }],
+            maskWidth: [{ frame: 0, value: 0.1 }, { frame: 30, value: 0.4, ease: 'smooth' }]
+          }
+        })
+      ]
+    })
+  },
+  {
     // B2's range export trims the finished picture and the finished mix; the
     // branch only exists with a range, so without this shape nothing checks it.
     name: 'a range export, so the picture and the mix are trimmed',

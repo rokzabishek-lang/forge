@@ -89,13 +89,17 @@ describe('the graph panel', () => {
 
   it('gives the property tabs a row of their own that wraps, not the fixed-height header', () => {
     const header = panel.slice(panel.indexOf('flex h-7 shrink-0'), panel.indexOf('The properties on a row of their own'))
+    // The header maps Motion and Colour; the property list must not be in it.
+    expect(header).not.toContain('offered.map')
     expect(header).not.toContain('KEYED_PROPERTIES')
     const row = panel.slice(panel.indexOf('The properties on a row of their own'))
-    expect(row.slice(0, row.indexOf('KEYED_PROPERTIES.map'))).toContain('flex-wrap')
+    const tabs = row.indexOf('offered.map((key) =>')
+    expect(tabs).toBeGreaterThan(-1)
+    expect(row.slice(0, tabs)).toContain('flex-wrap')
   })
 
   it('draws against the fitted window, frozen while a point is dragged or a line drawn', () => {
-    expect(editor).toContain('const view = frozen ?? graphWindow(property, points)')
+    expect(editor).toContain('const view = frozen ?? graphWindow(property, points, resting)')
     // Frozen at the start of both gestures, released at the end of both.
     expect([...editor.matchAll(/setFrozen\(view\)/g)]).toHaveLength(2)
     expect([...editor.matchAll(/setFrozen\(null\)/g)]).toHaveLength(2)

@@ -19,6 +19,14 @@
  * and the one you cannot see while editing is the one that ships.
  */
 
+import {
+  keyframeExpression,
+  normaliseKeys,
+  valueAt,
+  type KeyedProperty,
+  type KeyframeTracks
+} from './keyframes'
+
 export type MaskKind = 'rectangle' | 'ellipse' | 'linear'
 export type MaskMode = 'reveal' | 'blur' | 'grade'
 
@@ -212,11 +220,58 @@ export function maskGeometry(shape: MaskShape, width: number, height: number): M
  * The rotation is folded in as two precomputed constants rather than calls to
  * sin and cos, because this is evaluated once per pixel per plane per frame.
  */
-export function maskExpression(shape: MaskShape): string {
+export function maskExpression(shape: MaskShape, motion?: MaskMotion): string {
   const n = (value: number): string => value.toFixed(5)
   const radians = (shape.rotation * Math.PI) / 180
   const cos = Math.cos(radians)
   const sin = Math.sin(radians)
+
+  /*
+   * A moving mask: each keyed number computed once per ROW and held.
+   *
+   * geq has no per-frame stage — the expression is evaluated for every pixel —
+   * and the centre alone appears twice and each half-extent three or four
+   * times below. `st()` stores a number in one of geq's variables and `ld()`
+   * reads it back; `;` sequences them. Measured on the bundled binary inside a
+   * quoted filter_complex argument: `st(0,32);if(lt(X,ld(0)),200,0)` is 200 up
+   * to x=31 and 0 from x=32. Both are libavutil's eval, far older than the
+   * Windows build.
+   *
+   * The curves depend on time alone, so they are worked out at the first
+   * pixel of each row (`X` is 0) and every other pixel reads them back — geq
+   * walks each row from x=0, and the variables persist between pixels.
+   * Measured over 3 s at 1080x1920 with four tracks of six keys: 11.4 s for a
+   * still mask, 26.8 s with the curves worked out at every pixel, 13.4 s once
+   * per row — and the per-row picture byte-identical to the per-pixel one over
+   * all 180 frames tested.
+   *
+   * `T` is the clip's own seconds here — the mask is drawn on the clip's chain
+   * before it is moved to its place on the timeline — measured 0, 0.1, 0.2…
+   * frame by frame at 10fps.
+   */
+  const keyed = (field: MaskField): string | null => {
+    const keys = motion?.keyframes?.[MASK_TRACK[field]]
+    if (!motion || !keys || keys.length === 0) return null
+    return keyframeExpression(keys, {
+      durationFrames: motion.durationFrames,
+      fps: motion.fps,
+      startSeconds: 0,
+      fallback: shape[field],
+      precision: 5,
+      timeVar: 'T'
+    })
+  }
+  const moving = { x: keyed('x'), y: keyed('y'), width: keyed('width'), height: keyed('height') }
+  const stores: string[] = []
+  if (moving.x) stores.push(`st(0,${moving.x})`)
+  if (moving.y) stores.push(`st(1,${moving.y})`)
+  if (moving.width) stores.push(`st(2,max(0.002,abs(${moving.width})))`)
+  if (moving.height) stores.push(`st(3,max(0.002,abs(${moving.height})))`)
+  // `+` only to evaluate every store inside one `if`; the sum is thrown away.
+  const prefix = stores.length > 0 ? `if(eq(X,0),${stores.join('+')},0);` : ''
+  // The half-extents as fractions of the stream: a stored value, or the number.
+  const wf = moving.width ? 'ld(2)' : n(Math.max(0.002, Math.abs(shape.width)))
+  const hf = moving.height ? 'ld(3)' : n(Math.max(0.002, Math.abs(shape.height)))
 
   /*
    * Half-extents and feather as fractions of the stream, never quite zero: a
@@ -225,15 +280,16 @@ export function maskExpression(shape: MaskShape): string {
    * from nothing to everything inside a single pixel, which IS a hard edge as
    * far as the output is concerned.
    */
-  const rx = `${n(Math.max(0.002, Math.abs(shape.width)))}*W`
-  const ry = `${n(Math.max(0.002, Math.abs(shape.height)))}*H`
+  const rx = `${wf}*W`
+  const ry = `${hf}*H`
   const soft = Math.max(0.0008, shape.feather)
-  const fx = `${n(Math.max(0.002, Math.abs(shape.width)) * soft)}*W`
-  const fy = `${n(Math.max(0.002, Math.abs(shape.height)) * soft)}*H`
+  // Folded into one number when the size is still, as it always was.
+  const fx = moving.width ? `ld(2)*${n(soft)}*W` : `${n(Math.max(0.002, Math.abs(shape.width)) * soft)}*W`
+  const fy = moving.height ? `ld(3)*${n(soft)}*H` : `${n(Math.max(0.002, Math.abs(shape.height)) * soft)}*H`
 
   // Coordinates in the shape's own frame, so every shape below ignores rotation.
-  const dx = `(X-${n(shape.x)}*W)`
-  const dy = `(Y-${n(shape.y)}*H)`
+  const dx = `(X-${moving.x ? 'ld(0)' : n(shape.x)}*W)`
+  const dy = `(Y-${moving.y ? 'ld(1)' : n(shape.y)}*H)`
   const xr = `(${n(cos)}*${dx}+${n(sin)}*${dy})`
   const yr = `(${n(-sin)}*${dx}+${n(cos)}*${dy})`
 
@@ -329,11 +385,15 @@ export function maskExpression(shape: MaskShape): string {
         Math.max(0.002, Math.abs(shape.width)),
         Math.max(0.002, Math.abs(shape.height))
       )
-      const r = `${n(shorter * corner)}*H`
+      const sizing = moving.width || moving.height
+      const least = sizing ? `min(${wf},${hf})` : null
+      const r = least ? `${least}*${n(corner)}*H` : `${n(shorter * corner)}*H`
       const ax = `max(abs(${xr})-((${rx})-${r}),0)`
       const ay = `max(abs(${yr})-((${ry})-${r}),0)`
       // One feather in pixels, so the corner and the flat edges fade together.
-      const edge = `${n(Math.max(0.0015, shorter * soft))}*H`
+      const edge = least
+        ? `max(0.0015,${least}*${n(soft)})*H`
+        : `${n(Math.max(0.0015, shorter * soft))}*H`
       inside = `clip(((${r})-hypot(${ax},${ay}))/(${edge}),0,1)`
       break
     }
@@ -345,7 +405,160 @@ export function maskExpression(shape: MaskShape): string {
   }
 
   const value = shape.invert ? `(1-(${inside}))` : inside
-  return `(${value})*255`
+  return `${prefix}(${value})*255`
+}
+
+/* ---------------------------------------------------------- a moving mask */
+
+/**
+ * Which of a clip's keyframe tracks moves which number of its mask.
+ *
+ * Only the centre and the size. A mask following someone across a shot, or
+ * an iris opening, is those four; its angle, softness and kind stay put, and
+ * keying them would be four more tracks for a rare case.
+ */
+export type MaskField = 'x' | 'y' | 'width' | 'height'
+export const MASK_FIELDS: MaskField[] = ['x', 'y', 'width', 'height']
+export const MASK_TRACK: Record<MaskField, KeyedProperty> = {
+  x: 'maskX',
+  y: 'maskY',
+  width: 'maskWidth',
+  height: 'maskHeight'
+}
+
+/** The mask number a track moves, or null for a track that is not the mask's. */
+export function maskFieldOf(property: KeyedProperty): MaskField | null {
+  return MASK_FIELDS.find((f) => MASK_TRACK[f] === property) ?? null
+}
+
+/** What the export needs to draw a moving mask. */
+export interface MaskMotion {
+  keyframes: KeyframeTracks | undefined
+  fps: number
+  durationFrames: number
+}
+
+/** Every frame, in the clip's own time, where any of the mask's numbers has a key. */
+export function maskKeyFrames(keyframes: KeyframeTracks | undefined): number[] {
+  const frames = new Set<number>()
+  for (const field of MASK_FIELDS) for (const k of keyframes?.[MASK_TRACK[field]] ?? []) frames.add(Math.round(k.frame))
+  return [...frames].sort((a, b) => a - b)
+}
+
+/** Does any of the mask's numbers move? */
+export function isMaskAnimated(keyframes: KeyframeTracks | undefined): boolean {
+  return MASK_FIELDS.some((f) => (keyframes?.[MASK_TRACK[f]]?.length ?? 0) > 0)
+}
+
+/**
+ * The shape at a frame of the clip's own time.
+ *
+ * A track with ANY key decides its number — one key is a value, as it is in
+ * the export's expression — and a number with no track is the shape's own. So
+ * the first key, written where the shape already was, changes nothing, and
+ * dragging the shape at that frame moves the key rather than a value the keys
+ * would ignore.
+ */
+export function maskShapeAt(
+  shape: MaskShape,
+  keyframes: KeyframeTracks | undefined,
+  frame: number,
+  durationFrames: number
+): MaskShape {
+  if (!isMaskAnimated(keyframes)) return shape
+  const out = { ...shape }
+  for (const field of MASK_FIELDS) {
+    const keys = keyframes?.[MASK_TRACK[field]]
+    if (keys && keys.length > 0) out[field] = valueAt(keys, frame, durationFrames, shape[field])
+  }
+  return out
+}
+
+/** A clip's mask as it stands at a frame of the clip's own time. */
+export function maskAt(
+  clip: { mask?: Mask; keyframes?: KeyframeTracks; duration: number },
+  frame: number
+): Mask | undefined {
+  if (!clip.mask) return undefined
+  if (!isMaskAnimated(clip.keyframes)) return clip.mask
+  return { ...clip.mask, shape: maskShapeAt(clip.mask.shape, clip.keyframes, frame, clip.duration) }
+}
+
+type Keyed = { mask?: Mask; keyframes?: KeyframeTracks; duration: number }
+
+/** The frame a key goes on: the playhead, kept inside the clip. */
+function keyFrame(clip: Keyed, frame: number): number {
+  return Math.max(0, Math.min(Math.max(0, clip.duration - 1), Math.round(frame)))
+}
+
+function withKey(tracks: KeyframeTracks, property: KeyedProperty, frame: number, value: number, duration: number): KeyframeTracks {
+  const existing = tracks[property] ?? []
+  const ease = existing.find((k) => k.frame === frame)?.ease
+  // normaliseKeys keeps the later of two keys at a frame, so appending replaces.
+  const next = normaliseKeys([...existing, { frame, value, ...(ease ? { ease } : {}) }], duration)
+  return { ...tracks, [property]: next }
+}
+
+/**
+ * An edit to the mask's shape, made at a frame of the clip.
+ *
+ * The one rule for every control that edits a mask — the handles on the
+ * picture and the panel's sliders alike: a number whose track has keys takes a
+ * key at the frame, and anything else changes the shape itself. So a mask that
+ * is not animated behaves exactly as it always did, and one that is animated
+ * cannot be edited in a way its own keys would then silently override.
+ */
+export function withMaskEdit<C extends Keyed>(clip: C, patch: Partial<MaskShape>, frame: number): C {
+  if (!clip.mask) return clip
+  const at = keyFrame(clip, frame)
+  let tracks = clip.keyframes ?? {}
+  const shapePatch: Partial<MaskShape> = { ...patch }
+  for (const field of MASK_FIELDS) {
+    const value = patch[field]
+    const property = MASK_TRACK[field]
+    if (value === undefined || !(tracks[property]?.length)) continue
+    tracks = withKey(tracks, property, at, value, clip.duration)
+    delete shapePatch[field]
+  }
+  return {
+    ...clip,
+    mask: { ...clip.mask, shape: { ...clip.mask.shape, ...shapePatch } },
+    ...(clip.keyframes || Object.keys(tracks).length > 0 ? { keyframes: tracks } : {})
+  }
+}
+
+/**
+ * Turn the mask's animation on, or off.
+ *
+ * On writes a key for each of the four numbers at the frame, where the shape
+ * already is, so nothing moves until something is changed at another frame.
+ * Off keeps what is on screen: the shape takes its values at the frame and
+ * the four tracks go.
+ */
+export function withMaskAnimation<C extends Keyed>(clip: C, on: boolean, frame: number): C {
+  if (!clip.mask) return clip
+  const at = keyFrame(clip, frame)
+  if (on) {
+    if (isMaskAnimated(clip.keyframes)) return clip
+    let tracks = clip.keyframes ?? {}
+    for (const field of MASK_FIELDS) {
+      tracks = withKey(tracks, MASK_TRACK[field], at, clip.mask.shape[field], clip.duration)
+    }
+    return { ...clip, keyframes: tracks }
+  }
+  const shape = maskShapeAt(clip.mask.shape, clip.keyframes, at, clip.duration)
+  return { ...clip, mask: { ...clip.mask, shape }, keyframes: withoutMaskKeys(clip.keyframes) }
+}
+
+/**
+ * The clip's tracks with the mask's taken out — for a mask removed or
+ * replaced, whose keys would otherwise steer whatever mask came next.
+ */
+export function withoutMaskKeys(keyframes: KeyframeTracks | undefined): KeyframeTracks | undefined {
+  if (!keyframes) return undefined
+  const kept = { ...keyframes }
+  for (const field of MASK_FIELDS) delete kept[MASK_TRACK[field]]
+  return Object.keys(kept).length > 0 ? kept : undefined
 }
 
 /** Nothing is masked off — emit no filter and pay nothing per frame. */

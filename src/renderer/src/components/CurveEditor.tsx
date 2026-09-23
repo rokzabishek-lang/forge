@@ -44,9 +44,15 @@ export function CurveEditor({
   durationFrames,
   playheadFrame,
   onChange,
-  onScrub
+  onScrub,
+  rest
 }: {
   property: KeyedProperty
+  /**
+   * The value with no keys — the property's neutral unless the caller knows
+   * better. A mask track rests at the mask's own shape, not at a constant.
+   */
+  rest?: number
   keys: Keyframe[]
   durationFrames: number
   /** Frames from the clip's start; outside the clip it is simply not drawn. */
@@ -88,7 +94,8 @@ export function CurveEditor({
   const info = PROPERTY_INFO[property]
   const span = Math.max(1, durationFrames)
   const points = normaliseKeys(keys, durationFrames)
-  const view = frozen ?? graphWindow(property, points)
+  const resting = rest ?? info.neutral
+  const view = frozen ?? graphWindow(property, points, resting)
   const viewSpan = Math.max(1e-6, view.hi - view.lo)
   const plotW = Math.max(1, width - 2 * PAD)
   const plotH = HEIGHT - 2 * PAD
@@ -140,7 +147,7 @@ export function CurveEditor({
     return Array.from({ length: steps + 1 }, (_, i) => {
       const frame = (i / steps) * span
       return `${toX(frame).toFixed(1)},${toY(
-        valueAt(shown, frame, durationFrames, info.neutral)
+        valueAt(shown, frame, durationFrames, resting)
       ).toFixed(1)}`
     }).join(' ')
   }
@@ -273,8 +280,8 @@ export function CurveEditor({
           <line
             x1={PAD}
             x2={width - PAD}
-            y1={toY(info.neutral)}
-            y2={toY(info.neutral)}
+            y1={toY(resting)}
+            y2={toY(resting)}
             stroke="rgba(255,255,255,0.10)"
             strokeDasharray="3 3"
           />
