@@ -46,3 +46,23 @@ describe('the canvases that animate say when they changed', () => {
     expect(ring.slice(at, ring.indexOf('\n}\n', at))).toContain('target.dataset.forgeRev = String(++paints)')
   })
 })
+
+describe('the preview applies white balance the way the export does', () => {
+  const grade = source('src/renderer/src/grade.ts')
+
+  it('multiplies by the gains first, in RGB, before the sliders', () => {
+    const gains = grade.indexOf('rgb = clamp(rgb * uGains, 0.0, 1.0);')
+    expect(gains).toBeGreaterThan(-1)
+    expect(gains).toBeLessThan(grade.indexOf('vec3 yuv = RGB_TO_YUV * rgb;'))
+  })
+
+  it('sets the gains in both grading paths, from the shared function', () => {
+    expect([...grade.matchAll(/setGains\(gl, uniforms\.uGains, color\)/g)]).toHaveLength(2)
+    expect(grade).toContain('const { r, g, b } = whiteBalanceGains(color.temperature, color.tint)')
+  })
+
+  it('keys the cached picture on the balance, so moving it repaints', () => {
+    expect(grade).toContain('(color.temperature ?? 0).toFixed(4),')
+    expect(grade).toContain('(color.tint ?? 0).toFixed(4),')
+  })
+})
