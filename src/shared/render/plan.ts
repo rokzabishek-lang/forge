@@ -15,7 +15,7 @@ import { hasPath, pathExpression } from './path'
 import { hasKeys, keyframeExpression } from './keyframes'
 import { curvesFilter } from './colourCurve'
 import { isFullFrameMask, maskExpression } from './mask'
-import { safeCrop, type Size } from './crop'
+import { effectiveCrop, safeCrop, type Size } from './crop'
 import { atempoChain, clipSpeed, sourceFramesFor, speedVideoFilter } from './speed'
 import { audioFadeFilters, fadesWithNeighbours } from './audioFade'
 import { duckFilter } from './duck'
@@ -929,11 +929,13 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
       : asset.width && asset.height
         ? { width: asset.width, height: asset.height }
         : null
-    const streamSize: Size | null = clip.crop
-      ? safeCrop(clip.crop, preCrop) ??
-        safeCrop(clip.crop, { width: 1e6, height: 1e6 }) ??
-        preCrop
+    // What the crop filter will really output — see `effectiveCrop`. With no
+    // known source size the loose rectangle is the best guess there is.
+    const streamSize: Size | null = !clip.crop
+      ? preCrop
       : preCrop
+        ? effectiveCrop(clip.crop, preCrop)
+        : safeCrop(clip.crop, { width: 1e6, height: 1e6 })
 
     const turn = widestTurn(clip, box.rotation)
     const extent = turn > 0.01 ? rotatedExtent(turn, box.width, box.height) : null

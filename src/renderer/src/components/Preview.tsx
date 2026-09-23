@@ -31,6 +31,7 @@ import { fadeGainAt, fadesWithNeighbours } from '@shared/render/audioFade'
 import { audioRole, clampGain, clipLevelAt, isAudible } from '@shared/render/audibility'
 import { NO_SCRUB, SCRUB_BURST_MS, scrubStep, type ScrubState } from '@shared/render/scrub'
 import { motionSourceRect } from '@shared/render/motion'
+import { effectiveCrop } from '@shared/render/crop'
 import { clipBox, parallaxBakeFor, planeShare } from '@shared/render/plan'
 import { pathAt } from '@shared/render/path'
 import { clockStep, needsReanchor, type ClockAnchor } from '@shared/render/clock'
@@ -1292,7 +1293,9 @@ export function Preview(): ReactNode {
       }
       ctx.globalAlpha = 1
 
-      const crop = top?.clip.crop
+      // The rectangle the export really cuts, not the raw one — they differ for
+      // a crop hanging off an edge (shared/render/crop.ts effectiveCrop).
+      const crop = top?.clip.crop ? effectiveCrop(top.clip.crop, { width: naturalW, height: naturalH }) : undefined
       if (crop) {
         ctx.fillStyle = 'rgba(8,10,13,0.66)'
         ctx.beginPath()
@@ -1350,7 +1353,9 @@ export function Preview(): ReactNode {
         flushGradesBelow(trackOrder.get(layer.clip.trackId) ?? 0)
         const w = layer.asset.width ?? naturalW
         const h = layer.asset.height ?? naturalH
-        const crop: CropRect = layer.clip.crop ?? { x: 0, y: 0, width: w, height: h }
+        // Exactly what the export crops to, so the finished frame on screen is
+        // the finished frame in the file.
+        const crop: CropRect = effectiveCrop(layer.clip.crop, { width: w, height: h })
         const motion = layer.clip.motion
 
         /*

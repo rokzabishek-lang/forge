@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { evenDown, safeCrop } from '@shared/render/crop'
+import { effectiveCrop, evenDown, safeCrop } from '@shared/render/crop'
+import { buildRenderPlan } from '@shared/render/plan'
+import { emptyProject, type Clip, type MediaAsset, type Project } from '@shared/timeline'
 
 /*
  * A crop may only ever shrink.
@@ -133,5 +135,75 @@ describe('safeCrop', () => {
     const trimmed = safeCrop({ x: 0, y: 0, width: 3209, height: 1000 }, { width: 3209, height: 1807 })!
     expect(trimmed.width).toBe(3208)
     expect(trimmed.width).toBeLessThanOrEqual(3209)
+  })
+})
+
+
+describe('effectiveCrop — the rectangle the export really cuts', () => {
+  /*
+   * The preview drew the raw `clip.crop`; the export clamps it twice (safeCrop,
+   * then the filter's own expressions). They disagreed for any crop hanging off
+   * an edge, which automation produces. Now both ask this.
+   */
+  const source = { width: 1280, height: 720 }
+
+  it('is the whole frame when there is no crop', () => {
+    expect(effectiveCrop(undefined, source)).toEqual({ x: 0, y: 0, width: 1280, height: 720 })
+  })
+
+  it('slides a crop hanging off an edge inside, keeping its size — as the export does', () => {
+    expect(effectiveCrop({ x: 1000, y: 100, width: 400, height: 400 }, source)).toEqual({ x: 880, y: 100, width: 400, height: 400 })
+    expect(effectiveCrop({ x: -50, y: -9, width: 400, height: 400 }, source)).toEqual({ x: 0, y: 0, width: 400, height: 400 })
+  })
+
+  it('evens an odd size down, never up', () => {
+    expect(effectiveCrop({ x: 10, y: 10, width: 401, height: 301 }, source)).toEqual({ x: 10, y: 10, width: 400, height: 300 })
+  })
+
+  it('cuts a crop bigger than its source to the source — what the filter outputs', () => {
+    expect(effectiveCrop({ x: 0, y: 0, width: 3210, height: 1808 }, source)).toEqual({ x: 0, y: 0, width: 1280, height: 720 })
+  })
+
+  it('agrees with safeCrop wherever safeCrop has an answer', () => {
+    for (const crop of [{ x: 100, y: 50, width: 640, height: 360 }, { x: 1279, y: 0, width: 600, height: 700 }]) {
+      expect(effectiveCrop(crop, source)).toEqual(safeCrop(crop, source))
+    }
+  })
+})
+
+describe('the camera move is sized from the stream the crop really makes', () => {
+  it('does not take a crop bigger than the source at its word', () => {
+    // A 3210x1808 crop of a 1280x720 file: the crop filter outputs 1280x720, and
+    // the move must be sized from THAT, not from a stream that does not exist.
+    const asset: MediaAsset = {
+      id: 'a', path: '/m/a.mp4', name: 'a.mp4', kind: 'video', durationFrames: 90,
+      width: 1280, height: 720, fps: 30, hasVideo: true, hasAudio: false, size: 1
+    }
+    const clip: Clip = {
+      id: 'c', assetId: 'a', trackId: 'v1', start: 0, duration: 60, inPoint: 0, volume: 1,
+      transform: { x: 0, y: 0, scale: 1, rotation: 0, opacity: 1 },
+      color: { brightness: 0, contrast: 1, saturation: 1 },
+      crop: { x: 0, y: 0, width: 3210, height: 1808 },
+      motion: { kind: 'kenburns', direction: 'in', amount: 0.15 }
+    }
+    const project: Project = { ...emptyProject(), assets: [asset], clips: [clip] }
+    const graph = buildRenderPlan({ project, outputPath: '/o.mp4' }).args.join(' ')
+    const size = /zoompan=[^;]*?:s=(\d+)x(\d+)/.exec(graph)
+    expect(size).not.toBeNull()
+    expect(Number(size![1])).toBeLessThanOrEqual(1280)
+    expect(Number(size![2])).toBeLessThanOrEqual(720)
+  })
+})
+
+describe('the preview crops with the export’s rectangle', () => {
+  it('draws both viewports through effectiveCrop, never the raw clip.crop', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { resolve } = await import('node:path')
+    const preview = readFileSync(resolve(__dirname, '../src/renderer/src/components/Preview.tsx'), 'utf8')
+    expect(preview).toContain('const crop: CropRect = effectiveCrop(layer.clip.crop, { width: w, height: h })')
+    expect(preview).toContain('effectiveCrop(top.clip.crop, { width: naturalW, height: naturalH })')
+    // No site left drawing the rectangle as stored.
+    // (Testing for a crop before converting it is fine; using it as-is is not.)
+    expect(preview).not.toMatch(/const crop(?::\s*CropRect)?\s*=\s*(?:top\?\.|layer\.)clip\.crop\b(?!\s*\?\s*effectiveCrop)/)
   })
 })

@@ -82,9 +82,10 @@ describe('changing the frame rate', () => {
   })
 
   it('never has a clip read past the end of its file, at speed', () => {
-    // 2× near the end of a 301-frame source: rounding up could ask for more.
-    const fast = clip({ id: 'f', start: 0, duration: 50, inPoint: 199, speed: 2 })
-    const src = asset('a', { durationFrames: 301 })
+    // 2× reading exactly to the end of a 300-frame file. At 25 fps the in-point
+    // (166.7) and the length (41.7) both round UP, asking for 251 frames of 250.
+    const fast = clip({ id: 'f', start: 0, duration: 50, inPoint: 200, speed: 2 })
+    const src = asset('a', { durationFrames: 300 })
     for (const to of FRAME_RATES) {
       const out = convertFrameRate(project([fast], [src]), to)
       const c = byId(out, 'f')

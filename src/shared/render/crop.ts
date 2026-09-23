@@ -74,3 +74,37 @@ export function safeCrop(crop: CropRect, source: Size | null): CropRect | null {
 
   return { x, y, width, height }
 }
+
+/**
+ * The rectangle the export ACTUALLY crops to — for anything that has to show,
+ * or measure, the same picture.
+ *
+ * Two stages decide it: `safeCrop` against the size the app knows, and then the
+ * crop filter's own expressions (`min(w,in_w)`, `max(0,min(x,in_w-out_w))`,
+ * plan.ts `cropFilter`) against the stream that arrives. When `safeCrop` says
+ * "nothing to cut" the export still crops — to the loose rectangle, clamped —
+ * so the answer is what those expressions make of it.
+ *
+ * The preview drew the raw `clip.crop` instead, so a crop hanging off an edge
+ * (automation makes them: framing.ts, onePhoto.ts) showed one piece of the
+ * picture on screen and exported another, slid inside. And the plan's own
+ * `streamSize` took the loose rectangle's size for a crop bigger than its
+ * source, handing the camera move 3210×1808 for a stream the filter had cut to
+ * 1280×720.
+ */
+export function effectiveCrop(crop: CropRect | undefined, source: Size): CropRect {
+  const full = { x: 0, y: 0, width: source.width, height: source.height }
+  if (!crop || source.width <= 0 || source.height <= 0) return full
+  const inside = safeCrop(crop, source)
+  if (inside) return inside
+  const loose = safeCrop(crop, { width: 1e6, height: 1e6 })
+  if (!loose) return full
+  const width = Math.min(loose.width, source.width)
+  const height = Math.min(loose.height, source.height)
+  return {
+    x: Math.max(0, Math.min(loose.x, source.width - width)),
+    y: Math.max(0, Math.min(loose.y, source.height - height)),
+    width,
+    height
+  }
+}
