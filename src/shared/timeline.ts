@@ -9,6 +9,7 @@ import type { CarouselClipSpec } from './render/carousel'
 import type { Mask } from './render/mask'
 import type { Transcript } from './transcript'
 import type { VoiceEffect } from './render/voice'
+import type { AssetVision } from './director/eyes'
 /*
  * A value import, unlike every other one above, and safe: `render/speed.ts`
  * takes only TYPES from this file, so the edge is one-way at runtime. It is
@@ -791,6 +792,13 @@ export interface Project {
    * Optional so that every project written before parallax existed still loads.
    */
   parallax?: Record<string, ParallaxBake>
+  /**
+   * What the Director's eyes saw in each photo, by asset id — the sidecar's
+   * measurement and the VLM's look, each tied to the file's `size:mtime`
+   * (shared/director/eyes.ts). Facts about the photos, not the Director's
+   * work: `clearDirector` leaves them. Optional, so older projects open unchanged.
+   */
+  vision?: Record<string, AssetVision>
   captions: CaptionSettings
 }
 

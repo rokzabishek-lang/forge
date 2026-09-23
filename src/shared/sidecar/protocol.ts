@@ -148,6 +148,8 @@ export const SIDECAR_METHODS = {
   beats: 'audio.beats',
   /** Cut a photo into depth planes for parallax: { path, ffmpeg, ffprobe, layers? }. */
   depthLayers: 'depth.layers',
+  /** Sharpness, exposure and a perceptual hash per photo: { paths, ffmpeg, ffprobe }. */
+  visionMeasure: 'vision.measure',
   /**
    * Separate a song into a voice and an instrumental: { path, outDir? }.
    *

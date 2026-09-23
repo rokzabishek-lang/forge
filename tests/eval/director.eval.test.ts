@@ -199,3 +199,70 @@ describe.skipIf(!PROVIDER)('the Director on a real model', () => {
     3_600_000
   )
 })
+
+/**
+ * `FORGE_EVAL_LOOKS=<folder> npm run eval` — the look pass (docs/PLAN.md §4.1)
+ * on every picture in a folder, one image a call, built with the app's own
+ * `encodeImages`, `lookPrompt`, `lookSchema` and request body. STEP=prepare
+ * writes the requests (ask them with the relay), STEP=score reads the answers
+ * into results-looks.json. The VLM half of C0: time and tokens per picture,
+ * and — with a person's ground truth beside it — whether the eyes see.
+ */
+const LOOKS = process.env.FORGE_EVAL_LOOKS
+describe.skipIf(!PROVIDER || !LOOKS)('the look pass on a real model', () => {
+  it(
+    'prepares or scores one look per picture',
+    async () => {
+      const { readdir } = await import('node:fs/promises')
+      const { encodeImages } = await import('../../src/main/director')
+      const { lookPrompt, lookSchema, readLook, LOOK_MAX_TOKENS } = await import('@shared/director/look')
+      const { openaiRequestBody, ollamaRequestBody, openaiAnswer, ollamaAnswer, parseModelJson } = await import('@shared/director/provider')
+      const runId = process.env.FORGE_EVAL_RUN ?? `looks-${stamp()}`
+      const runDir = join(EVAL_ROOT, runId)
+      const openai = PROVIDER === 'openai'
+      const model = process.env.FORGE_EVAL_MODEL ?? ''
+      const files = (await readdir(LOOKS!)).filter((f) => /\.(jpe?g|png|webp)$/i.test(f)).sort()
+
+      if (STEP === 'prepare' || STEP === 'all') {
+        const { system, user } = lookPrompt({ product: process.env.FORGE_EVAL_PRODUCT ?? 'a wedding film', language: 'English' })
+        const requests: EvalRequest[] = []
+        for (const f of files) {
+          const images = await encodeImages([join(LOOKS!, f)])
+          const request = { system, user, schema: lookSchema(), maxTokens: LOOK_MAX_TOKENS, think: false }
+          requests.push({
+            id: `look.${f}`,
+            fixtureId: f,
+            provider: PROVIDER!,
+            path: openai ? '/v1/chat/completions' : '/api/chat',
+            body: openai ? openaiRequestBody(request, images, model) : ollamaRequestBody(request, images, model)
+          })
+        }
+        await writeJson(join(runDir, 'requests.json'), requests)
+      }
+      if (STEP === 'score' || STEP === 'all') {
+        const requests = (await readJson<EvalRequest[]>(join(runDir, 'requests.json'))) ?? []
+        const results = []
+        for (const r of requests) {
+          const response = await readJson<EvalResponse>(join(runDir, 'responses', `${r.id}.json`))
+          let look = null
+          let why: string | null = null
+          let tokens: [number | null, number | null] = [null, null]
+          try {
+            if (!response || response.status !== 200) throw new Error(response?.error ?? `status ${response?.status}`)
+            const answer = openai ? openaiAnswer(response.data) : ollamaAnswer(response.data)
+            tokens = [answer.promptTokens, answer.outputTokens]
+            const parsed = parseModelJson(answer.text)
+            look = 'error' in parsed ? null : readLook(parsed.value)
+            if (!look) why = 'error' in parsed ? parsed.error : 'not a look'
+          } catch (err) {
+            why = err instanceof Error ? err.message : String(err)
+          }
+          results.push({ picture: r.fixtureId, ms: response?.ms ?? 0, promptTokens: tokens[0], outputTokens: tokens[1], look, why })
+        }
+        await writeJson(join(runDir, 'results-looks.json'), { run: runId, model, results })
+        console.log(JSON.stringify(results, null, 1))
+      }
+    },
+    3_600_000
+  )
+})

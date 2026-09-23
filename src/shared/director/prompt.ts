@@ -1,6 +1,7 @@
 import type { Brief } from './schema'
 import { MAX_SEGMENTS } from './schema'
 import type { Menu } from './menu'
+import { lookLine } from './look'
 
 /**
  * What the model is told.
@@ -37,7 +38,42 @@ RULES
 - headline: six words or fewer, concrete nouns, one idea, or an empty string for no card. The cta headline is an imperative. No exclamation marks unless the tone is energetic.
 - punch_word: copy ONE word of the headline exactly — the word that hits. Empty if none.
 - why: a few words on why this picture, here.
-- reasoning comes first: one or two sentences on what the ad is and how it moves.`
+- A slot's "shows" is what is really in the picture: write about that. A slot "measured soft", "dark" or "blown" is never the hook or the product.
+- reasoning comes first: one or two sentences on what the ad is and how it moves.
+- language: every headline and punch_word is in the brief's copy language, in that language's own script — never English when another language is asked, never transliterated into Latin letters. Brand and product names stay exactly as the brief writes them. reasoning and why may be in English.`
+
+/**
+ * The script each copy language is written in, and one headline in it.
+ *
+ * Measured on Gemma 4 E2B (docs/EVAL.md, 2026-09-23): with only "language for
+ * all copy: Telugu" in the brief, every Telugu and Hindi headline came back in
+ * English — 24 of 24. With the rule above and this line at the end of the
+ * user prompt, 24 of 24 came back in the language's own script. The example
+ * is what shows a small model what "in Telugu" looks like.
+ *
+ * The line goes in the USER prompt, not the system prompt, so the system
+ * prompt stays the same for every ad and a server's prefix cache holds.
+ */
+export const SCRIPTS: Record<string, { script: string; example?: string }> = {
+  telugu: { script: 'Telugu script (తెలుగు)', example: 'రుచి అదిరింది' },
+  hindi: { script: 'Devanagari (हिन्दी)', example: 'स्वाद ज़बरदस्त' },
+  marathi: { script: 'Devanagari (मराठी)' },
+  tamil: { script: 'Tamil script (தமிழ்)' },
+  kannada: { script: 'Kannada script (ಕನ್ನಡ)' },
+  malayalam: { script: 'Malayalam script (മലയാളം)' },
+  bengali: { script: 'Bengali script (বাংলা)' },
+  gujarati: { script: 'Gujarati script (ગુજરાતી)' },
+  punjabi: { script: 'Gurmukhi (ਪੰਜਾਬੀ)' }
+}
+
+/** The closing instruction for a copy language other than English, or null. */
+export function languageLine(language: string): string | null {
+  const name = language.trim()
+  if (!name || /^english$/i.test(name)) return null
+  const known = SCRIPTS[name.toLowerCase()]
+  if (!known) return `Write all copy in ${name}, in its own script.`
+  return `Write all copy in ${name}, in ${known.script}${known.example ? ` — a ${name} headline looks like "${known.example}"` : ''}.`
+}
 
 const seconds = (ms: number): string => `${(ms / 1000).toFixed(1)} s`
 
@@ -65,6 +101,8 @@ export function spinePrompt(brief: Brief, menu: Menu): { system: string; user: s
     const parts = [s.id, s.kind === 'video' ? `video ${s.seconds?.toFixed(1)} s` : 'image', `"${s.label}"`]
     if (s.note) parts.push(`— ${s.note}`)
     if (s.speech) parts.push(`— says: "${s.speech}"`)
+    if (s.look) parts.push(`— shows: ${lookLine(s.look)}`)
+    if (s.flags && s.flags.length > 0) parts.push(`— measured ${s.flags.join(', ')}`)
     lines.push(parts.join('  '))
   }
 
@@ -80,6 +118,8 @@ export function spinePrompt(brief: Brief, menu: Menu): { system: string; user: s
   for (const f of menu.families) lines.push(`${f.id} — ${f.intent}`)
 
   lines.push('')
+  const language = languageLine(brief.language)
+  if (language) lines.push(language)
   lines.push('Answer with the JSON plan.')
 
   return { system: PLAYBOOK, user: lines.join('\n') }

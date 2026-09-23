@@ -280,6 +280,20 @@ must fail to build; drop a reason code and the histogram test must fail.
 
 ## 4. C1 — Eyes · 3–4 days
 
+> **Built 2026-09-23, first part** — `vision.measure` in the sidecar
+> (`capabilities/vision.py`, numpy/scipy, every photo measured at one 512-px
+> size, flat pictures given no hash), `shared/director/look.ts` (look@1),
+> `gate.ts`, `eyes.ts` (the cache on `Project.vision`, keyed by `size:mtime`),
+> `ask.ts` (the think-off/think-on retry, now shared by the spine and the looks),
+> IPC `vision:measure` and `media:fileKeys`, and `direct()` measuring, looking
+> and gating before it builds the menu; the SLOTS table shows each look and any
+> measured flag. Tests `directorGate`, `directorEyes`, `directorAsk`,
+> `renderer/eyesStore`, render check `integration/vision`. Changed by the probe
+> (`eval/findings.md`): `people` is a count (none / one / two / group), `words`
+> come before the lists, the product is named only for `product_visible`.
+> Not yet: looks for video slots (first frames per shot), and the hero as a
+> spine field — that is `spine@2`, C2.
+
 ### 4.1 The look pass — `look@1`
 
 One call per photo, one image per call, the model answering from closed lists
@@ -290,12 +304,12 @@ eight, and one image is a few hundred tokens.
 // src/shared/director/look.ts — lookSchema(): flat, reasoning first, enums only
 {
   "reasoning": "…",                                     // ≤ 200 chars
-  "people":  "none" | "one" | "couple" | "group",
+  "words":   "…",                                       // ≤ 12 words of what is there — BEFORE the lists (probe 2)
+  "people":  "none" | "one" | "two" | "group",           // a count of the subjects (probe 1: "couple" confused it)
   "shot":    "wide" | "medium" | "close" | "detail",
   "mood":    "warm" | "calm" | "joyful" | "dramatic" | "clean" | "dark",
   "product_visible": "yes" | "no" | "unsure",
-  "hero":    "weak" | "usable" | "strong",              // a coarse bucket, used only as a FILTER (§4.3) — never ranked
-  "words":   "…"                                        // ≤ 12 words of what is there, in the brief's language
+  "hero":    "weak" | "usable" | "strong"               // a coarse bucket, used only as a FILTER (§4.3) — never ranked
 }
 ```
 

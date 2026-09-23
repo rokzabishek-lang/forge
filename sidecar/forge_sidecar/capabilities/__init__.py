@@ -16,6 +16,10 @@ OPTIONAL = [
     ("asr.transcribe", "asr"),
     ("audio.beats", "beats"),
     ("depth.layers", "depth"),
+    # Sharpness, exposure and near-duplicates, for the Director's quality gate
+    # (docs/PLAN.md §4.2). numpy and scipy only; absent, the gate lets every
+    # photo through rather than the Director failing.
+    ("vision.measure", "vision"),
     # Optional in the strongest sense: the app can already split a song with
     # mid/side and the bundled ffmpeg, so this being absent costs quality
     # rather than the feature. See stems.py.

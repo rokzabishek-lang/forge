@@ -1,0 +1,818 @@
+{
+  "run": "2026-09-23-lmstudio-gemma-4-e2b-knob-language",
+  "stamp": "2026-09-23T19:30:16.619Z",
+  "provider": "openai",
+  "model": "google/gemma-4-e2b",
+  "think": false,
+  "server": "http://127.0.0.1:1234",
+  "transport": "relay",
+  "catalogue": {
+    "builtIn": 8,
+    "library": 412
+  },
+  "media": "synthetic",
+  "results": [
+    {
+      "fixtureId": "event-diwali-sale",
+      "kind": "event",
+      "language": "Hindi",
+      "tone": "urgent",
+      "seconds": 20,
+      "slots": 5,
+      "cuts": 9,
+      "beats": "analysed",
+      "status": 200,
+      "ms": 11095,
+      "promptTokens": 888,
+      "outputTokens": 350,
+      "truncated": false,
+      "parsed": true,
+      "verdict": "rejected",
+      "why": "slot_05 ends on cut_end, which is not after the segment before it",
+      "problems": [],
+      "reasoning": "This ad is designed to create urgency for the Diwali sale by showcasing festive wear and family shopping.",
+      "headlines": [
+        {
+          "segment": 0,
+          "role": "hook",
+          "text": "दिवाली सेल आ गई",
+          "chars": 15,
+          "seconds": 0.8,
+          "capacity": 19,
+          "fits": true
+        },
+        {
+          "segment": 1,
+          "role": "problem",
+          "text": "कपड़ों की चिंता छोड़ो",
+          "chars": 21,
+          "seconds": 4.3,
+          "capacity": 40,
+          "fits": true
+        },
+        {
+          "segment": 2,
+          "role": "product",
+          "text": "रंगरेज़ फैशन",
+          "chars": 12,
+          "seconds": 4.3,
+          "capacity": 40,
+          "fits": true
+        },
+        {
+          "segment": 3,
+          "role": "proof",
+          "text": "30 प्रतिशत छूट",
+          "chars": 14,
+          "seconds": 8.533333333333333,
+          "capacity": 40,
+          "fits": true
+        },
+        {
+          "segment": 4,
+          "role": "cta",
+          "text": "दुकान पर आओ",
+          "chars": 11,
+          "seconds": 0,
+          "capacity": 19,
+          "fits": true
+        }
+      ],
+      "applied": {
+        "reasoning": "Standard cut: hook, problem, product, proof, cta over 5 shots.",
+        "pace": "punchy",
+        "segments": [
+          {
+            "slot": "slot_01",
+            "role": "hook",
+            "ends_at": "cut_02",
+            "enter": "cut",
+            "headline": "festive wear, 30% off everything",
+            "punch_word": "festive",
+            "why": "opens the ad"
+          },
+          {
+            "slot": "slot_02",
+            "role": "problem",
+            "ends_at": "cut_03",
+            "enter": "cut",
+            "headline": "",
+            "punch_word": "",
+            "why": "the problem it solves"
+          },
+          {
+            "slot": "slot_03",
+            "role": "product",
+            "ends_at": "cut_04",
+            "enter": "zoom",
+            "headline": "Rangrez Fashion Diwali sale",
+            "punch_word": "Rangrez",
+            "why": "the product itself"
+          },
+          {
+            "slot": "slot_04",
+            "role": "proof",
+            "ends_at": "cut_06",
+            "enter": "cut",
+            "headline": "",
+            "punch_word": "",
+            "why": "proof that it works"
+          },
+          {
+            "slot": "slot_05",
+            "role": "cta",
+            "ends_at": "cut_end",
+            "enter": "dissolve",
+            "headline": "Visit the store by Sunday",
+            "punch_word": "Visit",
+            "why": "what to do now"
+          }
+        ]
+      },
+      "baseline": {
+        "reasoning": "Standard cut: hook, problem, product, proof, cta over 5 shots.",
+        "pace": "punchy",
+        "segments": [
+          {
+            "slot": "slot_01",
+            "role": "hook",
+            "ends_at": "cut_02",
+            "enter": "cut",
+            "headline": "festive wear, 30% off everything",
+            "punch_word": "festive",
+            "why": "opens the ad"
+          },
+          {
+            "slot": "slot_02",
+            "role": "problem",
+            "ends_at": "cut_03",
+            "enter": "cut",
+            "headline": "",
+            "punch_word": "",
+            "why": "the problem it solves"
+          },
+          {
+            "slot": "slot_03",
+            "role": "product",
+            "ends_at": "cut_04",
+            "enter": "zoom",
+            "headline": "Rangrez Fashion Diwali sale",
+            "punch_word": "Rangrez",
+            "why": "the product itself"
+          },
+          {
+            "slot": "slot_04",
+            "role": "proof",
+            "ends_at": "cut_06",
+            "enter": "cut",
+            "headline": "",
+            "punch_word": "",
+            "why": "proof that it works"
+          },
+          {
+            "slot": "slot_05",
+            "role": "cta",
+            "ends_at": "cut_end",
+            "enter": "dissolve",
+            "headline": "Visit the store by Sunday",
+            "punch_word": "Visit",
+            "why": "what to do now"
+          }
+        ]
+      },
+      "renders": {
+        "model": null,
+        "baseline": null
+      },
+      "raw": "{\"reasoning\": \"This ad is designed to create urgency for the Diwali sale by showcasing festive wear and family shopping.\", \"pace\": \"punchy\", \"segments\": [{\"slot\": \"slot_01\", \"role\": \"hook\", \"ends_at\": \"cut_01\", \"enter\": \"cut\", \"headline\": \"दिवाली सेल आ गई\", \"punch_word\": \"सेल\", \"why\": \"Diya rangoli sets the festive mood for Diwali shopping.\"}, {\"slot\": \"slot_02\", \"role\": \"problem\", \"ends_at\": \"cut_02\", \"enter\": \"cut\", \"headline\": \"कपड़ों की चिंता छोड़ो\", \"punch_word\": \"चिंता\", \"why\": \"Showcasing the new kurta range.\"}, {\"slot\": \"slot_03\", \"role\": \"product\", \"ends_at\": \"cut_03\", \"enter\": \"cut\", \"headline\": \"रंगरेज़ फैशन\", \"punch_word\": \"फैशन\", \"why\": \"Highlighting the beautiful saree model.\"}, {\"slot\": \"slot_04\", \"role\": \"proof\", \"ends_at\": \"cut_end\", \"enter\": \"cut\", \"headline\": \"30 प्रतिशत छूट\", \"punch_word\": \"छूट\", \"why\": \"Visualizing the massive discount.\"}, {\"slot\": \"slot_05\", \"role\": \"cta\", \"ends_at\": \"cut_end\", \"enter\": \"cut\", \"headline\": \"दुकान पर आओ\", \"punch_word\": \"आओ\", \"why\": \"Encouraging immediate visit before Sunday.\"}]}"
+    },
+    {
+      "fixtureId": "food-biryani",
+      "kind": "food",
+      "language": "Telugu",
+      "tone": "playful",
+      "seconds": 20,
+      "slots": 6,
+      "cuts": 9,
+      "beats": "analysed",
+      "status": 200,
+      "ms": 12047,
+      "promptTokens": 900,
+      "outputTokens": 476,
+      "truncated": false,
+      "parsed": true,
+      "verdict": "repaired",
+      "why": null,
+      "problems": [
+        "segments[5].ends_at: slot_06 is 4.0s of footage but its segment is 7.0s — 3.0s of black after it",
+        "segments[2].enter: \"dissolve\" became a cut — at most 3 of 5 cuts may carry a transition"
+      ],
+      "reasoning": "This ad will follow the skeleton: hook, problem, product, proof, offer, cta. It moves through the provided slots, using cuts and transitions to create a playful ad for Paradise Spice biryani.",
+      "headlines": [
+        {
+          "segment": 0,
+          "role": "hook",
+          "text": "పది గంటల రుచి",
+          "chars": 13,
+          "seconds": 1.4333333333333333,
+          "capacity": 23,
+          "fits": true
+        },
+        {
+          "segment": 1,
+          "role": "problem",
+          "text": "రుచి కోల్పోకండి",
+          "chars": 15,
+          "seconds": 4.633333333333334,
+          "capacity": 40,
+          "fits": true
+        },
+        {
+          "segment": 2,
+          "role": "product",
+          "text": "పరాధి స్పైస్ బిర్యానీ",
+          "chars": 21,
+          "seconds": 4.633333333333334,
+          "capacity": 40,
+          "fits": true
+        },
+        {
+          "segment": 3,
+          "role": "proof",
+          "text": "సంతోషకరమైన అనుభవం",
+          "chars": 17,
+          "seconds": 1.1666666666666667,
+          "capacity": 19,
+          "fits": true
+        },
+        {
+          "segment": 4,
+          "role": "offer",
+          "text": "ఈ వారం ఆఫర్",
+          "chars": 11,
+          "seconds": 1.1,
+          "capacity": 19,
+          "fits": true
+        },
+        {
+          "segment": 5,
+          "role": "cta",
+          "text": "ఇప్పుడే ఆర్డర్ చేయండి",
+          "chars": 21,
+          "seconds": 7.033333333333333,
+          "capacity": 40,
+          "fits": true
+        }
+      ],
+      "applied": {
+        "reasoning": "This ad will follow the skeleton: hook, problem, product, proof, offer, cta. It moves through the provided slots, using cuts and transitions to create a playful ad for Paradise Spice biryani.",
+        "pace": "punchy",
+        "segments": [
+          {
+            "slot": "slot_01",
+            "role": "hook",
+            "ends_at": "cut_01",
+            "enter": "cut",
+            "headline": "పది గంటల రుచి",
+            "punch_word": "రుచి",
+            "why": "The irresistible aroma of the biryani opening up first to a."
+          },
+          {
+            "slot": "slot_02",
+            "role": "problem",
+            "ends_at": "cut_02",
+            "enter": "cut",
+            "headline": "రుచి కోల్పోకండి",
+            "punch_word": "కోల్పోకండి",
+            "why": "Addressing the fear of losing authentic flavor."
+          },
+          {
+            "slot": "slot_03",
+            "role": "product",
+            "ends_at": "cut_03",
+            "enter": "cut",
+            "headline": "పరాధి స్పైస్ బిర్యానీ",
+            "punch_word": "బిర్యానీ",
+            "why": "Showing the chef's skill in preparation."
+          },
+          {
+            "slot": "slot_04",
+            "role": "proof",
+            "ends_at": "cut_04",
+            "enter": "slide",
+            "headline": "సంతోషకరమైన అనుభవం",
+            "punch_word": "అనుభవం",
+            "why": "Showing the joy of the family enjoying the meal."
+          },
+          {
+            "slot": "slot_05",
+            "role": "offer",
+            "ends_at": "cut_05",
+            "enter": "wipe",
+            "headline": "ఈ వారం ఆఫర్",
+            "punch_word": "ఆఫర్",
+            "why": "Highlighting the special deal for Hyderabad food lovers."
+          },
+          {
+            "slot": "slot_06",
+            "role": "cta",
+            "ends_at": "cut_end",
+            "enter": "zoom",
+            "headline": "ఇప్పుడే ఆర్డర్ చేయండి",
+            "punch_word": "ఆర్డర్",
+            "why": "Final call to action with a strong visual reveal."
+          }
+        ]
+      },
+      "baseline": {
+        "reasoning": "Standard cut: hook, problem, product, proof, offer, cta over 6 shots.",
+        "pace": "steady",
+        "segments": [
+          {
+            "slot": "slot_01",
+            "role": "hook",
+            "ends_at": "cut_01",
+            "enter": "cut",
+            "headline": "dum biryani, sealed for",
+            "punch_word": "dum",
+            "why": "opens the ad"
+          },
+          {
+            "slot": "slot_02",
+            "role": "problem",
+            "ends_at": "cut_02",
+            "enter": "cut",
+            "headline": "",
+            "punch_word": "",
+            "why": "the problem it solves"
+          },
+          {
+            "slot": "slot_03",
+            "role": "product",
+            "ends_at": "cut_03",
+            "enter": "zoom",
+            "headline": "Paradise Spice biryani",
+            "punch_word": "Paradise",
+            "why": "the product itself"
+          },
+          {
+            "slot": "slot_04",
+            "role": "proof",
+            "ends_at": "cut_05",
+            "enter": "cut",
+            "headline": "",
+            "punch_word": "",
+            "why": "proof that it works"
+          },
+          {
+            "slot": "slot_05",
+            "role": "offer",
+            "ends_at": "cut_07",
+            "enter": "dissolve",
+            "headline": "",
+            "punch_word": "",
+            "why": "the offer"
+          },
+          {
+            "slot": "slot_06",
+            "role": "cta",
+            "ends_at": "cut_end",
+            "enter": "cut",
+            "headline": "Order now — free delivery this week",
+            "punch_word": "Order",
+            "why": "what to do now"
+          }
+        ]
+      },
+      "renders": {
+        "model": null,
+        "baseline": null
+      },
+      "raw": "{\"reasoning\": \"This ad will follow the skeleton: hook, problem, product, proof, offer, cta. It moves through the provided slots, using cuts and transitions to create a playful ad for Paradise Spice biryani.\", \"pace\": \"punchy\", \"segments\": [{\"slot\": \"slot_01\", \"role\": \"hook\", \"ends_at\": \"cut_01\", \"enter\": \"cut\", \"headline\": \"పది గంటల రుచి\", \"punch_word\": \"రుచి\", \"why\": \"The irresistible aroma of the biryani opening up first to a.\"}, {\"slot\": \"slot_02\", \"role\": \"problem\", \"ends_at\": \"cut_02\", \"enter\": \"cut\", \"headline\": \"రుచి కోల్పోకండి\", \"punch_word\": \"కోల్పోకండి\", \"why\": \"Addressing the fear of losing authentic flavor.\"}, {\"slot\": \"slot_03\", \"role\": \"product\", \"ends_at\": \"cut_03\", \"enter\": \"dissolve\", \"headline\": \"పరాధి స్పైస్ బిర్యానీ\", \"punch_word\": \"బిర్యానీ\", \"why\": \"Showing the chef's skill in preparation.\"}, {\"slot\": \"slot_04\", \"role\": \"proof\", \"ends_at\": \"cut_04\", \"enter\": \"slide\", \"headline\": \"సంతోషకరమైన అనుభవం\", \"punch_word\": \"అనుభవం\", \"why\": \"Showing the joy of the family enjoying the meal.\"}, {\"slot\": \"slot_05\", \"role\": \"offer\", \"ends_at\": \"cut_05\", \"enter\": \"wipe\", \"headline\": \"ఈ వారం ఆఫర్\", \"punch_word\": \"ఆఫర్\", \"why\": \"Highlighting the special deal for Hyderabad food lovers.\"}, {\"slot\": \"slot_06\", \"role\": \"cta\", \"ends_at\": \"cut_end\", \"enter\": \"zoom\", \"headline\": \"ఇప్పుడే ఆర్డర్ చేయండి\", \"punch_word\": \"ఆర్డర్\", \"why\": \"Final call to action with a strong visual reveal.\"}]}"
+    },
+    {
+      "fixtureId": "product-coldbrew",
+      "kind": "product",
+      "language": "Hindi",
+      "tone": "playful",
+      "seconds": 15,
+      "slots": 6,
+      "cuts": 8,
+      "beats": "analysed",
+      "status": 200,
+      "ms": 10855,
+      "promptTokens": 880,
+      "outputTokens": 430,
+      "truncated": false,
+      "parsed": true,
+      "verdict": "repaired",
+      "why": null,
+      "problems": [
+        "segments[5].ends_at: slot_06 is 3.0s of footage but its segment is 4.1s — 1.1s of black after it"
+      ],
+      "reasoning": "This ad is a playful demonstration targeting college students, showing how easily they can get a café experience at home with Chill Brew cold coffee.",
+      "headlines": [
+        {
+          "segment": 0,
+          "role": "hook",
+          "text": "घर पर कैफे का मज़ा",
+          "chars": 18,
+          "seconds": 1.7666666666666666,
+          "capacity": 28,
+          "fits": true
+        },
+        {
+          "segment": 1,
+          "role": "problem",
+          "text": "घर में थकान महसूस",
+          "chars": 17,
+          "seconds": 4.1,
+          "capacity": 40,
+          "fits": true
+        },
+        {
+          "segment": 2,
+          "role": "product",
+          "text": "Chill Brew कॉफ़ी",
+          "chars": 16,
+          "seconds": 2.066666666666667,
+          "capacity": 33,
+          "fits": true
+        },
+        {
+          "segment": 3,
+          "role": "proof",
+          "text": "असली स्वाद का सबूत",
+          "chars": 18,
+          "seconds": 0.9666666666666667,
+          "capacity": 19,
+          "fits": true
+        },
+        {
+          "segment": 4,
+          "role": "offer",
+          "text": "आज ही ऑर्डर करें",
+          "chars": 16,
+          "seconds": 1,
+          "capacity": 19,
+          "fits": true
+        },
+        {
+          "segment": 5,
+          "role": "cta",
+          "text": "स्वगी पर पाएं",
+          "chars": 13,
+          "seconds": 4.066666666666666,
+          "capacity": 40,
+          "fits": true
+        }
+      ],
+      "applied": {
+        "reasoning": "This ad is a playful demonstration targeting college students, showing how easily they can get a café experience at home with Chill Brew cold coffee.",
+        "pace": "punchy",
+        "segments": [
+          {
+            "slot": "slot_01",
+            "role": "hook",
+            "ends_at": "cut_01",
+            "enter": "cut",
+            "headline": "घर पर कैफे का मज़ा",
+            "punch_word": "मज़ा",
+            "why": "Instant coffee craving solved by Chill Brew glass."
+          },
+          {
+            "slot": "slot_02",
+            "role": "problem",
+            "ends_at": "cut_02",
+            "enter": "cut",
+            "headline": "घर में थकान महसूस",
+            "punch_word": "थकान",
+            "why": "Relatable feeling of needing a quick pick-me-up."
+          },
+          {
+            "slot": "slot_03",
+            "role": "product",
+            "ends_at": "cut_03",
+            "enter": "dissolve",
+            "headline": "Chill Brew कॉफ़ी",
+            "punch_word": "कॉफ़ी",
+            "why": "Showing the product in action with friends."
+          },
+          {
+            "slot": "slot_04",
+            "role": "proof",
+            "ends_at": "cut_04",
+            "enter": "wipe",
+            "headline": "असली स्वाद का सबूत",
+            "punch_word": "सबूत",
+            "why": "Highlighting the quality of the coffee beans."
+          },
+          {
+            "slot": "slot_05",
+            "role": "offer",
+            "ends_at": "cut_05",
+            "enter": "cut",
+            "headline": "आज ही ऑर्डर करें",
+            "punch_word": "ऑर्डर",
+            "why": "Directing the audience to purchase."
+          },
+          {
+            "slot": "slot_06",
+            "role": "cta",
+            "ends_at": "cut_end",
+            "enter": "smooth",
+            "headline": "स्वगी पर पाएं",
+            "punch_word": "पाएं",
+            "why": "Final call to action for ordering on Swiggy."
+          }
+        ]
+      },
+      "baseline": {
+        "reasoning": "Standard cut: hook, problem, product, proof, offer, cta over 6 shots.",
+        "pace": "steady",
+        "segments": [
+          {
+            "slot": "slot_01",
+            "role": "hook",
+            "ends_at": "cut_01",
+            "enter": "cut",
+            "headline": "café taste at home in 30",
+            "punch_word": "café",
+            "why": "opens the ad"
+          },
+          {
+            "slot": "slot_02",
+            "role": "problem",
+            "ends_at": "cut_02",
+            "enter": "cut",
+            "headline": "",
+            "punch_word": "",
+            "why": "the problem it solves"
+          },
+          {
+            "slot": "slot_03",
+            "role": "product",
+            "ends_at": "cut_03",
+            "enter": "zoom",
+            "headline": "Chill Brew cold coffee",
+            "punch_word": "Chill",
+            "why": "the product itself"
+          },
+          {
+            "slot": "slot_04",
+            "role": "proof",
+            "ends_at": "cut_04",
+            "enter": "cut",
+            "headline": "",
+            "punch_word": "",
+            "why": "proof that it works"
+          },
+          {
+            "slot": "slot_05",
+            "role": "offer",
+            "ends_at": "cut_06",
+            "enter": "dissolve",
+            "headline": "",
+            "punch_word": "",
+            "why": "the offer"
+          },
+          {
+            "slot": "slot_06",
+            "role": "cta",
+            "ends_at": "cut_end",
+            "enter": "cut",
+            "headline": "Order on Swiggy",
+            "punch_word": "Order",
+            "why": "what to do now"
+          }
+        ]
+      },
+      "renders": {
+        "model": null,
+        "baseline": null
+      },
+      "raw": "{\"reasoning\": \"This ad is a playful demonstration targeting college students, showing how easily they can get a café experience at home with Chill Brew cold coffee.\", \"pace\": \"punchy\", \"segments\": [{\"slot\": \"slot_01\", \"role\": \"hook\", \"ends_at\": \"cut_01\", \"enter\": \"cut\", \"headline\": \"घर पर कैफे का मज़ा\", \"punch_word\": \"मज़ा\", \"why\": \"Instant coffee craving solved by Chill Brew glass.\"}, {\"slot\": \"slot_02\", \"role\": \"problem\", \"ends_at\": \"cut_02\", \"enter\": \"cut\", \"headline\": \"घर में थकान महसूस\", \"punch_word\": \"थकान\", \"why\": \"Relatable feeling of needing a quick pick-me-up.\"}, {\"slot\": \"slot_03\", \"role\": \"product\", \"ends_at\": \"cut_03\", \"enter\": \"dissolve\", \"headline\": \"Chill Brew कॉफ़ी\", \"punch_word\": \"कॉफ़ी\", \"why\": \"Showing the product in action with friends.\"}, {\"slot\": \"slot_04\", \"role\": \"proof\", \"ends_at\": \"cut_04\", \"enter\": \"wipe\", \"headline\": \"असली स्वाद का सबूत\", \"punch_word\": \"सबूत\", \"why\": \"Highlighting the quality of the coffee beans.\"}, {\"slot\": \"slot_05\", \"role\": \"offer\", \"ends_at\": \"cut_05\", \"enter\": \"cut\", \"headline\": \"आज ही ऑर्डर करें\", \"punch_word\": \"ऑर्डर\", \"why\": \"Directing the audience to purchase.\"}, {\"slot\": \"slot_06\", \"role\": \"cta\", \"ends_at\": \"cut_end\", \"enter\": \"smooth\", \"headline\": \"स्वगी पर पाएं\", \"punch_word\": \"पाएं\", \"why\": \"Final call to action for ordering on Swiggy.\"}]}"
+    },
+    {
+      "fixtureId": "wedding-sravani-karthik",
+      "kind": "wedding",
+      "language": "Telugu",
+      "tone": "calm",
+      "seconds": 25,
+      "slots": 7,
+      "cuts": 8,
+      "beats": "analysed",
+      "status": 200,
+      "ms": 12669,
+      "promptTokens": 956,
+      "outputTokens": 499,
+      "truncated": false,
+      "parsed": true,
+      "verdict": "repaired",
+      "why": null,
+      "problems": [
+        "segments[0].headline: \"పెళ్లి కూతురు సిద్ధం\" is 20 characters — too long to read in 1.0s (19 fit) — card dropped"
+      ],
+      "reasoning": "This ad moves through the key moments of a wedding day, focusing on the seamless experience provided by the song.",
+      "headlines": [
+        {
+          "segment": 0,
+          "role": "hook",
+          "text": "పెళ్లి కూతురు సిద్ధం",
+          "chars": 20,
+          "seconds": 1.0333333333333334,
+          "capacity": 19,
+          "fits": false
+        },
+        {
+          "segment": 1,
+          "role": "problem",
+          "text": "సంగీతం తో అనుభూతి",
+          "chars": 17,
+          "seconds": 5.433333333333334,
+          "capacity": 40,
+          "fits": true
+        },
+        {
+          "segment": 2,
+          "role": "product",
+          "text": "శ్రావణి & కార్తీక్",
+          "chars": 18,
+          "seconds": 5.466666666666667,
+          "capacity": 40,
+          "fits": true
+        },
+        {
+          "segment": 3,
+          "role": "proof",
+          "text": "كامل అనుభవం",
+          "chars": 11,
+          "seconds": 2.7666666666666666,
+          "capacity": 40,
+          "fits": true
+        },
+        {
+          "segment": 4,
+          "role": "offer",
+          "text": "ఒక పాటలో",
+          "chars": 8,
+          "seconds": 2.6666666666666665,
+          "capacity": 40,
+          "fits": true
+        },
+        {
+          "segment": 5,
+          "role": "cta",
+          "text": "పూర్తి వీడియో చూడండి",
+          "chars": 20,
+          "seconds": 2.8,
+          "capacity": 40,
+          "fits": true
+        },
+        {
+          "segment": 6,
+          "role": "cta",
+          "text": "ఇప్పుడే చూడండి",
+          "chars": 14,
+          "seconds": 2.6666666666666665,
+          "capacity": 40,
+          "fits": true
+        }
+      ],
+      "applied": {
+        "reasoning": "This ad moves through the key moments of a wedding day, focusing on the seamless experience provided by the song.",
+        "pace": "calm",
+        "segments": [
+          {
+            "slot": "slot_01",
+            "role": "hook",
+            "ends_at": "cut_01",
+            "enter": "cut",
+            "headline": "",
+            "punch_word": "",
+            "why": "This shows the readiness for the big day."
+          },
+          {
+            "slot": "slot_02",
+            "role": "problem",
+            "ends_at": "cut_02",
+            "enter": "cut",
+            "headline": "సంగీతం తో అనుభూతి",
+            "punch_word": "అనుభూతి",
+            "why": "Highlighting the feeling created by the music."
+          },
+          {
+            "slot": "slot_03",
+            "role": "product",
+            "ends_at": "cut_03",
+            "enter": "cut",
+            "headline": "శ్రావణి & కార్తీక్",
+            "punch_word": "కార్తీక్",
+            "why": "Introducing the couple and their special moment."
+          },
+          {
+            "slot": "slot_04",
+            "role": "proof",
+            "ends_at": "cut_04",
+            "enter": "dissolve",
+            "headline": "كامل అనుభవం",
+            "punch_word": "",
+            "why": "Showing the joy and happiness of the couple."
+          },
+          {
+            "slot": "slot_05",
+            "role": "offer",
+            "ends_at": "cut_05",
+            "enter": "slide",
+            "headline": "ఒక పాటలో",
+            "punch_word": "పాటలో",
+            "why": "Emphasizing the benefit of the whole day in one song."
+          },
+          {
+            "slot": "slot_06",
+            "role": "cta",
+            "ends_at": "cut_06",
+            "enter": "cut",
+            "headline": "పూర్తి వీడియో చూడండి",
+            "punch_word": "చూడండి",
+            "why": "Directing the viewer to the full video."
+          },
+          {
+            "slot": "slot_07",
+            "role": "cta",
+            "ends_at": "cut_end",
+            "enter": "smooth",
+            "headline": "ఇప్పుడే చూడండి",
+            "punch_word": "",
+            "why": "Final call to action for immediate viewing."
+          }
+        ]
+      },
+      "baseline": {
+        "reasoning": "Standard cut: hook, problem, product, proof, offer, cta over 6 shots.",
+        "pace": "calm",
+        "segments": [
+          {
+            "slot": "slot_01",
+            "role": "hook",
+            "ends_at": "cut_02",
+            "enter": "cut",
+            "headline": "the whole day, in one song",
+            "punch_word": "the",
+            "why": "opens the ad"
+          },
+          {
+            "slot": "slot_02",
+            "role": "problem",
+            "ends_at": "cut_03",
+            "enter": "cut",
+            "headline": "",
+            "punch_word": "",
+            "why": "the problem it solves"
+          },
+          {
+            "slot": "slot_03",
+            "role": "product",
+            "ends_at": "cut_04",
+            "enter": "zoom",
+            "headline": "Sravani & Karthik — pelli video",
+            "punch_word": "Sravani",
+            "why": "the product itself"
+          },
+          {
+            "slot": "slot_04",
+            "role": "proof",
+            "ends_at": "cut_05",
+            "enter": "cut",
+            "headline": "",
+            "punch_word": "",
+            "why": "proof that it works"
+          },
+          {
+            "slot": "slot_05",
+            "role": "offer",
+            "ends_at": "cut_06",
+            "enter": "dissolve",
+            "headline": "",
+            "punch_word": "",
+            "why": "the offer"
+          },
+          {
+            "slot": "slot_07",
+            "role": "cta",
+            "ends_at": "cut_end",
+            "enter": "cut",
+            "headline": "Full video link in bio",
+            "punch_word": "Full",
+            "why": "what to do now"
+          }
+        ]
+      },
+      "renders": {
+        "model": null,
+        "baseline": null
+      },
+      "raw": "{\"reasoning\": \"This ad moves through the key moments of a wedding day, focusing on the seamless experience provided by the song.\", \"pace\": \"calm\", \"segments\": [{\"slot\": \"slot_01\", \"role\": \"hook\", \"ends_at\": \"cut_01\", \"enter\": \"cut\", \"headline\": \"పెళ్లి కూతురు సిద్ధం\", \"punch_word\": \"సిద్ధం\", \"why\": \"This shows the readiness for the big day.\"}, {\"slot\": \"slot_02\", \"role\": \"problem\", \"ends_at\": \"cut_02\", \"enter\": \"cut\", \"headline\": \"సంగీతం తో అనుభూతి\", \"punch_word\": \"అనుభూతి\", \"why\": \"Highlighting the feeling created by the music.\"}, {\"slot\": \"slot_03\", \"role\": \"product\", \"ends_at\": \"cut_03\", \"enter\": \"cut\", \"headline\": \"శ్రావణి & కార్తీక్\", \"punch_word\": \"కార్తీక్\", \"why\": \"Introducing the couple and their special moment.\"}, {\"slot\": \"slot_04\", \"role\": \"proof\", \"ends_at\": \"cut_04\", \"enter\": \"dissolve\", \"headline\": \"كامل అనుభవం\", \"punch_word\": \"\", \"why\": \"Showing the joy and happiness of the couple.\"}, {\"slot\": \"slot_05\", \"role\": \"offer\", \"ends_at\": \"cut_05\", \"enter\": \"slide\", \"headline\": \"ఒక పాటలో\", \"punch_word\": \"పాటలో\", \"why\": \"Emphasizing the benefit of the whole day in one song.\"}, {\"slot\": \"slot_06\", \"role\": \"cta\", \"ends_at\": \"cut_06\", \"enter\": \"cut\", \"headline\": \"పూర్తి వీడియో చూడండి\", \"punch_word\": \"చూడండి\", \"why\": \"Directing the viewer to the full video.\"}, {\"slot\": \"slot_07\", \"role\": \"cta\", \"ends_at\": \"cut_end\", \"enter\": \"smooth\", \"headline\": \"ఇప్పుడే చూడండి\", \"punch_word\": \"\", \"why\": \"Final call to action for immediate viewing.\"}]}"
+    }
+  ]
+}

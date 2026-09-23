@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { flatViolations, unsupportedKeywords, type ObjectSchema } from '@shared/director/conforms'
-import { PACES, ROLES, spineSchema } from '@shared/director/schema'
+import { MAX_WHY_CHARS, MAX_WHY_DECODE_CHARS, PACES, ROLES, spineSchema } from '@shared/director/schema'
 import type { Menu } from '@shared/director/menu'
 
 const menu: Pick<Menu, 'slots' | 'cuts' | 'families'> = {
@@ -31,6 +31,14 @@ describe('spineSchema', () => {
       expect(unsupportedKeywords(schema)).toEqual([])
       expect(flatViolations(schema)).toEqual([])
     }
+  })
+
+  it('gives the decoder more room for a why than the panel keeps', () => {
+    // A why cut off at 60 by the grammar was twice followed by the model closing
+    // the whole plan after one segment (docs/EVAL.md, run 2). The validator clips to 60.
+    const why = segment(spineSchema(menu)).properties.why as { maxLength?: number }
+    expect(why.maxLength).toBe(MAX_WHY_DECODE_CHARS)
+    expect(MAX_WHY_DECODE_CHARS).toBeGreaterThan(MAX_WHY_CHARS)
   })
 
   it('puts reasoning first, and declares every property in required order', () => {

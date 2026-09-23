@@ -1,6 +1,6 @@
 {
-  "run": "2026-09-23-lmstudio-gemma-4-e2b",
-  "stamp": "2026-09-23T19:50:24.735Z",
+  "run": "2026-09-23-lmstudio-gemma-4-e2b-r2",
+  "stamp": "2026-09-23T19:52:10.597Z",
   "provider": "openai",
   "model": "google/gemma-4-e2b",
   "think": false,
@@ -22,20 +22,20 @@
       "cuts": 9,
       "beats": "analysed",
       "status": 200,
-      "ms": 9974,
-      "promptTokens": 803,
-      "outputTokens": 329,
+      "ms": 10797,
+      "promptTokens": 895,
+      "outputTokens": 355,
       "truncated": false,
       "parsed": true,
-      "verdict": "used",
-      "why": null,
+      "verdict": "rejected",
+      "why": "slot_05 ends on cut_end, which is not after the segment before it",
       "problems": [],
-      "reasoning": "This ad will move urgently through the festive wear to drive sales for Diwali.",
+      "reasoning": "This ad is designed to create urgency for Diwali shopping by showcasing festive wear and a significant discount.",
       "headlines": [
         {
           "segment": 0,
           "role": "hook",
-          "text": "Diwali Sale Now",
+          "text": "दिवाली सेल आ गई",
           "chars": 15,
           "seconds": 0.8,
           "capacity": 19,
@@ -44,8 +44,8 @@
         {
           "segment": 1,
           "role": "problem",
-          "text": "Kurta Range",
-          "chars": 11,
+          "text": "कपड़े महंगे हैं",
+          "chars": 15,
           "seconds": 4.3,
           "capacity": 40,
           "fits": true
@@ -53,7 +53,7 @@
         {
           "segment": 2,
           "role": "product",
-          "text": "Saree Beauty",
+          "text": "रंगरेज़ फैशन",
           "chars": 12,
           "seconds": 4.3,
           "capacity": 40,
@@ -62,70 +62,70 @@
         {
           "segment": 3,
           "role": "proof",
-          "text": "30 Percent Off",
+          "text": "30 प्रतिशत छूट",
           "chars": 14,
-          "seconds": 2.1333333333333333,
-          "capacity": 34,
+          "seconds": 8.533333333333333,
+          "capacity": 40,
           "fits": true
         },
         {
           "segment": 4,
-          "role": "offer",
-          "text": "Visit Store",
-          "chars": 11,
-          "seconds": 6.4,
-          "capacity": 40,
+          "role": "cta",
+          "text": "दुकान पर आएं",
+          "chars": 12,
+          "seconds": 0,
+          "capacity": 19,
           "fits": true
         }
       ],
       "applied": {
-        "reasoning": "This ad will move urgently through the festive wear to drive sales for Diwali.",
+        "reasoning": "Standard cut: hook, problem, product, proof, cta over 5 shots.",
         "pace": "punchy",
         "segments": [
           {
             "slot": "slot_01",
             "role": "hook",
-            "ends_at": "cut_01",
+            "ends_at": "cut_02",
             "enter": "cut",
-            "headline": "Diwali Sale Now",
-            "punch_word": "Sale",
-            "why": "Festive wear is here now"
+            "headline": "festive wear, 30% off everything",
+            "punch_word": "festive",
+            "why": "opens the ad"
           },
           {
             "slot": "slot_02",
             "role": "problem",
-            "ends_at": "cut_02",
+            "ends_at": "cut_03",
             "enter": "cut",
-            "headline": "Kurta Range",
-            "punch_word": "Kurta",
-            "why": "Shop the new kurta range"
+            "headline": "",
+            "punch_word": "",
+            "why": "the problem it solves"
           },
           {
             "slot": "slot_03",
             "role": "product",
-            "ends_at": "cut_03",
-            "enter": "cut",
-            "headline": "Saree Beauty",
-            "punch_word": "Saree",
-            "why": "See the stunning saree model"
+            "ends_at": "cut_04",
+            "enter": "zoom",
+            "headline": "Rangrez Fashion Diwali sale",
+            "punch_word": "Rangrez",
+            "why": "the product itself"
           },
           {
             "slot": "slot_04",
             "role": "proof",
-            "ends_at": "cut_04",
-            "enter": "light",
-            "headline": "30 Percent Off",
-            "punch_word": "Off",
-            "why": "Get 30 percent off everything"
+            "ends_at": "cut_06",
+            "enter": "cut",
+            "headline": "",
+            "punch_word": "",
+            "why": "proof that it works"
           },
           {
             "slot": "slot_05",
-            "role": "offer",
+            "role": "cta",
             "ends_at": "cut_end",
             "enter": "dissolve",
-            "headline": "Visit Store",
+            "headline": "Visit the store by Sunday",
             "punch_word": "Visit",
-            "why": "Visit the store by Sunday"
+            "why": "what to do now"
           }
         ]
       },
@@ -181,10 +181,10 @@
         ]
       },
       "renders": {
-        "model": "tests/output/eval/2026-09-23-lmstudio-gemma-4-e2b/renders/event-diwali-sale.model.mp4",
-        "baseline": "tests/output/eval/2026-09-23-lmstudio-gemma-4-e2b/renders/event-diwali-sale.baseline.mp4"
+        "model": null,
+        "baseline": "tests/output/eval/2026-09-23-lmstudio-gemma-4-e2b-r2/renders/event-diwali-sale.baseline.mp4"
       },
-      "raw": "{\"reasoning\": \"This ad will move urgently through the festive wear to drive sales for Diwali.\", \"pace\": \"punchy\", \"segments\": [{\"slot\": \"slot_01\", \"role\": \"hook\", \"ends_at\": \"cut_01\", \"enter\": \"cut\", \"headline\": \"Diwali Sale Now\", \"punch_word\": \"Sale\", \"why\": \"Festive wear is here now\"}, {\"slot\": \"slot_02\", \"role\": \"problem\", \"ends_at\": \"cut_02\", \"enter\": \"cut\", \"headline\": \"Kurta Range\", \"punch_word\": \"Kurta\", \"why\": \"Shop the new kurta range\"}, {\"slot\": \"slot_03\", \"role\": \"product\", \"ends_at\": \"cut_03\", \"enter\": \"cut\", \"headline\": \"Saree Beauty\", \"punch_word\": \"Saree\", \"why\": \"See the stunning saree model\"}, {\"slot\": \"slot_04\", \"role\": \"proof\", \"ends_at\": \"cut_04\", \"enter\": \"light\", \"headline\": \"30 Percent Off\", \"punch_word\": \"Off\", \"why\": \"Get 30 percent off everything\"}, {\"slot\": \"slot_05\", \"role\": \"offer\", \"ends_at\": \"cut_end\", \"enter\": \"dissolve\", \"headline\": \"Visit Store\", \"punch_word\": \"Visit\", \"why\": \"Visit the store by Sunday\"}]}"
+      "raw": "{\"reasoning\": \"This ad is designed to create urgency for Diwali shopping by showcasing festive wear and a significant discount.\", \"pace\": \"punchy\", \"segments\": [{\"slot\": \"slot_01\", \"role\": \"hook\", \"ends_at\": \"cut_01\", \"enter\": \"cut\", \"headline\": \"दिवाली सेल आ गई\", \"punch_word\": \"सेल\", \"why\": \"त्योहार की खरीदारी का मौका है।\"}, {\"slot\": \"slot_02\", \"role\": \"problem\", \"ends_at\": \"cut_02\", \"enter\": \"cut\", \"headline\": \"कपड़े महंगे हैं\", \"punch_word\": \"महंगे\", \"why\": \"त्योहार पर कपड़े खरीदने में परेशानी आती है।\"}, {\"slot\": \"slot_03\", \"role\": \"product\", \"ends_at\": \"cut_03\", \"enter\": \"cut\", \"headline\": \"रंगरेज़ फैशन\", \"punch_word\": \"फैशन\", \"why\": \"हमारे नए कुर्ते देखें।\"}, {\"slot\": \"slot_04\", \"role\": \"proof\", \"ends_at\": \"cut_end\", \"enter\": \"light\", \"headline\": \"30 प्रतिशत छूट\", \"punch_word\": \"छूट\", \"why\": \"इस शानदार ऑफर का लाभ उठाएं।\"}, {\"slot\": \"slot_05\", \"role\": \"cta\", \"ends_at\": \"cut_end\", \"enter\": \"smooth\", \"headline\": \"दुकान पर आएं\", \"punch_word\": \"आएं\", \"why\": \"इस रविवार तक स्टोर पर आएं।\"}]}"
     },
     {
       "fixtureId": "event-fest",
@@ -196,69 +196,24 @@
       "cuts": 9,
       "beats": "analysed",
       "status": 200,
-      "ms": 9303,
-      "promptTokens": 845,
-      "outputTokens": 392,
+      "ms": 4224,
+      "promptTokens": 908,
+      "outputTokens": 115,
       "truncated": false,
       "parsed": true,
       "verdict": "rejected",
-      "why": "slot_06 ends on cut_end, which is not after the segment before it",
+      "why": "The plan stops at 0.7s of a 18.1s ad — it ended early",
       "problems": [],
-      "reasoning": "This ad will move urgently from grabbing attention to highlighting the festival experience and driving ticket sales before the deadline.",
+      "reasoning": "This ad moves urgently through the key points: hook, problem, product reveal, proof, and a final call to action.",
       "headlines": [
         {
           "segment": 0,
           "role": "hook",
-          "text": "Rhythm Fest Tickets Close",
-          "chars": 25,
+          "text": "Rhythm Fest 2026 is here",
+          "chars": 24,
           "seconds": 0.7333333333333333,
           "capacity": 19,
           "fits": false
-        },
-        {
-          "segment": 1,
-          "role": "problem",
-          "text": "Miss This Music",
-          "chars": 15,
-          "seconds": 3.8666666666666667,
-          "capacity": 40,
-          "fits": true
-        },
-        {
-          "segment": 2,
-          "role": "product",
-          "text": "Rhythm Fest 2026",
-          "chars": 16,
-          "seconds": 3.8666666666666667,
-          "capacity": 40,
-          "fits": true
-        },
-        {
-          "segment": 3,
-          "role": "proof",
-          "text": "Twelve Artists",
-          "chars": 14,
-          "seconds": 1.9,
-          "capacity": 30,
-          "fits": true
-        },
-        {
-          "segment": 4,
-          "role": "offer",
-          "text": "Get Your Tickets",
-          "chars": 16,
-          "seconds": 7.766666666666667,
-          "capacity": 40,
-          "fits": true
-        },
-        {
-          "segment": 5,
-          "role": "cta",
-          "text": "Buy Now",
-          "chars": 7,
-          "seconds": 0,
-          "capacity": 19,
-          "fits": true
         }
       ],
       "applied": {
@@ -383,9 +338,9 @@
       },
       "renders": {
         "model": null,
-        "baseline": "tests/output/eval/2026-09-23-lmstudio-gemma-4-e2b/renders/event-fest.baseline.mp4"
+        "baseline": "tests/output/eval/2026-09-23-lmstudio-gemma-4-e2b-r2/renders/event-fest.baseline.mp4"
       },
-      "raw": "{\"reasoning\": \"This ad will move urgently from grabbing attention to highlighting the festival experience and driving ticket sales before the deadline.\", \"pace\": \"punchy\", \"segments\": [{\"slot\": \"slot_01\", \"role\": \"hook\", \"ends_at\": \"cut_01\", \"enter\": \"cut\", \"headline\": \"Rhythm Fest Tickets Close\", \"punch_word\": \"Close\", \"why\": \"Urgent call for tickets now\"}, {\"slot\": \"slot_02\", \"role\": \"problem\", \"ends_at\": \"cut_02\", \"enter\": \"cut\", \"headline\": \"Miss This Music\", \"punch_word\": \"Music\", \"why\": \"The pain of missing out on the experience\"}, {\"slot\": \"slot_03\", \"role\": \"product\", \"ends_at\": \"cut_03\", \"enter\": \"cut\", \"headline\": \"Rhythm Fest 2026\", \"punch_word\": \"Fest\", \"why\": \"Introducing the festival\"}, {\"slot\": \"slot_04\", \"role\": \"proof\", \"ends_at\": \"cut_04\", \"enter\": \"dissolve\", \"headline\": \"Twelve Artists\", \"punch_word\": \"Artists\", \"why\": \"Highlighting the lineup size\"}, {\"slot\": \"slot_05\", \"role\": \"offer\", \"ends_at\": \"cut_end\", \"enter\": \"wipe\", \"headline\": \"Get Your Tickets\", \"punch_word\": \"Tickets\", \"why\": \"The final call to action\"}, {\"slot\": \"slot_06\", \"role\": \"cta\", \"ends_at\": \"cut_end\", \"enter\": \"smooth\", \"headline\": \"Buy Now\", \"punch_word\": \"Now\", \"why\": \"Final imperative to act\"}]}"
+      "raw": "{\"reasoning\": \"This ad moves urgently through the key points: hook, problem, product reveal, proof, and a final call to action.\", \"pace\": \"punchy\", \"segments\": [{\"slot\": \"slot_01\", \"role\": \"hook\", \"ends_at\": \"cut_01\", \"enter\": \"cut\", \"headline\": \"Rhythm Fest 2026 is here\", \"punch_word\": \"Rhythm\", \"why\": \"Bold claim to grab attention for students in Hyderabad about\"}]}"
     },
     {
       "fixtureId": "fashion-perfume",
@@ -397,20 +352,22 @@
       "cuts": 7,
       "beats": "analysed",
       "status": 200,
-      "ms": 9336,
-      "promptTokens": 786,
-      "outputTokens": 405,
+      "ms": 10429,
+      "promptTokens": 849,
+      "outputTokens": 412,
       "truncated": false,
       "parsed": true,
-      "verdict": "used",
+      "verdict": "repaired",
       "why": null,
-      "problems": [],
-      "reasoning": "This ad will move from a bold hook about the scent to showing the product and the mood it creates, culminating in a call to action.",
+      "problems": [
+        "segments[2].enter: \"dissolve\" became a cut — at most 3 of 5 cuts may carry a transition"
+      ],
+      "reasoning": "This ad moves from a bold claim about the scent to showing the product's application and the mood it creates, culminating in a call to action.",
       "headlines": [
         {
           "segment": 0,
           "role": "hook",
-          "text": "After Dark Scent",
+          "text": "After dark scent",
           "chars": 16,
           "seconds": 2.3333333333333335,
           "capacity": 37,
@@ -419,8 +376,8 @@
         {
           "segment": 1,
           "role": "problem",
-          "text": "Tired of Fading?",
-          "chars": 16,
+          "text": "Feeling lost",
+          "chars": 12,
           "seconds": 5.333333333333333,
           "capacity": 40,
           "fits": true
@@ -428,7 +385,7 @@
         {
           "segment": 2,
           "role": "product",
-          "text": "Noir 9 Eau De Parfum",
+          "text": "Noir 9 eau de parfum",
           "chars": 20,
           "seconds": 5.366666666666666,
           "capacity": 40,
@@ -437,8 +394,8 @@
         {
           "segment": 3,
           "role": "proof",
-          "text": "Unforgettable Presence",
-          "chars": 22,
+          "text": "Confidence found",
+          "chars": 16,
           "seconds": 1.9333333333333333,
           "capacity": 31,
           "fits": true
@@ -463,7 +420,7 @@
         }
       ],
       "applied": {
-        "reasoning": "This ad will move from a bold hook about the scent to showing the product and the mood it creates, culminating in a call to action.",
+        "reasoning": "This ad moves from a bold claim about the scent to showing the product's application and the mood it creates, culminating in a call to action.",
         "pace": "punchy",
         "segments": [
           {
@@ -471,45 +428,45 @@
             "role": "hook",
             "ends_at": "cut_01",
             "enter": "cut",
-            "headline": "After Dark Scent",
-            "punch_word": "After",
-            "why": "Introducing Noir 9 for evening wear."
+            "headline": "After dark scent",
+            "punch_word": "after",
+            "why": "This sets the mood for the premium fragrance experience."
           },
           {
             "slot": "slot_02",
             "role": "problem",
             "ends_at": "cut_02",
             "enter": "cut",
-            "headline": "Tired of Fading?",
-            "punch_word": "Fading",
-            "why": "Feeling like your fragrance disappears too fast."
+            "headline": "Feeling lost",
+            "punch_word": "lost",
+            "why": "This addresses the feeling of needing a signature scent."
           },
           {
             "slot": "slot_03",
             "role": "product",
             "ends_at": "cut_03",
-            "enter": "dissolve",
-            "headline": "Noir 9 Eau De Parfum",
-            "punch_word": "Noir",
-            "why": "The hero shot of the bottle."
+            "enter": "cut",
+            "headline": "Noir 9 eau de parfum",
+            "punch_word": "noir",
+            "why": "The hero shot of the product."
           },
           {
             "slot": "slot_04",
             "role": "proof",
             "ends_at": "cut_04",
-            "enter": "wipe",
-            "headline": "Unforgettable Presence",
-            "punch_word": "Presence",
-            "why": "Showing the scent being applied."
+            "enter": "slide",
+            "headline": "Confidence found",
+            "punch_word": "found",
+            "why": "Showing the scent being applied for immediate effect."
           },
           {
             "slot": "slot_05",
             "role": "offer",
             "ends_at": "cut_05",
-            "enter": "cut",
+            "enter": "wipe",
             "headline": "Discover Noir 9",
-            "punch_word": "Discover",
-            "why": "The city atmosphere."
+            "punch_word": "",
+            "why": "The final visual of the city mood."
           },
           {
             "slot": "slot_06",
@@ -517,8 +474,8 @@
             "ends_at": "cut_end",
             "enter": "smooth",
             "headline": "Discover Noir 9",
-            "punch_word": "Discover",
-            "why": "Final call to action."
+            "punch_word": "",
+            "why": "The final smooth reveal leading to the CTA."
           }
         ]
       },
@@ -583,10 +540,10 @@
         ]
       },
       "renders": {
-        "model": "tests/output/eval/2026-09-23-lmstudio-gemma-4-e2b/renders/fashion-perfume.model.mp4",
-        "baseline": "tests/output/eval/2026-09-23-lmstudio-gemma-4-e2b/renders/fashion-perfume.baseline.mp4"
+        "model": "tests/output/eval/2026-09-23-lmstudio-gemma-4-e2b-r2/renders/fashion-perfume.model.mp4",
+        "baseline": "tests/output/eval/2026-09-23-lmstudio-gemma-4-e2b-r2/renders/fashion-perfume.baseline.mp4"
       },
-      "raw": "{\"reasoning\": \"This ad will move from a bold hook about the scent to showing the product and the mood it creates, culminating in a call to action.\", \"pace\": \"punchy\", \"segments\": [{\"slot\": \"slot_01\", \"role\": \"hook\", \"ends_at\": \"cut_01\", \"enter\": \"cut\", \"headline\": \"After Dark Scent\", \"punch_word\": \"After\", \"why\": \"Introducing Noir 9 for evening wear.\"}, {\"slot\": \"slot_02\", \"role\": \"problem\", \"ends_at\": \"cut_02\", \"enter\": \"cut\", \"headline\": \"Tired of Fading?\", \"punch_word\": \"Fading\", \"why\": \"Feeling like your fragrance disappears too fast.\"}, {\"slot\": \"slot_03\", \"role\": \"product\", \"ends_at\": \"cut_03\", \"enter\": \"dissolve\", \"headline\": \"Noir 9 Eau De Parfum\", \"punch_word\": \"Noir\", \"why\": \"The hero shot of the bottle.\"}, {\"slot\": \"slot_04\", \"role\": \"proof\", \"ends_at\": \"cut_04\", \"enter\": \"wipe\", \"headline\": \"Unforgettable Presence\", \"punch_word\": \"Presence\", \"why\": \"Showing the scent being applied.\"}, {\"slot\": \"slot_05\", \"role\": \"offer\", \"ends_at\": \"cut_05\", \"enter\": \"cut\", \"headline\": \"Discover Noir 9\", \"punch_word\": \"Discover\", \"why\": \"The city atmosphere.\"}, {\"slot\": \"slot_06\", \"role\": \"cta\", \"ends_at\": \"cut_end\", \"enter\": \"smooth\", \"headline\": \"Discover Noir 9\", \"punch_word\": \"Discover\", \"why\": \"Final call to action.\"}]}"
+      "raw": "{\"reasoning\": \"This ad moves from a bold claim about the scent to showing the product's application and the mood it creates, culminating in a call to action.\", \"pace\": \"punchy\", \"segments\": [{\"slot\": \"slot_01\", \"role\": \"hook\", \"ends_at\": \"cut_01\", \"enter\": \"cut\", \"headline\": \"After dark scent\", \"punch_word\": \"after\", \"why\": \"This sets the mood for the premium fragrance experience.\"}, {\"slot\": \"slot_02\", \"role\": \"problem\", \"ends_at\": \"cut_02\", \"enter\": \"cut\", \"headline\": \"Feeling lost\", \"punch_word\": \"lost\", \"why\": \"This addresses the feeling of needing a signature scent.\"}, {\"slot\": \"slot_03\", \"role\": \"product\", \"ends_at\": \"cut_03\", \"enter\": \"dissolve\", \"headline\": \"Noir 9 eau de parfum\", \"punch_word\": \"noir\", \"why\": \"The hero shot of the product.\"}, {\"slot\": \"slot_04\", \"role\": \"proof\", \"ends_at\": \"cut_04\", \"enter\": \"slide\", \"headline\": \"Confidence found\", \"punch_word\": \"found\", \"why\": \"Showing the scent being applied for immediate effect.\"}, {\"slot\": \"slot_05\", \"role\": \"offer\", \"ends_at\": \"cut_05\", \"enter\": \"wipe\", \"headline\": \"Discover Noir 9\", \"punch_word\": \"\", \"why\": \"The final visual of the city mood.\"}, {\"slot\": \"slot_06\", \"role\": \"cta\", \"ends_at\": \"cut_end\", \"enter\": \"smooth\", \"headline\": \"Discover Noir 9\", \"punch_word\": \"\", \"why\": \"The final smooth reveal leading to the CTA.\"}]}"
     },
     {
       "fixtureId": "food-biryani",
@@ -598,9 +555,9 @@
       "cuts": 9,
       "beats": "analysed",
       "status": 200,
-      "ms": 9292,
-      "promptTokens": 819,
-      "outputTokens": 399,
+      "ms": 11113,
+      "promptTokens": 909,
+      "outputTokens": 437,
       "truncated": false,
       "parsed": true,
       "verdict": "repaired",
@@ -609,13 +566,13 @@
         "segments[5].ends_at: slot_06 is 4.0s of footage but its segment is 7.0s — 3.0s of black after it",
         "segments[2].enter: \"dissolve\" became a cut — at most 3 of 5 cuts may carry a transition"
       ],
-      "reasoning": "This ad will move through the stages of hook, problem, product, proof, offer, and CTA using the provided slots and cuts to promote Paradise Spice biryani to Hyderabad food lovers.",
+      "reasoning": "This ad will follow the skeleton: hook, problem, product, proof, offer, cta. It moves through the provided slots, using cuts and transitions to build excitement for Paradise Spice biryani.",
       "headlines": [
         {
           "segment": 0,
           "role": "hook",
-          "text": "Dum Biryani magic",
-          "chars": 17,
+          "text": "ఆ రుచి అద్భుతం",
+          "chars": 14,
           "seconds": 1.4333333333333333,
           "capacity": 23,
           "fits": true
@@ -623,8 +580,8 @@
         {
           "segment": 1,
           "role": "problem",
-          "text": "Taste the flavor",
-          "chars": 16,
+          "text": "పాత వంటకాల బాధ",
+          "chars": 14,
           "seconds": 4.633333333333334,
           "capacity": 40,
           "fits": true
@@ -632,7 +589,7 @@
         {
           "segment": 2,
           "role": "product",
-          "text": "Paradise Spice Biryani",
+          "text": "Paradise Spice biryani",
           "chars": 22,
           "seconds": 4.633333333333334,
           "capacity": 40,
@@ -641,8 +598,8 @@
         {
           "segment": 3,
           "role": "proof",
-          "text": "Six Hour Seal",
-          "chars": 13,
+          "text": "ఆస్వాదించండి",
+          "chars": 12,
           "seconds": 1.1666666666666667,
           "capacity": 19,
           "fits": true
@@ -650,8 +607,8 @@
         {
           "segment": 4,
           "role": "offer",
-          "text": "Order Now",
-          "chars": 9,
+          "text": "ప్రత్యేక ఆఫర్",
+          "chars": 13,
           "seconds": 1.1,
           "capacity": 19,
           "fits": true
@@ -659,15 +616,15 @@
         {
           "segment": 5,
           "role": "cta",
-          "text": "Free Delivery This Week",
-          "chars": 23,
+          "text": "ఇప్పుడే ఆర్డర్ చేయండి",
+          "chars": 21,
           "seconds": 7.033333333333333,
           "capacity": 40,
           "fits": true
         }
       ],
       "applied": {
-        "reasoning": "This ad will move through the stages of hook, problem, product, proof, offer, and CTA using the provided slots and cuts to promote Paradise Spice biryani to Hyderabad food lovers.",
+        "reasoning": "This ad will follow the skeleton: hook, problem, product, proof, offer, cta. It moves through the provided slots, using cuts and transitions to build excitement for Paradise Spice biryani.",
         "pace": "punchy",
         "segments": [
           {
@@ -675,54 +632,54 @@
             "role": "hook",
             "ends_at": "cut_01",
             "enter": "cut",
-            "headline": "Dum Biryani magic",
-            "punch_word": "dum",
-            "why": "Experience the authentic taste now."
+            "headline": "ఆ రుచి అద్భుతం",
+            "punch_word": "రుచి",
+            "why": "See the biryani handi open for the first time."
           },
           {
             "slot": "slot_02",
             "role": "problem",
             "ends_at": "cut_02",
             "enter": "cut",
-            "headline": "Taste the flavor",
-            "punch_word": "",
-            "why": "Tired of ordinary food?"
+            "headline": "పాత వంటకాల బాధ",
+            "punch_word": "బాధ",
+            "why": "Highlight the pain of traditional cooking."
           },
           {
             "slot": "slot_03",
             "role": "product",
             "ends_at": "cut_03",
             "enter": "cut",
-            "headline": "Paradise Spice Biryani",
-            "punch_word": "",
-            "why": "See the chef's skill."
+            "headline": "Paradise Spice biryani",
+            "punch_word": "biryani",
+            "why": "Show the hero shot of the product."
           },
           {
             "slot": "slot_04",
             "role": "proof",
             "ends_at": "cut_04",
             "enter": "slide",
-            "headline": "Six Hour Seal",
+            "headline": "ఆస్వాదించండి",
             "punch_word": "",
-            "why": "Proof of flavor longevity."
+            "why": "Show the happy family enjoying the food."
           },
           {
             "slot": "slot_05",
             "role": "offer",
             "ends_at": "cut_05",
             "enter": "wipe",
-            "headline": "Order Now",
+            "headline": "ప్రత్యేక ఆఫర్",
             "punch_word": "",
-            "why": "Special offer for you."
+            "why": "Introduce the special deal."
           },
           {
             "slot": "slot_06",
             "role": "cta",
             "ends_at": "cut_end",
-            "enter": "smooth",
-            "headline": "Free Delivery This Week",
-            "punch_word": "",
-            "why": "Order today for a treat."
+            "enter": "zoom",
+            "headline": "ఇప్పుడే ఆర్డర్ చేయండి",
+            "punch_word": "ఆర్డర్",
+            "why": "Final call to action."
           }
         ]
       },
@@ -787,10 +744,10 @@
         ]
       },
       "renders": {
-        "model": "tests/output/eval/2026-09-23-lmstudio-gemma-4-e2b/renders/food-biryani.model.mp4",
-        "baseline": "tests/output/eval/2026-09-23-lmstudio-gemma-4-e2b/renders/food-biryani.baseline.mp4"
+        "model": "tests/output/eval/2026-09-23-lmstudio-gemma-4-e2b-r2/renders/food-biryani.model.mp4",
+        "baseline": "tests/output/eval/2026-09-23-lmstudio-gemma-4-e2b-r2/renders/food-biryani.baseline.mp4"
       },
-      "raw": "{\"reasoning\": \"This ad will move through the stages of hook, problem, product, proof, offer, and CTA using the provided slots and cuts to promote Paradise Spice biryani to Hyderabad food lovers.\", \"pace\": \"punchy\", \"segments\": [{\"slot\": \"slot_01\", \"role\": \"hook\", \"ends_at\": \"cut_01\", \"enter\": \"cut\", \"headline\": \"Dum Biryani magic\", \"punch_word\": \"dum\", \"why\": \"Experience the authentic taste now.\"}, {\"slot\": \"slot_02\", \"role\": \"problem\", \"ends_at\": \"cut_02\", \"enter\": \"cut\", \"headline\": \"Taste the flavor\", \"punch_word\": \"\", \"why\": \"Tired of ordinary food?\"}, {\"slot\": \"slot_03\", \"role\": \"product\", \"ends_at\": \"cut_03\", \"enter\": \"dissolve\", \"headline\": \"Paradise Spice Biryani\", \"punch_word\": \"\", \"why\": \"See the chef's skill.\"}, {\"slot\": \"slot_04\", \"role\": \"proof\", \"ends_at\": \"cut_04\", \"enter\": \"slide\", \"headline\": \"Six Hour Seal\", \"punch_word\": \"\", \"why\": \"Proof of flavor longevity.\"}, {\"slot\": \"slot_05\", \"role\": \"offer\", \"ends_at\": \"cut_05\", \"enter\": \"wipe\", \"headline\": \"Order Now\", \"punch_word\": \"\", \"why\": \"Special offer for you.\"}, {\"slot\": \"slot_06\", \"role\": \"cta\", \"ends_at\": \"cut_end\", \"enter\": \"smooth\", \"headline\": \"Free Delivery This Week\", \"punch_word\": \"\", \"why\": \"Order today for a treat.\"}]}"
+      "raw": "{\"reasoning\": \"This ad will follow the skeleton: hook, problem, product, proof, offer, cta. It moves through the provided slots, using cuts and transitions to build excitement for Paradise Spice biryani.\", \"pace\": \"punchy\", \"segments\": [{\"slot\": \"slot_01\", \"role\": \"hook\", \"ends_at\": \"cut_01\", \"enter\": \"cut\", \"headline\": \"ఆ రుచి అద్భుతం\", \"punch_word\": \"రుచి\", \"why\": \"See the biryani handi open for the first time.\"}, {\"slot\": \"slot_02\", \"role\": \"problem\", \"ends_at\": \"cut_02\", \"enter\": \"cut\", \"headline\": \"పాత వంటకాల బాధ\", \"punch_word\": \"బాధ\", \"why\": \"Highlight the pain of traditional cooking.\"}, {\"slot\": \"slot_03\", \"role\": \"product\", \"ends_at\": \"cut_03\", \"enter\": \"dissolve\", \"headline\": \"Paradise Spice biryani\", \"punch_word\": \"biryani\", \"why\": \"Show the hero shot of the product.\"}, {\"slot\": \"slot_04\", \"role\": \"proof\", \"ends_at\": \"cut_04\", \"enter\": \"slide\", \"headline\": \"ఆస్వాదించండి\", \"punch_word\": \"\", \"why\": \"Show the happy family enjoying the food.\"}, {\"slot\": \"slot_05\", \"role\": \"offer\", \"ends_at\": \"cut_05\", \"enter\": \"wipe\", \"headline\": \"ప్రత్యేక ఆఫర్\", \"punch_word\": \"\", \"why\": \"Introduce the special deal.\"}, {\"slot\": \"slot_06\", \"role\": \"cta\", \"ends_at\": \"cut_end\", \"enter\": \"zoom\", \"headline\": \"ఇప్పుడే ఆర్డర్ చేయండి\", \"punch_word\": \"ఆర్డర్\", \"why\": \"Final call to action.\"}]}"
     },
     {
       "fixtureId": "product-coldbrew",
@@ -802,9 +759,9 @@
       "cuts": 8,
       "beats": "analysed",
       "status": 200,
-      "ms": 10457,
-      "promptTokens": 795,
-      "outputTokens": 456,
+      "ms": 11446,
+      "promptTokens": 887,
+      "outputTokens": 452,
       "truncated": false,
       "parsed": true,
       "verdict": "repaired",
@@ -812,13 +769,13 @@
       "problems": [
         "segments[5].ends_at: slot_06 is 3.0s of footage but its segment is 4.1s — 1.1s of black after it"
       ],
-      "reasoning": "This ad will move quickly, targeting college students with a playful tone to show how easy it is to get café-quality coffee at home. It will follow the hook, problem, product, and a quick CTA.",
+      "reasoning": "This ad will follow the skeleton: hook, problem, product, proof, offer (if applicable), and CTA. It will use the provided slots in order, timed to fit within the 15-second target.",
       "headlines": [
         {
           "segment": 0,
           "role": "hook",
-          "text": "Home café taste now",
-          "chars": 19,
+          "text": "घर पर कैफ़े का स्वाद",
+          "chars": 20,
           "seconds": 1.7666666666666666,
           "capacity": 28,
           "fits": true
@@ -826,8 +783,8 @@
         {
           "segment": 1,
           "role": "problem",
-          "text": "Tired of boring coffee",
-          "chars": 22,
+          "text": "घर पर कॉफ़ी नहीं?",
+          "chars": 17,
           "seconds": 4.1,
           "capacity": 40,
           "fits": true
@@ -835,8 +792,8 @@
         {
           "segment": 2,
           "role": "product",
-          "text": "Chill Brew coffee",
-          "chars": 17,
+          "text": "Chill Brew कॉफ़ी",
+          "chars": 16,
           "seconds": 2.066666666666667,
           "capacity": 33,
           "fits": true
@@ -844,8 +801,8 @@
         {
           "segment": 3,
           "role": "proof",
-          "text": "Real café flavor",
-          "chars": 16,
+          "text": "असली स्वाद",
+          "chars": 10,
           "seconds": 0.9666666666666667,
           "capacity": 19,
           "fits": true
@@ -853,8 +810,8 @@
         {
           "segment": 4,
           "role": "offer",
-          "text": "Get yours today",
-          "chars": 15,
+          "text": "आज ही ऑर्डर करें",
+          "chars": 16,
           "seconds": 1,
           "capacity": 19,
           "fits": true
@@ -862,15 +819,15 @@
         {
           "segment": 5,
           "role": "cta",
-          "text": "Order on Swiggy",
-          "chars": 15,
+          "text": "Swiggy पर ऑर्डर करें",
+          "chars": 20,
           "seconds": 4.066666666666666,
           "capacity": 40,
           "fits": true
         }
       ],
       "applied": {
-        "reasoning": "This ad will move quickly, targeting college students with a playful tone to show how easy it is to get café-quality coffee at home. It will follow the hook, problem, product, and a quick CTA.",
+        "reasoning": "This ad will follow the skeleton: hook, problem, product, proof, offer (if applicable), and CTA. It will use the provided slots in order, timed to fit within the 15-second target.",
         "pace": "punchy",
         "segments": [
           {
@@ -878,54 +835,54 @@
             "role": "hook",
             "ends_at": "cut_01",
             "enter": "cut",
-            "headline": "Home café taste now",
-            "punch_word": "taste",
-            "why": "Show the chilled brew glass immediately to grab attention."
+            "headline": "घर पर कैफ़े का स्वाद",
+            "punch_word": "स्वाद",
+            "why": "Show the chilled brew glass to grab attention immediately."
           },
           {
             "slot": "slot_02",
             "role": "problem",
             "ends_at": "cut_02",
             "enter": "cut",
-            "headline": "Tired of boring coffee",
-            "punch_word": "boring",
-            "why": "Show the milk pouring to establish the pain point of weak/un"
+            "headline": "घर पर कॉफ़ी नहीं?",
+            "punch_word": "कॉफ़ी",
+            "why": "Show the milk pouring to highlight the struggle of not being"
           },
           {
             "slot": "slot_03",
             "role": "product",
             "ends_at": "cut_03",
             "enter": "dissolve",
-            "headline": "Chill Brew coffee",
-            "punch_word": "Brew",
-            "why": "Show the friends to connect the product with social/hostel生活"
+            "headline": "Chill Brew कॉफ़ी",
+            "punch_word": "Chill",
+            "why": "Show the cafe friends to establish the desired vibe."
           },
           {
             "slot": "slot_04",
             "role": "proof",
             "ends_at": "cut_04",
             "enter": "wipe",
-            "headline": "Real café flavor",
-            "punch_word": "flavor",
-            "why": "Show the beans closeup to prove the quality of the coffee."
+            "headline": "असली स्वाद",
+            "punch_word": "स्वाद",
+            "why": "Show the beans closeup as proof of quality."
           },
           {
             "slot": "slot_05",
             "role": "offer",
             "ends_at": "cut_05",
             "enter": "cut",
-            "headline": "Get yours today",
-            "punch_word": "today",
-            "why": "Show the bottle pack to present the purchase option."
+            "headline": "आज ही ऑर्डर करें",
+            "punch_word": "ऑर्डर",
+            "why": "Show the bottle pack to drive immediate action."
           },
           {
             "slot": "slot_06",
             "role": "cta",
             "ends_at": "cut_end",
             "enter": "smooth",
-            "headline": "Order on Swiggy",
-            "punch_word": "Swiggy",
-            "why": "Show the ice drop as the final visual before the call to act"
+            "headline": "Swiggy पर ऑर्डर करें",
+            "punch_word": "ऑर्डर",
+            "why": "Show the ice drop for the final call to action."
           }
         ]
       },
@@ -990,10 +947,10 @@
         ]
       },
       "renders": {
-        "model": "tests/output/eval/2026-09-23-lmstudio-gemma-4-e2b/renders/product-coldbrew.model.mp4",
-        "baseline": "tests/output/eval/2026-09-23-lmstudio-gemma-4-e2b/renders/product-coldbrew.baseline.mp4"
+        "model": "tests/output/eval/2026-09-23-lmstudio-gemma-4-e2b-r2/renders/product-coldbrew.model.mp4",
+        "baseline": "tests/output/eval/2026-09-23-lmstudio-gemma-4-e2b-r2/renders/product-coldbrew.baseline.mp4"
       },
-      "raw": "{\"reasoning\": \"This ad will move quickly, targeting college students with a playful tone to show how easy it is to get café-quality coffee at home. It will follow the hook, problem, product, and a quick CTA.\", \"pace\": \"punchy\", \"segments\": [{\"slot\": \"slot_01\", \"role\": \"hook\", \"ends_at\": \"cut_01\", \"enter\": \"cut\", \"headline\": \"Home café taste now\", \"punch_word\": \"taste\", \"why\": \"Show the chilled brew glass immediately to grab attention.\"}, {\"slot\": \"slot_02\", \"role\": \"problem\", \"ends_at\": \"cut_02\", \"enter\": \"cut\", \"headline\": \"Tired of boring coffee\", \"punch_word\": \"boring\", \"why\": \"Show the milk pouring to establish the pain point of weak/un\"}, {\"slot\": \"slot_03\", \"role\": \"product\", \"ends_at\": \"cut_03\", \"enter\": \"dissolve\", \"headline\": \"Chill Brew coffee\", \"punch_word\": \"Brew\", \"why\": \"Show the friends to connect the product with social/hostel生活\"}, {\"slot\": \"slot_04\", \"role\": \"proof\", \"ends_at\": \"cut_04\", \"enter\": \"wipe\", \"headline\": \"Real café flavor\", \"punch_word\": \"flavor\", \"why\": \"Show the beans closeup to prove the quality of the coffee.\"}, {\"slot\": \"slot_05\", \"role\": \"offer\", \"ends_at\": \"cut_05\", \"enter\": \"cut\", \"headline\": \"Get yours today\", \"punch_word\": \"today\", \"why\": \"Show the bottle pack to present the purchase option.\"}, {\"slot\": \"slot_06\", \"role\": \"cta\", \"ends_at\": \"cut_end\", \"enter\": \"smooth\", \"headline\": \"Order on Swiggy\", \"punch_word\": \"Swiggy\", \"why\": \"Show the ice drop as the final visual before the call to act\"}]}"
+      "raw": "{\"reasoning\": \"This ad will follow the skeleton: hook, problem, product, proof, offer (if applicable), and CTA. It will use the provided slots in order, timed to fit within the 15-second target.\", \"pace\": \"punchy\", \"segments\": [{\"slot\": \"slot_01\", \"role\": \"hook\", \"ends_at\": \"cut_01\", \"enter\": \"cut\", \"headline\": \"घर पर कैफ़े का स्वाद\", \"punch_word\": \"स्वाद\", \"why\": \"Show the chilled brew glass to grab attention immediately.\"}, {\"slot\": \"slot_02\", \"role\": \"problem\", \"ends_at\": \"cut_02\", \"enter\": \"cut\", \"headline\": \"घर पर कॉफ़ी नहीं?\", \"punch_word\": \"कॉफ़ी\", \"why\": \"Show the milk pouring to highlight the struggle of not being\"}, {\"slot\": \"slot_03\", \"role\": \"product\", \"ends_at\": \"cut_03\", \"enter\": \"dissolve\", \"headline\": \"Chill Brew कॉफ़ी\", \"punch_word\": \"Chill\", \"why\": \"Show the cafe friends to establish the desired vibe.\"}, {\"slot\": \"slot_04\", \"role\": \"proof\", \"ends_at\": \"cut_04\", \"enter\": \"wipe\", \"headline\": \"असली स्वाद\", \"punch_word\": \"स्वाद\", \"why\": \"Show the beans closeup as proof of quality.\"}, {\"slot\": \"slot_05\", \"role\": \"offer\", \"ends_at\": \"cut_05\", \"enter\": \"cut\", \"headline\": \"आज ही ऑर्डर करें\", \"punch_word\": \"ऑर्डर\", \"why\": \"Show the bottle pack to drive immediate action.\"}, {\"slot\": \"slot_06\", \"role\": \"cta\", \"ends_at\": \"cut_end\", \"enter\": \"smooth\", \"headline\": \"Swiggy पर ऑर्डर करें\", \"punch_word\": \"ऑर्डर\", \"why\": \"Show the ice drop for the final call to action.\"}]}"
     },
     {
       "fixtureId": "product-serum",
@@ -1005,128 +962,83 @@
       "cuts": 8,
       "beats": "analysed",
       "status": 200,
-      "ms": 9446,
-      "promptTokens": 835,
-      "outputTokens": 399,
+      "ms": 4221,
+      "promptTokens": 898,
+      "outputTokens": 111,
       "truncated": false,
       "parsed": true,
-      "verdict": "used",
-      "why": null,
+      "verdict": "rejected",
+      "why": "The plan stops at 2.1s of a 18.9s ad — it ended early",
       "problems": [],
-      "reasoning": "This ad will move from hooking the viewer with the promise of brighter skin to showing the product, proving the results, and ending with a clear call to action.",
+      "reasoning": "This ad moves from a hook to the problem, introduces the product, shows proof, and ends with an offer and CTA.",
       "headlines": [
         {
           "segment": 0,
           "role": "hook",
-          "text": "Brighten skin in 14 days",
-          "chars": 24,
+          "text": "Dull skin gone",
+          "chars": 14,
           "seconds": 2.1,
           "capacity": 34,
-          "fits": true
-        },
-        {
-          "segment": 1,
-          "role": "problem",
-          "text": "Tired of dull skin",
-          "chars": 18,
-          "seconds": 4.8,
-          "capacity": 40,
-          "fits": true
-        },
-        {
-          "segment": 2,
-          "role": "product",
-          "text": "Aura Vitamin C Serum",
-          "chars": 20,
-          "seconds": 4.9,
-          "capacity": 40,
-          "fits": true
-        },
-        {
-          "segment": 3,
-          "role": "proof",
-          "text": "See the difference",
-          "chars": 18,
-          "seconds": 1.1,
-          "capacity": 19,
-          "fits": true
-        },
-        {
-          "segment": 4,
-          "role": "offer",
-          "text": "20 percent off now",
-          "chars": 18,
-          "seconds": 1.2,
-          "capacity": 19,
-          "fits": true
-        },
-        {
-          "segment": 5,
-          "role": "cta",
-          "text": "Shop now",
-          "chars": 8,
-          "seconds": 4.766666666666667,
-          "capacity": 40,
           "fits": true
         }
       ],
       "applied": {
-        "reasoning": "This ad will move from hooking the viewer with the promise of brighter skin to showing the product, proving the results, and ending with a clear call to action.",
-        "pace": "punchy",
+        "reasoning": "Standard cut: hook, problem, product, proof, offer, cta over 6 shots.",
+        "pace": "calm",
         "segments": [
           {
             "slot": "slot_01",
             "role": "hook",
             "ends_at": "cut_01",
             "enter": "cut",
-            "headline": "Brighten skin in 14 days",
-            "punch_word": "brighten",
-            "why": "Stop dull skin now"
+            "headline": "brighter skin in 14 days",
+            "punch_word": "brighter",
+            "why": "opens the ad"
           },
           {
             "slot": "slot_02",
             "role": "problem",
             "ends_at": "cut_02",
             "enter": "cut",
-            "headline": "Tired of dull skin",
-            "punch_word": "dull",
-            "why": "Feeling lackluster"
+            "headline": "",
+            "punch_word": "",
+            "why": "the problem it solves"
           },
           {
             "slot": "slot_03",
             "role": "product",
             "ends_at": "cut_03",
-            "enter": "cut",
+            "enter": "zoom",
             "headline": "Aura Vitamin C Serum",
             "punch_word": "Aura",
-            "why": "Meet your solution"
+            "why": "the product itself"
           },
           {
             "slot": "slot_04",
             "role": "proof",
             "ends_at": "cut_04",
-            "enter": "dissolve",
-            "headline": "See the difference",
+            "enter": "cut",
+            "headline": "",
             "punch_word": "",
-            "why": "14 days of glow"
+            "why": "proof that it works"
           },
           {
             "slot": "slot_05",
             "role": "offer",
-            "ends_at": "cut_05",
-            "enter": "wipe",
-            "headline": "20 percent off now",
-            "punch_word": "off",
-            "why": "Limited time deal"
+            "ends_at": "cut_06",
+            "enter": "dissolve",
+            "headline": "",
+            "punch_word": "",
+            "why": "the offer"
           },
           {
-            "slot": "slot_06",
+            "slot": "slot_07",
             "role": "cta",
             "ends_at": "cut_end",
-            "enter": "smooth",
-            "headline": "Shop now",
+            "enter": "cut",
+            "headline": "Shop now — 20% off your first order",
             "punch_word": "Shop",
-            "why": "Claim your glow"
+            "why": "what to do now"
           }
         ]
       },
@@ -1191,10 +1103,10 @@
         ]
       },
       "renders": {
-        "model": "tests/output/eval/2026-09-23-lmstudio-gemma-4-e2b/renders/product-serum.model.mp4",
-        "baseline": "tests/output/eval/2026-09-23-lmstudio-gemma-4-e2b/renders/product-serum.baseline.mp4"
+        "model": null,
+        "baseline": "tests/output/eval/2026-09-23-lmstudio-gemma-4-e2b-r2/renders/product-serum.baseline.mp4"
       },
-      "raw": "{\"reasoning\": \"This ad will move from hooking the viewer with the promise of brighter skin to showing the product, proving the results, and ending with a clear call to action.\", \"pace\": \"punchy\", \"segments\": [{\"slot\": \"slot_01\", \"role\": \"hook\", \"ends_at\": \"cut_01\", \"enter\": \"cut\", \"headline\": \"Brighten skin in 14 days\", \"punch_word\": \"brighten\", \"why\": \"Stop dull skin now\"}, {\"slot\": \"slot_02\", \"role\": \"problem\", \"ends_at\": \"cut_02\", \"enter\": \"cut\", \"headline\": \"Tired of dull skin\", \"punch_word\": \"dull\", \"why\": \"Feeling lackluster\"}, {\"slot\": \"slot_03\", \"role\": \"product\", \"ends_at\": \"cut_03\", \"enter\": \"cut\", \"headline\": \"Aura Vitamin C Serum\", \"punch_word\": \"Aura\", \"why\": \"Meet your solution\"}, {\"slot\": \"slot_04\", \"role\": \"proof\", \"ends_at\": \"cut_04\", \"enter\": \"dissolve\", \"headline\": \"See the difference\", \"punch_word\": \"\", \"why\": \"14 days of glow\"}, {\"slot\": \"slot_05\", \"role\": \"offer\", \"ends_at\": \"cut_05\", \"enter\": \"wipe\", \"headline\": \"20 percent off now\", \"punch_word\": \"off\", \"why\": \"Limited time deal\"}, {\"slot\": \"slot_06\", \"role\": \"cta\", \"ends_at\": \"cut_end\", \"enter\": \"smooth\", \"headline\": \"Shop now\", \"punch_word\": \"Shop\", \"why\": \"Claim your glow\"}]}"
+      "raw": "{\"reasoning\": \"This ad moves from a hook to the problem, introduces the product, shows proof, and ends with an offer and CTA.\", \"pace\": \"punchy\", \"segments\": [{\"slot\": \"slot_01\", \"role\": \"hook\", \"ends_at\": \"cut_01\", \"enter\": \"cut\", \"headline\": \"Dull skin gone\", \"punch_word\": \"dull\", \"why\": \"Stop the scroll with a bold claim about skin brightness. The\"}]}"
     },
     {
       "fixtureId": "product-sneaker",
@@ -1206,25 +1118,25 @@
       "cuts": 9,
       "beats": "analysed",
       "status": 200,
-      "ms": 8369,
-      "promptTokens": 858,
-      "outputTokens": 402,
+      "ms": 11626,
+      "promptTokens": 921,
+      "outputTokens": 450,
       "truncated": false,
       "parsed": true,
       "verdict": "repaired",
       "why": null,
       "problems": [
-        "segments[0].headline: \"Unleash faster running\" is 22 characters — too long to read in 1.2s (19 fit) — card dropped",
+        "segments[0].headline: \"Faster, lighter stride …\" is 26 characters — too long to read in 1.2s (19 fit) — card dropped",
         "segments[5].ends_at: slot_06 is 4.0s of footage but its segment is 5.7s — 1.7s of black after it",
         "segments[2].enter: \"dissolve\" became a cut — at most 3 of 5 cuts may carry a transition"
       ],
-      "reasoning": "This ad will be energetic, focusing on the speed and bounce of the Stride X2 shoe to motivate 10K runners.",
+      "reasoning": "This ad is structured to be energetic and fast-paced, targeting runners training for a 10K by highlighting the Stride X2 running shoe's benefits. It moves from a hook to the problem, introduces the product, shows proof, and ends with a clear call to action.",
       "headlines": [
         {
           "segment": 0,
           "role": "hook",
-          "text": "Unleash faster running",
-          "chars": 22,
+          "text": "Faster, lighter stride now",
+          "chars": 26,
           "seconds": 1.1666666666666667,
           "capacity": 19,
           "fits": false
@@ -1232,8 +1144,8 @@
         {
           "segment": 1,
           "role": "problem",
-          "text": "Tired of slow miles",
-          "chars": 19,
+          "text": "Tired of slow runs",
+          "chars": 18,
           "seconds": 3.7666666666666666,
           "capacity": 40,
           "fits": true
@@ -1259,8 +1171,8 @@
         {
           "segment": 4,
           "role": "offer",
-          "text": "Train smarter now",
-          "chars": 17,
+          "text": "Get yours today",
+          "chars": 15,
           "seconds": 0.4666666666666667,
           "capacity": 19,
           "fits": true
@@ -1268,15 +1180,15 @@
         {
           "segment": 5,
           "role": "cta",
-          "text": "Get your Stride X2",
-          "chars": 18,
+          "text": "Get yours",
+          "chars": 9,
           "seconds": 5.666666666666667,
           "capacity": 40,
           "fits": true
         }
       ],
       "applied": {
-        "reasoning": "This ad will be energetic, focusing on the speed and bounce of the Stride X2 shoe to motivate 10K runners.",
+        "reasoning": "This ad is structured to be energetic and fast-paced, targeting runners training for a 10K by highlighting the Stride X2 running shoe's benefits. It moves from a hook to the problem, introduces the product, shows proof, and ends with a clear call to action.",
         "pace": "punchy",
         "segments": [
           {
@@ -1286,16 +1198,16 @@
             "enter": "cut",
             "headline": "",
             "punch_word": "",
-            "why": "See the shoe profile now"
+            "why": "See the shoe profile immediately for the claim."
           },
           {
             "slot": "slot_02",
             "role": "problem",
             "ends_at": "cut_02",
             "enter": "cut",
-            "headline": "Tired of slow miles",
+            "headline": "Tired of slow runs",
             "punch_word": "slow",
-            "why": "Feel the pain of sluggish pace"
+            "why": "Show the sole close-up to emphasize the issue."
           },
           {
             "slot": "slot_03",
@@ -1304,7 +1216,7 @@
             "enter": "cut",
             "headline": "Stride X2 shoe",
             "punch_word": "Stride",
-            "why": "Introducing the hero product"
+            "why": "Reveal the hero product in action."
           },
           {
             "slot": "slot_04",
@@ -1313,25 +1225,25 @@
             "enter": "slide",
             "headline": "40% more bounce",
             "punch_word": "bounce",
-            "why": "Show the performance benefit"
+            "why": "Use the laces to demonstrate the feature."
           },
           {
             "slot": "slot_05",
             "role": "offer",
             "ends_at": "cut_05",
             "enter": "light",
-            "headline": "Train smarter now",
-            "punch_word": "smarter",
-            "why": "Highlight the training advantage"
+            "headline": "Get yours today",
+            "punch_word": "yours",
+            "why": "A warm flash to introduce the call to action."
           },
           {
             "slot": "slot_06",
             "role": "cta",
             "ends_at": "cut_end",
-            "enter": "zoom",
-            "headline": "Get your Stride X2",
-            "punch_word": "Stride",
-            "why": "Final call to action"
+            "enter": "wipe",
+            "headline": "Get yours",
+            "punch_word": "Get",
+            "why": "A final wipe to drive the CTA."
           }
         ]
       },
@@ -1396,10 +1308,10 @@
         ]
       },
       "renders": {
-        "model": "tests/output/eval/2026-09-23-lmstudio-gemma-4-e2b/renders/product-sneaker.model.mp4",
-        "baseline": "tests/output/eval/2026-09-23-lmstudio-gemma-4-e2b/renders/product-sneaker.baseline.mp4"
+        "model": "tests/output/eval/2026-09-23-lmstudio-gemma-4-e2b-r2/renders/product-sneaker.model.mp4",
+        "baseline": "tests/output/eval/2026-09-23-lmstudio-gemma-4-e2b-r2/renders/product-sneaker.baseline.mp4"
       },
-      "raw": "{\"reasoning\": \"This ad will be energetic, focusing on the speed and bounce of the Stride X2 shoe to motivate 10K runners.\", \"pace\": \"punchy\", \"segments\": [{\"slot\": \"slot_01\", \"role\": \"hook\", \"ends_at\": \"cut_01\", \"enter\": \"cut\", \"headline\": \"Unleash faster running\", \"punch_word\": \"faster\", \"why\": \"See the shoe profile now\"}, {\"slot\": \"slot_02\", \"role\": \"problem\", \"ends_at\": \"cut_02\", \"enter\": \"cut\", \"headline\": \"Tired of slow miles\", \"punch_word\": \"slow\", \"why\": \"Feel the pain of sluggish pace\"}, {\"slot\": \"slot_03\", \"role\": \"product\", \"ends_at\": \"cut_03\", \"enter\": \"dissolve\", \"headline\": \"Stride X2 shoe\", \"punch_word\": \"Stride\", \"why\": \"Introducing the hero product\"}, {\"slot\": \"slot_04\", \"role\": \"proof\", \"ends_at\": \"cut_04\", \"enter\": \"slide\", \"headline\": \"40% more bounce\", \"punch_word\": \"bounce\", \"why\": \"Show the performance benefit\"}, {\"slot\": \"slot_05\", \"role\": \"offer\", \"ends_at\": \"cut_05\", \"enter\": \"light\", \"headline\": \"Train smarter now\", \"punch_word\": \"smarter\", \"why\": \"Highlight the training advantage\"}, {\"slot\": \"slot_06\", \"role\": \"cta\", \"ends_at\": \"cut_end\", \"enter\": \"zoom\", \"headline\": \"Get your Stride X2\", \"punch_word\": \"Stride\", \"why\": \"Final call to action\"}]}"
+      "raw": "{\"reasoning\": \"This ad is structured to be energetic and fast-paced, targeting runners training for a 10K by highlighting the Stride X2 running shoe's benefits. It moves from a hook to the problem, introduces the product, shows proof, and ends with a clear call to action.\", \"pace\": \"punchy\", \"segments\": [{\"slot\": \"slot_01\", \"role\": \"hook\", \"ends_at\": \"cut_01\", \"enter\": \"cut\", \"headline\": \"Faster, lighter stride now\", \"punch_word\": \"faster\", \"why\": \"See the shoe profile immediately for the claim.\"}, {\"slot\": \"slot_02\", \"role\": \"problem\", \"ends_at\": \"cut_02\", \"enter\": \"cut\", \"headline\": \"Tired of slow runs\", \"punch_word\": \"slow\", \"why\": \"Show the sole close-up to emphasize the issue.\"}, {\"slot\": \"slot_03\", \"role\": \"product\", \"ends_at\": \"cut_03\", \"enter\": \"dissolve\", \"headline\": \"Stride X2 shoe\", \"punch_word\": \"Stride\", \"why\": \"Reveal the hero product in action.\"}, {\"slot\": \"slot_04\", \"role\": \"proof\", \"ends_at\": \"cut_04\", \"enter\": \"slide\", \"headline\": \"40% more bounce\", \"punch_word\": \"bounce\", \"why\": \"Use the laces to demonstrate the feature.\"}, {\"slot\": \"slot_05\", \"role\": \"offer\", \"ends_at\": \"cut_05\", \"enter\": \"light\", \"headline\": \"Get yours today\", \"punch_word\": \"yours\", \"why\": \"A warm flash to introduce the call to action.\"}, {\"slot\": \"slot_06\", \"role\": \"cta\", \"ends_at\": \"cut_end\", \"enter\": \"wipe\", \"headline\": \"Get yours\", \"punch_word\": \"Get\", \"why\": \"A final wipe to drive the CTA.\"}]}"
     },
     {
       "fixtureId": "studio-lumen",
@@ -1411,17 +1323,19 @@
       "cuts": 9,
       "beats": "analysed",
       "status": 200,
-      "ms": 9855,
-      "promptTokens": 860,
-      "outputTokens": 415,
+      "ms": 12269,
+      "promptTokens": 923,
+      "outputTokens": 488,
       "truncated": false,
       "parsed": true,
       "verdict": "repaired",
       "why": null,
       "problems": [
-        "segments[1].punch_word: \"posed\" is not a word of \"Stop posing now\" — no word highlighted"
+        "segments[6].slot: \"slot_06\" is used twice — the second dropped",
+        "segments[1].punch_word: \"posed\" is not a word of \"Stop posing now\" — no word highlighted",
+        "segments[5].punch_word: \"cried\" is not a word of \"Real client story\" — no word highlighted"
       ],
-      "reasoning": "This ad will move through the hook, problem, product, proof, and CTA structure using the provided slots and cuts to convey the premium experience of Lumen Studios wedding photography.",
+      "reasoning": "This ad moves through a sequence of shots demonstrating the premium, unposed nature of Lumen Studios wedding photography, moving from the initial hook to a testimonial and a call to action.",
       "headlines": [
         {
           "segment": 0,
@@ -1444,8 +1358,8 @@
         {
           "segment": 2,
           "role": "product",
-          "text": "Lumen Studios photos",
-          "chars": 20,
+          "text": "Lumen Studios",
+          "chars": 13,
           "seconds": 4.366666666666666,
           "capacity": 40,
           "fits": true
@@ -1453,8 +1367,8 @@
         {
           "segment": 3,
           "role": "proof",
-          "text": "Real client results",
-          "chars": 19,
+          "text": "Moments caught",
+          "chars": 14,
           "seconds": 2.2,
           "capacity": 35,
           "fits": true
@@ -1462,7 +1376,7 @@
         {
           "segment": 4,
           "role": "offer",
-          "text": "Book your session",
+          "text": "Deliver the album",
           "chars": 17,
           "seconds": 0.5666666666666667,
           "capacity": 19,
@@ -1470,16 +1384,25 @@
         },
         {
           "segment": 5,
+          "role": "proof",
+          "text": "Real client story",
+          "chars": 17,
+          "seconds": 5.966666666666667,
+          "capacity": 40,
+          "fits": true
+        },
+        {
+          "segment": 6,
           "role": "cta",
           "text": "Book a call",
           "chars": 11,
-          "seconds": 5.966666666666667,
-          "capacity": 40,
+          "seconds": 0,
+          "capacity": 19,
           "fits": true
         }
       ],
       "applied": {
-        "reasoning": "This ad will move through the hook, problem, product, proof, and CTA structure using the provided slots and cuts to convey the premium experience of Lumen Studios wedding photography.",
+        "reasoning": "This ad moves through a sequence of shots demonstrating the premium, unposed nature of Lumen Studios wedding photography, moving from the initial hook to a testimonial and a call to action.",
         "pace": "punchy",
         "segments": [
           {
@@ -1489,7 +1412,7 @@
             "enter": "cut",
             "headline": "Capture every moment",
             "punch_word": "moment",
-            "why": "This is the feeling of truly seeing your day."
+            "why": "This is what you miss when you pose for photos at your big-f"
           },
           {
             "slot": "slot_02",
@@ -1498,43 +1421,43 @@
             "enter": "cut",
             "headline": "Stop posing now",
             "punch_word": "",
-            "why": "Don't let perfect moments be missed."
+            "why": "Couples want authentic memories, not stiff poses."
           },
           {
             "slot": "slot_03",
             "role": "product",
             "ends_at": "cut_03",
-            "enter": "cut",
-            "headline": "Lumen Studios photos",
-            "punch_word": "photos",
-            "why": "Our lens captures the genuine emotion."
+            "enter": "dissolve",
+            "headline": "Lumen Studios",
+            "punch_word": "Studios",
+            "why": "Showcasing the detail of our work."
           },
           {
             "slot": "slot_04",
             "role": "proof",
             "ends_at": "cut_04",
-            "enter": "dissolve",
-            "headline": "Real client results",
-            "punch_word": "results",
-            "why": "See the impact our work makes."
+            "enter": "slide",
+            "headline": "Moments caught",
+            "punch_word": "caught",
+            "why": "Our team captures the genuine emotion."
           },
           {
             "slot": "slot_05",
             "role": "offer",
             "ends_at": "cut_05",
             "enter": "wipe",
-            "headline": "Book your session",
-            "punch_word": "session",
-            "why": "Secure your unforgettable memories now."
+            "headline": "Deliver the album",
+            "punch_word": "album",
+            "why": "Highlighting the quality of the final deliverable."
           },
           {
             "slot": "slot_06",
-            "role": "cta",
+            "role": "proof",
             "ends_at": "cut_end",
             "enter": "cut",
-            "headline": "Book a call",
-            "punch_word": "call",
-            "why": "Contact us to start planning your wedding coverage."
+            "headline": "Real client story",
+            "punch_word": "",
+            "why": "Testimonial from Anika and Rohan."
           }
         ]
       },
@@ -1599,10 +1522,10 @@
         ]
       },
       "renders": {
-        "model": "tests/output/eval/2026-09-23-lmstudio-gemma-4-e2b/renders/studio-lumen.model.mp4",
-        "baseline": "tests/output/eval/2026-09-23-lmstudio-gemma-4-e2b/renders/studio-lumen.baseline.mp4"
+        "model": "tests/output/eval/2026-09-23-lmstudio-gemma-4-e2b-r2/renders/studio-lumen.model.mp4",
+        "baseline": "tests/output/eval/2026-09-23-lmstudio-gemma-4-e2b-r2/renders/studio-lumen.baseline.mp4"
       },
-      "raw": "{\"reasoning\": \"This ad will move through the hook, problem, product, proof, and CTA structure using the provided slots and cuts to convey the premium experience of Lumen Studios wedding photography.\", \"pace\": \"punchy\", \"segments\": [{\"slot\": \"slot_01\", \"role\": \"hook\", \"ends_at\": \"cut_01\", \"enter\": \"cut\", \"headline\": \"Capture every moment\", \"punch_word\": \"moment\", \"why\": \"This is the feeling of truly seeing your day.\"}, {\"slot\": \"slot_02\", \"role\": \"problem\", \"ends_at\": \"cut_02\", \"enter\": \"cut\", \"headline\": \"Stop posing now\", \"punch_word\": \"posed\", \"why\": \"Don't let perfect moments be missed.\"}, {\"slot\": \"slot_03\", \"role\": \"product\", \"ends_at\": \"cut_03\", \"enter\": \"cut\", \"headline\": \"Lumen Studios photos\", \"punch_word\": \"photos\", \"why\": \"Our lens captures the genuine emotion.\"}, {\"slot\": \"slot_04\", \"role\": \"proof\", \"ends_at\": \"cut_04\", \"enter\": \"dissolve\", \"headline\": \"Real client results\", \"punch_word\": \"results\", \"why\": \"See the impact our work makes.\"}, {\"slot\": \"slot_05\", \"role\": \"offer\", \"ends_at\": \"cut_05\", \"enter\": \"wipe\", \"headline\": \"Book your session\", \"punch_word\": \"session\", \"why\": \"Secure your unforgettable memories now.\"}, {\"slot\": \"slot_06\", \"role\": \"cta\", \"ends_at\": \"cut_end\", \"enter\": \"cut\", \"headline\": \"Book a call\", \"punch_word\": \"call\", \"why\": \"Contact us to start planning your wedding coverage.\"}]}"
+      "raw": "{\"reasoning\": \"This ad moves through a sequence of shots demonstrating the premium, unposed nature of Lumen Studios wedding photography, moving from the initial hook to a testimonial and a call to action.\", \"pace\": \"punchy\", \"segments\": [{\"slot\": \"slot_01\", \"role\": \"hook\", \"ends_at\": \"cut_01\", \"enter\": \"cut\", \"headline\": \"Capture every moment\", \"punch_word\": \"moment\", \"why\": \"This is what you miss when you pose for photos at your big-f\"}, {\"slot\": \"slot_02\", \"role\": \"problem\", \"ends_at\": \"cut_02\", \"enter\": \"cut\", \"headline\": \"Stop posing now\", \"punch_word\": \"posed\", \"why\": \"Couples want authentic memories, not stiff poses.\"}, {\"slot\": \"slot_03\", \"role\": \"product\", \"ends_at\": \"cut_03\", \"enter\": \"dissolve\", \"headline\": \"Lumen Studios\", \"punch_word\": \"Studios\", \"why\": \"Showcasing the detail of our work.\"}, {\"slot\": \"slot_04\", \"role\": \"proof\", \"ends_at\": \"cut_04\", \"enter\": \"slide\", \"headline\": \"Moments caught\", \"punch_word\": \"caught\", \"why\": \"Our team captures the genuine emotion.\"}, {\"slot\": \"slot_05\", \"role\": \"offer\", \"ends_at\": \"cut_05\", \"enter\": \"wipe\", \"headline\": \"Deliver the album\", \"punch_word\": \"album\", \"why\": \"Highlighting the quality of the final deliverable.\"}, {\"slot\": \"slot_06\", \"role\": \"proof\", \"ends_at\": \"cut_end\", \"enter\": \"cut\", \"headline\": \"Real client story\", \"punch_word\": \"cried\", \"why\": \"Testimonial from Anika and Rohan.\"}, {\"slot\": \"slot_06\", \"role\": \"cta\", \"ends_at\": \"cut_end\", \"enter\": \"cut\", \"headline\": \"Book a call\", \"punch_word\": \"call\", \"why\": \"Directing the viewer to book a consultation.\"}]}"
     },
     {
       "fixtureId": "wedding-priya-arjun",
@@ -1614,21 +1537,21 @@
       "cuts": 11,
       "beats": "analysed",
       "status": 200,
-      "ms": 12591,
-      "promptTokens": 931,
-      "outputTokens": 543,
+      "ms": 13408,
+      "promptTokens": 994,
+      "outputTokens": 532,
       "truncated": false,
       "parsed": true,
       "verdict": "rejected",
       "why": "slot_08 ends on cut_end, which is not after the segment before it",
       "problems": [],
-      "reasoning": "This ad will follow the skeleton: hook, problem, product, proof, and cta. The tone will be calm, focusing on the beauty of the wedding film.",
+      "reasoning": "This ad moves through the stages of showing a beautiful wedding film, focusing on the emotion and beauty of Priya & Arjun's day.",
       "headlines": [
         {
           "segment": 0,
           "role": "hook",
-          "text": "Relive your perfect day",
-          "chars": 23,
+          "text": "Relive the day now",
+          "chars": 18,
           "seconds": 2.1666666666666665,
           "capacity": 35,
           "fits": true
@@ -1636,8 +1559,8 @@
         {
           "segment": 1,
           "role": "problem",
-          "text": "Moments fade quickly",
-          "chars": 20,
+          "text": "Moments fade fast",
+          "chars": 17,
           "seconds": 5,
           "capacity": 40,
           "fits": true
@@ -1654,35 +1577,35 @@
         {
           "segment": 3,
           "role": "proof",
-          "text": "See the emotion unfold",
-          "chars": 22,
+          "text": "See the love story",
+          "chars": 18,
           "seconds": 5.066666666666666,
           "capacity": 40,
           "fits": true
         },
         {
           "segment": 4,
-          "role": "proof",
-          "text": "Love in every glance",
-          "chars": 20,
+          "role": "offer",
+          "text": "Relive the day now",
+          "chars": 18,
           "seconds": 1.8333333333333333,
           "capacity": 29,
           "fits": true
         },
         {
           "segment": 5,
-          "role": "proof",
-          "text": "Family memories captured",
-          "chars": 24,
+          "role": "cta",
+          "text": "Watch the full film",
+          "chars": 19,
           "seconds": 0.5666666666666667,
           "capacity": 19,
-          "fits": false
+          "fits": true
         },
         {
           "segment": 6,
-          "role": "proof",
-          "text": "Your story deserves this",
-          "chars": 24,
+          "role": "cta",
+          "text": "Watch the full film",
+          "chars": 19,
           "seconds": 10.333333333333334,
           "capacity": 40,
           "fits": true
@@ -1819,9 +1742,9 @@
       },
       "renders": {
         "model": null,
-        "baseline": "tests/output/eval/2026-09-23-lmstudio-gemma-4-e2b/renders/wedding-priya-arjun.baseline.mp4"
+        "baseline": "tests/output/eval/2026-09-23-lmstudio-gemma-4-e2b-r2/renders/wedding-priya-arjun.baseline.mp4"
       },
-      "raw": "{\"reasoning\": \"This ad will follow the skeleton: hook, problem, product, proof, and cta. The tone will be calm, focusing on the beauty of the wedding film.\", \"pace\": \"calm\", \"segments\": [{\"slot\": \"slot_01\", \"role\": \"hook\", \"ends_at\": \"cut_01\", \"enter\": \"cut\", \"headline\": \"Relive your perfect day\", \"punch_word\": \"Relive\", \"why\": \"This captures the quiet anticipation of the wedding day.\"}, {\"slot\": \"slot_02\", \"role\": \"problem\", \"ends_at\": \"cut_02\", \"enter\": \"cut\", \"headline\": \"Moments fade quickly\", \"punch_word\": \"fade\", \"why\": \"The fleeting nature of beautiful memories.\"}, {\"slot\": \"slot_03\", \"role\": \"product\", \"ends_at\": \"cut_03\", \"enter\": \"cut\", \"headline\": \"Priya & Arjun film\", \"punch_word\": \"film\", \"why\": \"Introducing the beautiful wedding film.\"}, {\"slot\": \"slot_04\", \"role\": \"proof\", \"ends_at\": \"cut_04\", \"enter\": \"dissolve\", \"headline\": \"See the emotion unfold\", \"punch_word\": \"emotion\", \"why\": \"Showing the genuine moments of connection.\"}, {\"slot\": \"slot_05\", \"role\": \"proof\", \"ends_at\": \"cut_05\", \"enter\": \"slide\", \"headline\": \"Love in every glance\", \"punch_word\": \"glance\", \"why\": \"A moment of deep, heartfelt emotion.\"}, {\"slot\": \"slot_06\", \"role\": \"proof\", \"ends_at\": \"cut_06\", \"enter\": \"cut\", \"headline\": \"Family memories captured\", \"punch_word\": \"memories\", \"why\": \"Highlighting the joy of family togetherness.\"}, {\"slot\": \"slot_07\", \"role\": \"proof\", \"ends_at\": \"cut_end\", \"enter\": \"cut\", \"headline\": \"Your story deserves this\", \"punch_word\": \"deserves\", \"why\": \"The lasting value of professional storytelling.\"}, {\"slot\": \"slot_08\", \"role\": \"cta\", \"ends_at\": \"cut_end\", \"enter\": \"cut\", \"headline\": \"Watch the full film\", \"punch_word\": \"Watch\", \"why\": \"The final call to action for the viewer.\"}]}"
+      "raw": "{\"reasoning\": \"This ad moves through the stages of showing a beautiful wedding film, focusing on the emotion and beauty of Priya & Arjun's day.\", \"pace\": \"calm\", \"segments\": [{\"slot\": \"slot_01\", \"role\": \"hook\", \"ends_at\": \"cut_01\", \"enter\": \"cut\", \"headline\": \"Relive the day now\", \"punch_word\": \"relive\", \"why\": \"See Priya getting ready for the wedding.\"}, {\"slot\": \"slot_02\", \"role\": \"problem\", \"ends_at\": \"cut_02\", \"enter\": \"cut\", \"headline\": \"Moments fade fast\", \"punch_word\": \"fade\", \"why\": \"The beautiful moments of the day pass quickly.\"}, {\"slot\": \"slot_03\", \"role\": \"product\", \"ends_at\": \"cut_03\", \"enter\": \"cut\", \"headline\": \"Priya & Arjun film\", \"punch_word\": \"film\", \"why\": \"This is the wedding film you need.\"}, {\"slot\": \"slot_04\", \"role\": \"proof\", \"ends_at\": \"cut_04\", \"enter\": \"dissolve\", \"headline\": \"See the love story\", \"punch_word\": \"love\", \"why\": \"Witness the varmala moment.\"}, {\"slot\": \"slot_05\", \"role\": \"offer\", \"ends_at\": \"cut_05\", \"enter\": \"light\", \"headline\": \"Relive the day now\", \"punch_word\": \"now\", \"why\": \"Feel the emotion of the first look.\"}, {\"slot\": \"slot_06\", \"role\": \"cta\", \"ends_at\": \"cut_06\", \"enter\": \"wipe\", \"headline\": \"Watch the full film\", \"punch_word\": \"full\", \"why\": \"Don't miss this beautiful family moment.\"}, {\"slot\": \"slot_07\", \"role\": \"cta\", \"ends_at\": \"cut_end\", \"enter\": \"smooth\", \"headline\": \"Watch the full film\", \"punch_word\": \"full\", \"why\": \"Relive every moment of the day.\"}, {\"slot\": \"slot_08\", \"role\": \"cta\", \"ends_at\": \"cut_end\", \"enter\": \"smooth\", \"headline\": \"Watch the full film\", \"punch_word\": \"full\", \"why\": \"Experience the vows.\"}]}"
     },
     {
       "fixtureId": "wedding-sravani-karthik",
@@ -1833,21 +1756,23 @@
       "cuts": 8,
       "beats": "analysed",
       "status": 200,
-      "ms": 11174,
-      "promptTokens": 875,
-      "outputTokens": 482,
+      "ms": 12909,
+      "promptTokens": 965,
+      "outputTokens": 494,
       "truncated": false,
       "parsed": true,
-      "verdict": "rejected",
-      "why": "slot_07 ends on cut_end, which is not after the segment before it",
-      "problems": [],
-      "reasoning": "This ad will move through the moments of a wedding day, focusing on the beautiful experience of capturing it all in one song for the family.",
+      "verdict": "repaired",
+      "why": null,
+      "problems": [
+        "segments[0].headline: \"పెళ్లి కూతురు సిద్ధం\" is 20 characters — too long to read in 1.0s (19 fit) — card dropped"
+      ],
+      "reasoning": "This ad moves through the stages of a wedding celebration, focusing on capturing the emotion and beauty of the day in one song.",
       "headlines": [
         {
           "segment": 0,
           "role": "hook",
-          "text": "Pelli video in one song",
-          "chars": 23,
+          "text": "పెళ్లి కూతురు సిద్ధం",
+          "chars": 20,
           "seconds": 1.0333333333333334,
           "capacity": 19,
           "fits": false
@@ -1855,8 +1780,8 @@
         {
           "segment": 1,
           "role": "problem",
-          "text": "Day's chaos fades",
-          "chars": 17,
+          "text": "సంగీతం తో పూర్తి రోజు",
+          "chars": 21,
           "seconds": 5.433333333333334,
           "capacity": 40,
           "fits": true
@@ -1873,8 +1798,8 @@
         {
           "segment": 3,
           "role": "proof",
-          "text": "Perfect memory made",
-          "chars": 19,
+          "text": "సంతోషం నిండింది",
+          "chars": 15,
           "seconds": 2.7666666666666666,
           "capacity": 40,
           "fits": true
@@ -1882,88 +1807,97 @@
         {
           "segment": 4,
           "role": "offer",
-          "text": "Capture the whole day",
-          "chars": 21,
+          "text": "పండుగ అద్భుతం",
+          "chars": 13,
           "seconds": 2.6666666666666665,
           "capacity": 40,
           "fits": true
         },
         {
           "segment": 5,
-          "role": "proof",
-          "text": "Golden sunset moments",
-          "chars": 21,
-          "seconds": 5.466666666666667,
+          "role": "cta",
+          "text": "మీ వీడియో చూడండి",
+          "chars": 16,
+          "seconds": 2.8,
           "capacity": 40,
           "fits": true
         },
         {
           "segment": 6,
           "role": "cta",
-          "text": "Link in bio now",
-          "chars": 15,
-          "seconds": 0,
-          "capacity": 19,
+          "text": "పూర్తి వీడియో లింక్",
+          "chars": 19,
+          "seconds": 2.6666666666666665,
+          "capacity": 40,
           "fits": true
         }
       ],
       "applied": {
-        "reasoning": "Standard cut: hook, problem, product, proof, offer, cta over 6 shots.",
+        "reasoning": "This ad moves through the stages of a wedding celebration, focusing on capturing the emotion and beauty of the day in one song.",
         "pace": "calm",
         "segments": [
           {
             "slot": "slot_01",
             "role": "hook",
-            "ends_at": "cut_02",
+            "ends_at": "cut_01",
             "enter": "cut",
-            "headline": "the whole day, in one song",
-            "punch_word": "the",
-            "why": "opens the ad"
+            "headline": "",
+            "punch_word": "",
+            "why": "The beginning of the celebration is here."
           },
           {
             "slot": "slot_02",
             "role": "problem",
-            "ends_at": "cut_03",
+            "ends_at": "cut_02",
             "enter": "cut",
-            "headline": "",
-            "punch_word": "",
-            "why": "the problem it solves"
+            "headline": "సంగీతం తో పూర్తి రోజు",
+            "punch_word": "రోజు",
+            "why": "The music covers the entire day."
           },
           {
             "slot": "slot_03",
             "role": "product",
-            "ends_at": "cut_04",
-            "enter": "zoom",
-            "headline": "Sravani & Karthik — pelli video",
+            "ends_at": "cut_03",
+            "enter": "cut",
+            "headline": "Sravani & Karthik",
             "punch_word": "Sravani",
-            "why": "the product itself"
+            "why": "Close-up on the engagement moment."
           },
           {
             "slot": "slot_04",
             "role": "proof",
-            "ends_at": "cut_05",
-            "enter": "cut",
-            "headline": "",
+            "ends_at": "cut_04",
+            "enter": "dissolve",
+            "headline": "సంతోషం నిండింది",
             "punch_word": "",
-            "why": "proof that it works"
+            "why": "The couple's genuine joy is shown."
           },
           {
             "slot": "slot_05",
             "role": "offer",
+            "ends_at": "cut_05",
+            "enter": "slide",
+            "headline": "పండుగ అద్భుతం",
+            "punch_word": "అద్భుతం",
+            "why": "Showing the vibrant dance moment."
+          },
+          {
+            "slot": "slot_06",
+            "role": "cta",
             "ends_at": "cut_06",
-            "enter": "dissolve",
-            "headline": "",
-            "punch_word": "",
-            "why": "the offer"
+            "enter": "cut",
+            "headline": "మీ వీడియో చూడండి",
+            "punch_word": "చూడండి",
+            "why": "A beautiful portrait moment."
           },
           {
             "slot": "slot_07",
             "role": "cta",
             "ends_at": "cut_end",
             "enter": "cut",
-            "headline": "Full video link in bio",
-            "punch_word": "Full",
-            "why": "what to do now"
+            "headline": "పూర్తి వీడియో లింక్",
+            "punch_word": "లింక్",
+            "why": "Final call to action for the full video."
           }
         ]
       },
@@ -2028,10 +1962,10 @@
         ]
       },
       "renders": {
-        "model": null,
-        "baseline": "tests/output/eval/2026-09-23-lmstudio-gemma-4-e2b/renders/wedding-sravani-karthik.baseline.mp4"
+        "model": "tests/output/eval/2026-09-23-lmstudio-gemma-4-e2b-r2/renders/wedding-sravani-karthik.model.mp4",
+        "baseline": "tests/output/eval/2026-09-23-lmstudio-gemma-4-e2b-r2/renders/wedding-sravani-karthik.baseline.mp4"
       },
-      "raw": "{\"reasoning\": \"This ad will move through the moments of a wedding day, focusing on the beautiful experience of capturing it all in one song for the family.\", \"pace\": \"calm\", \"segments\": [{\"slot\": \"slot_01\", \"role\": \"hook\", \"ends_at\": \"cut_01\", \"enter\": \"cut\", \"headline\": \"Pelli video in one song\", \"punch_word\": \"video\", \"why\": \"The readiness for the wedding day begins here.\"}, {\"slot\": \"slot_02\", \"role\": \"problem\", \"ends_at\": \"cut_02\", \"enter\": \"cut\", \"headline\": \"Day's chaos fades\", \"punch_word\": \"chaos\", \"why\": \"The initial excitement and potential stress of the day.\"}, {\"slot\": \"slot_03\", \"role\": \"product\", \"ends_at\": \"cut_03\", \"enter\": \"cut\", \"headline\": \"Sravani & Karthik\", \"punch_word\": \"Sravani\", \"why\": \"The close-up of the sacred moment.\"}, {\"slot\": \"slot_04\", \"role\": \"proof\", \"ends_at\": \"cut_04\", \"enter\": \"dissolve\", \"headline\": \"Perfect memory made\", \"punch_word\": \"memory\", \"why\": \"The joy and laughter of the couple.\"}, {\"slot\": \"slot_05\", \"role\": \"offer\", \"ends_at\": \"cut_05\", \"enter\": \"slide\", \"headline\": \"Capture the whole day\", \"punch_word\": \"day\", \"why\": \"Showing the vibrant dance of the baraat.\"}, {\"slot\": \"slot_06\", \"role\": \"proof\", \"ends_at\": \"cut_end\", \"enter\": \"cut\", \"headline\": \"Golden sunset moments\", \"punch_word\": \"sunset\", \"why\": \"A serene portrait of the couple.\"}, {\"slot\": \"slot_07\", \"role\": \"cta\", \"ends_at\": \"cut_end\", \"enter\": \"cut\", \"headline\": \"Link in bio now\", \"punch_word\": \"now\", \"why\": \"The final call to action for the full video.\"}]}"
+      "raw": "{\"reasoning\": \"This ad moves through the stages of a wedding celebration, focusing on capturing the emotion and beauty of the day in one song.\", \"pace\": \"calm\", \"segments\": [{\"slot\": \"slot_01\", \"role\": \"hook\", \"ends_at\": \"cut_01\", \"enter\": \"cut\", \"headline\": \"పెళ్లి కూతురు సిద్ధం\", \"punch_word\": \"సిద్ధం\", \"why\": \"The beginning of the celebration is here.\"}, {\"slot\": \"slot_02\", \"role\": \"problem\", \"ends_at\": \"cut_02\", \"enter\": \"cut\", \"headline\": \"సంగీతం తో పూర్తి రోజు\", \"punch_word\": \"రోజు\", \"why\": \"The music covers the entire day.\"}, {\"slot\": \"slot_03\", \"role\": \"product\", \"ends_at\": \"cut_03\", \"enter\": \"cut\", \"headline\": \"Sravani & Karthik\", \"punch_word\": \"Sravani\", \"why\": \"Close-up on the engagement moment.\"}, {\"slot\": \"slot_04\", \"role\": \"proof\", \"ends_at\": \"cut_04\", \"enter\": \"dissolve\", \"headline\": \"సంతోషం నిండింది\", \"punch_word\": \"\", \"why\": \"The couple's genuine joy is shown.\"}, {\"slot\": \"slot_05\", \"role\": \"offer\", \"ends_at\": \"cut_05\", \"enter\": \"slide\", \"headline\": \"పండుగ అద్భుతం\", \"punch_word\": \"అద్భుతం\", \"why\": \"Showing the vibrant dance moment.\"}, {\"slot\": \"slot_06\", \"role\": \"cta\", \"ends_at\": \"cut_06\", \"enter\": \"cut\", \"headline\": \"మీ వీడియో చూడండి\", \"punch_word\": \"చూడండి\", \"why\": \"A beautiful portrait moment.\"}, {\"slot\": \"slot_07\", \"role\": \"cta\", \"ends_at\": \"cut_end\", \"enter\": \"cut\", \"headline\": \"పూర్తి వీడియో లింక్\", \"punch_word\": \"లింక్\", \"why\": \"Final call to action for the full video.\"}]}"
     }
   ]
 }

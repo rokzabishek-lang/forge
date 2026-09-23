@@ -27,7 +27,7 @@ import { runGraphicsSelfTest } from './graphics/tier2'
 import { transitionsFromMasks, type TransitionDef } from '@shared/transitions/registry'
 import type { MaskTag } from '@shared/transitions/classify'
 import { entriesOfKind, isClipSticker, type ClipStickerMeta } from '@shared/assets/catalog'
-import { toAsset } from './assets'
+import { fileKey, toAsset } from './assets'
 import {
   prepareCaptions,
   writeCaptionFrame,
@@ -702,6 +702,39 @@ export function registerIpc(getWindow: () => BrowserWindow | null): JobQueue {
   ipcMain.handle('depth:cancel', (_e, assetId: unknown) => {
     if (typeof assetId !== 'string') return
     bakes.get(assetId)?.abort()
+  })
+
+  /* --------------------------------------------------------------- vision */
+
+  /*
+   * The Director's objective checks (docs/PLAN.md §4.2): sharpness, exposure
+   * and a perceptual hash per photo, from the sidecar, with each file's cache
+   * key beside it. A sidecar that cannot measure is not an error — the gate
+   * lets every photo through — so it comes back as `unavailable`.
+   */
+  ipcMain.handle('vision:measure', async (_e, payload: unknown) => {
+    const { paths } = (payload ?? {}) as { paths?: unknown }
+    if (!Array.isArray(paths) || paths.some((p) => typeof p !== 'string')) {
+      throw new Error('Measuring photos needs a list of file paths')
+    }
+    const list = paths as string[]
+    const keys = Object.fromEntries(await Promise.all(list.map(async (p) => [p, await fileKey(p)] as const)))
+    try {
+      const result = await getSidecar().request<{ measures: ({ path: string; error?: string } & Record<string, unknown>)[] }>(
+        SIDECAR_METHODS.visionMeasure,
+        { paths: list, ffmpeg: FFMPEG_PATH, ffprobe: FFPROBE_PATH },
+        { timeoutMs: 120_000 }
+      )
+      return { measures: result.measures, keys }
+    } catch (err) {
+      return { measures: [], keys, unavailable: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle('media:fileKeys', async (_e, payload: unknown) => {
+    const { paths } = (payload ?? {}) as { paths?: unknown }
+    if (!Array.isArray(paths) || paths.some((p) => typeof p !== 'string')) throw new Error('File keys need a list of paths')
+    return Object.fromEntries(await Promise.all((paths as string[]).map(async (p) => [p, await fileKey(p)] as const)))
   })
 
   ipcMain.handle('media:peaks', async (_e, payload: unknown) => {

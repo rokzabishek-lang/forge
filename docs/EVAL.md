@@ -57,6 +57,64 @@ prevents it. The rhythm engine will (a shot is never longer than its footage).
 in a 9:16 ad sits between black bars (`tests/output/evalPipeline/shot2.png`).
 Commercials fill the frame; the recipes must crop to fill, around the subject.
 
+### Knob 1 — the language rule (2026-09-23)
+
+The four Telugu and Hindi requests of run 1, re-asked with one change: a rule
+in the system prompt, in the target script, with an example headline, and
+the language named again as the last line of the user prompt. **24 of 24
+headlines came back in the language's own script** (against 0 of 24). Two
+new faults showed: an Arabic word inside a Telugu headline (a script leak),
+and the brand "Paradise Spice" mistransliterated as "పరాధి స్పైస్". Adopted
+into `prompt.ts` — the rule generic in the playbook so the system prompt stays
+one cacheable prefix, the language and its script in the user prompt, brand
+names kept as the brief writes them.
+
+**Headline capacity counts the wrong thing for Indic scripts.** It counts code
+points; a Telugu or Devanagari vowel sign or virama is a code point of its
+own, so "పెళ్లి కూతురు సిద్ధం" counts 20 where a reader sees about 12, and was
+dropped as too long. `PLAN.md` §9's per-language capacity is real, and it
+should count grapheme clusters (`Intl.Segmenter`), then measure what fits.
+
+### Run 2 — all ten with the language rule (2026-09-23)
+
+The language rule holds on the full ten, brand names now left as written
+("Paradise Spice biryani", "Chill Brew", "Swiggy"). English copy unchanged in
+kind.
+
+**And it found the worst failure yet.** Twice (`product-serum`,
+`event-fest`, both English) the model stopped after ONE segment — its `why`
+cut off by the schema's 60-character limit mid-sentence ("…students in
+Hyderabad about"), after which it closed the whole plan — and the validator
+passed `product-serum` as **used**: a 20-second brief became a one-second ad.
+A one-line change to the system prompt was enough to tip two English briefs
+into it. Two fixes, both in: the decoder allows a `why` 100 characters (the
+panel still keeps 60; 7 of 115 `why`s had hit the old cap), and the validator
+**rejects a plan that stops before 75 % of the ad** — the standard cut is the
+honest answer. Re-scored under the new rule: run 1 **7/10**, run 2 **6/10**
+landed — the two "used" one-second ads are rejections now, as they should
+always have been.
+
+### The eyes — a first look probe (2026-09-23)
+
+Real photographs are still to come from the user, so this is a probe, not the
+VLM half of C0: three frames from real footage (two men laughing; four men in
+a festive courtyard; one man in a suit in a crowded courtroom) and a test
+pattern, through the look pass on Gemma 4 E2B in LM Studio — image and strict
+schema together work, **2.0–3.5 s and ~300 + ~65 tokens a picture** on this
+Mac. The words were right from the first try ("two men laughing indoor
+setting"). The lists were not, and three changes fixed most of it, one probe
+each:
+
+| probe | change | people (truth: 2, 4, 1, none) | test pattern | notes |
+|---|---|---|---|---|
+| 1 | as designed | one, one, one, none | "usable" | the counts contradicted the model's own words ("two men" → one) |
+| 2 | people as counts (none/one/two/group), "count the subjects", words BEFORE the lists | two, two, one, none | "usable" | faster; the brief's product leaked into the words ("… wedding film") |
+| 3 | the product named only for `product_visible` | two, two, one, none | **weak** | no leak |
+
+So: the four-man scene is still counted as two — a small VLM counts the
+foreground — and `hero` is lenient on anything but the obviously empty, which
+is why it is only ever a filter beside the measurements.
+
 **Memory:** LM Studio refused to load `gemma-4-e4b` beside the resident E2B —
 "insufficient system resources" — so the second configuration waits until E2B
 is unloaded. What the images add to time and memory is unmeasured until real
@@ -66,7 +124,128 @@ photos are supplied (`FORGE_EVAL_MEDIA`).
 
 | run | model | think | transport | landed | used · repaired · rejected · error | median s | median tokens in/out | headlines that fit | copy (model / standard) | preferred to standard | C0 bar |
 |---|---|---|---|---|---|---|---|---|---|---|---|
+| 2026-09-23-lmstudio-gemma-4-e2b-knob-language | google/gemma-4-e2b | off | relay | 3/4 | 0 · 3 · 1 · 0 | 11.6 | 894 / 453 | 23/24 | — / — (0 rated) | — | not rated |
+| 2026-09-23-lmstudio-gemma-4-e2b-r2 | google/gemma-4-e2b | off | relay | 6/10 | 0 · 6 · 4 · 0 | 11.3 | 909 / 444 | 50/53 | — / — (0 rated) | — | not rated |
 | 2026-09-23-lmstudio-gemma-4-e2b | google/gemma-4-e2b | off | relay | 7/10 | 3 · 4 · 3 · 0 | 9.7 | 840 / 404 | 58/62 | — / — (0 rated) | — | not rated |
+
+## 2026-09-23-lmstudio-gemma-4-e2b-knob-language
+
+openai · `google/gemma-4-e2b` · think off · relay · media synthetic · transitions 8 built-in + 412 library
+
+| brief | lang | verdict | s | tokens in/out | headlines (fit/written) | notes | reasoning |
+|---|---|---|---|---|---|---|---|
+| event-diwali-sale | Hindi | rejected | 11.1 | 888 / 350 | 5/5 | slot_05 ends on cut_end, which is not after the segment before it | This ad is designed to create urgency for the Diwali sale by showcasing festive wear and family shopping. |
+| food-biryani | Telugu | repaired | 12.0 | 900 / 476 | 6/6 | segments[5].ends_at: slot_06 is 4.0s of footage but its segment is 7.0s — 3.0s of black after it; segments[2].enter: "dissolve" became a cut — at most 3 of 5 cuts may carry a transition | This ad will follow the skeleton: hook, problem, product, proof, offer, cta. It moves through the provided slots, using cuts and transitions to create a playful ad for Paradise Spice biryani. |
+| product-coldbrew | Hindi | repaired | 10.9 | 880 / 430 | 6/6 | segments[5].ends_at: slot_06 is 3.0s of footage but its segment is 4.1s — 1.1s of black after it | This ad is a playful demonstration targeting college students, showing how easily they can get a café experience at home with Chill Brew cold coffee. |
+| wedding-sravani-karthik | Telugu | repaired | 12.7 | 956 / 499 | 6/7 | segments[0].headline: "పెళ్లి కూతురు సిద్ధం" is 20 characters — too long to read in 1.0s (19 fit) — card dropped | This ad moves through the key moments of a wedding day, focusing on the seamless experience provided by the song. |
+
+<details><summary>Every headline</summary>
+
+| brief | role | headline | chars / fit in the shot |
+|---|---|---|---|
+| event-diwali-sale | hook | दिवाली सेल आ गई | 15 / 19 |
+| event-diwali-sale | problem | कपड़ों की चिंता छोड़ो | 21 / 40 |
+| event-diwali-sale | product | रंगरेज़ फैशन | 12 / 40 |
+| event-diwali-sale | proof | 30 प्रतिशत छूट | 14 / 40 |
+| event-diwali-sale | cta | दुकान पर आओ | 11 / 19 |
+| food-biryani | hook | పది గంటల రుచి | 13 / 23 |
+| food-biryani | problem | రుచి కోల్పోకండి | 15 / 40 |
+| food-biryani | product | పరాధి స్పైస్ బిర్యానీ | 21 / 40 |
+| food-biryani | proof | సంతోషకరమైన అనుభవం | 17 / 19 |
+| food-biryani | offer | ఈ వారం ఆఫర్ | 11 / 19 |
+| food-biryani | cta | ఇప్పుడే ఆర్డర్ చేయండి | 21 / 40 |
+| product-coldbrew | hook | घर पर कैफे का मज़ा | 18 / 28 |
+| product-coldbrew | problem | घर में थकान महसूस | 17 / 40 |
+| product-coldbrew | product | Chill Brew कॉफ़ी | 16 / 33 |
+| product-coldbrew | proof | असली स्वाद का सबूत | 18 / 19 |
+| product-coldbrew | offer | आज ही ऑर्डर करें | 16 / 19 |
+| product-coldbrew | cta | स्वगी पर पाएं | 13 / 40 |
+| wedding-sravani-karthik | hook | పెళ్లి కూతురు సిద్ధం | 20 / 19 — **too long** |
+| wedding-sravani-karthik | problem | సంగీతం తో అనుభూతి | 17 / 40 |
+| wedding-sravani-karthik | product | శ్రావణి & కార్తీక్ | 18 / 40 |
+| wedding-sravani-karthik | proof | كامل అనుభవం | 11 / 40 |
+| wedding-sravani-karthik | offer | ఒక పాటలో | 8 / 40 |
+| wedding-sravani-karthik | cta | పూర్తి వీడియో చూడండి | 20 / 40 |
+| wedding-sravani-karthik | cta | ఇప్పుడే చూడండి | 14 / 40 |
+
+</details>
+
+## 2026-09-23-lmstudio-gemma-4-e2b-r2
+
+openai · `google/gemma-4-e2b` · think off · relay · media synthetic · transitions 8 built-in + 412 library
+
+| brief | lang | verdict | s | tokens in/out | headlines (fit/written) | notes | reasoning |
+|---|---|---|---|---|---|---|---|
+| event-diwali-sale | Hindi | rejected | 10.8 | 895 / 355 | 5/5 | slot_05 ends on cut_end, which is not after the segment before it | This ad is designed to create urgency for Diwali shopping by showcasing festive wear and a significant discount. |
+| event-fest | English | rejected | 4.2 | 908 / 115 | 0/1 | The plan stops at 0.7s of a 18.1s ad — it ended early | This ad moves urgently through the key points: hook, problem, product reveal, proof, and a final call to action. |
+| fashion-perfume | English | repaired | 10.4 | 849 / 412 | 6/6 | segments[2].enter: "dissolve" became a cut — at most 3 of 5 cuts may carry a transition | This ad moves from a bold claim about the scent to showing the product's application and the mood it creates, culminating in a call to action. |
+| food-biryani | Telugu | repaired | 11.1 | 909 / 437 | 6/6 | segments[5].ends_at: slot_06 is 4.0s of footage but its segment is 7.0s — 3.0s of black after it; segments[2].enter: "dissolve" became a cut — at most 3 of 5 cuts may carry a transition | This ad will follow the skeleton: hook, problem, product, proof, offer, cta. It moves through the provided slots, using cuts and transitions to build excitement for Paradise Spice biryani. |
+| product-coldbrew | Hindi | repaired | 11.4 | 887 / 452 | 6/6 | segments[5].ends_at: slot_06 is 3.0s of footage but its segment is 4.1s — 1.1s of black after it | This ad will follow the skeleton: hook, problem, product, proof, offer (if applicable), and CTA. It will use the provided slots in order, timed to fit within the 15-second target. |
+| product-serum | English | rejected | 4.2 | 898 / 111 | 1/1 | The plan stops at 2.1s of a 18.9s ad — it ended early | This ad moves from a hook to the problem, introduces the product, shows proof, and ends with an offer and CTA. |
+| product-sneaker | English | repaired | 11.6 | 921 / 450 | 5/6 | segments[0].headline: "Faster, lighter stride …" is 26 characters — too long to read in 1.2s (19 fit) — card dropped; segments[5].ends_at: slot_06 is 4.0s of footage but its segment is 5.7s — 1.7s of black after it; segments[2].enter: "dissolve" became a cut — at most 3 of 5 cuts may carry a transition | This ad is structured to be energetic and fast-paced, targeting runners training for a 10K by highlighting the Stride X2 running shoe's benefits. It moves from a hook to the problem, introduces the product, shows proof, and ends with a clear call to action. |
+| studio-lumen | English | repaired | 12.3 | 923 / 488 | 7/7 | segments[6].slot: "slot_06" is used twice — the second dropped; segments[1].punch_word: "posed" is not a word of "Stop posing now" — no word highlighted; segments[5].punch_word: "cried" is not a word of "Real client story" — no word highlighted | This ad moves through a sequence of shots demonstrating the premium, unposed nature of Lumen Studios wedding photography, moving from the initial hook to a testimonial and a call to action. |
+| wedding-priya-arjun | English | rejected | 13.4 | 994 / 532 | 8/8 | slot_08 ends on cut_end, which is not after the segment before it | This ad moves through the stages of showing a beautiful wedding film, focusing on the emotion and beauty of Priya & Arjun's day. |
+| wedding-sravani-karthik | Telugu | repaired | 12.9 | 965 / 494 | 6/7 | segments[0].headline: "పెళ్లి కూతురు సిద్ధం" is 20 characters — too long to read in 1.0s (19 fit) — card dropped | This ad moves through the stages of a wedding celebration, focusing on capturing the emotion and beauty of the day in one song. |
+
+<details><summary>Every headline</summary>
+
+| brief | role | headline | chars / fit in the shot |
+|---|---|---|---|
+| event-diwali-sale | hook | दिवाली सेल आ गई | 15 / 19 |
+| event-diwali-sale | problem | कपड़े महंगे हैं | 15 / 40 |
+| event-diwali-sale | product | रंगरेज़ फैशन | 12 / 40 |
+| event-diwali-sale | proof | 30 प्रतिशत छूट | 14 / 40 |
+| event-diwali-sale | cta | दुकान पर आएं | 12 / 19 |
+| event-fest | hook | Rhythm Fest 2026 is here | 24 / 19 — **too long** |
+| fashion-perfume | hook | After dark scent | 16 / 37 |
+| fashion-perfume | problem | Feeling lost | 12 / 40 |
+| fashion-perfume | product | Noir 9 eau de parfum | 20 / 40 |
+| fashion-perfume | proof | Confidence found | 16 / 31 |
+| fashion-perfume | offer | Discover Noir 9 | 15 / 19 |
+| fashion-perfume | cta | Discover Noir 9 | 15 / 40 |
+| food-biryani | hook | ఆ రుచి అద్భుతం | 14 / 23 |
+| food-biryani | problem | పాత వంటకాల బాధ | 14 / 40 |
+| food-biryani | product | Paradise Spice biryani | 22 / 40 |
+| food-biryani | proof | ఆస్వాదించండి | 12 / 19 |
+| food-biryani | offer | ప్రత్యేక ఆఫర్ | 13 / 19 |
+| food-biryani | cta | ఇప్పుడే ఆర్డర్ చేయండి | 21 / 40 |
+| product-coldbrew | hook | घर पर कैफ़े का स्वाद | 20 / 28 |
+| product-coldbrew | problem | घर पर कॉफ़ी नहीं? | 17 / 40 |
+| product-coldbrew | product | Chill Brew कॉफ़ी | 16 / 33 |
+| product-coldbrew | proof | असली स्वाद | 10 / 19 |
+| product-coldbrew | offer | आज ही ऑर्डर करें | 16 / 19 |
+| product-coldbrew | cta | Swiggy पर ऑर्डर करें | 20 / 40 |
+| product-serum | hook | Dull skin gone | 14 / 34 |
+| product-sneaker | hook | Faster, lighter stride now | 26 / 19 — **too long** |
+| product-sneaker | problem | Tired of slow runs | 18 / 40 |
+| product-sneaker | product | Stride X2 shoe | 14 / 29 |
+| product-sneaker | proof | 40% more bounce | 15 / 23 |
+| product-sneaker | offer | Get yours today | 15 / 19 |
+| product-sneaker | cta | Get yours | 9 / 40 |
+| studio-lumen | hook | Capture every moment | 20 / 21 |
+| studio-lumen | problem | Stop posing now | 15 / 40 |
+| studio-lumen | product | Lumen Studios | 13 / 40 |
+| studio-lumen | proof | Moments caught | 14 / 35 |
+| studio-lumen | offer | Deliver the album | 17 / 19 |
+| studio-lumen | proof | Real client story | 17 / 40 |
+| studio-lumen | cta | Book a call | 11 / 19 |
+| wedding-priya-arjun | hook | Relive the day now | 18 / 35 |
+| wedding-priya-arjun | problem | Moments fade fast | 17 / 40 |
+| wedding-priya-arjun | product | Priya & Arjun film | 18 / 40 |
+| wedding-priya-arjun | proof | See the love story | 18 / 40 |
+| wedding-priya-arjun | offer | Relive the day now | 18 / 29 |
+| wedding-priya-arjun | cta | Watch the full film | 19 / 19 |
+| wedding-priya-arjun | cta | Watch the full film | 19 / 40 |
+| wedding-priya-arjun | cta | Watch the full film | 19 / 19 |
+| wedding-sravani-karthik | hook | పెళ్లి కూతురు సిద్ధం | 20 / 19 — **too long** |
+| wedding-sravani-karthik | problem | సంగీతం తో పూర్తి రోజు | 21 / 40 |
+| wedding-sravani-karthik | product | Sravani & Karthik | 17 / 40 |
+| wedding-sravani-karthik | proof | సంతోషం నిండింది | 15 / 40 |
+| wedding-sravani-karthik | offer | పండుగ అద్భుతం | 13 / 40 |
+| wedding-sravani-karthik | cta | మీ వీడియో చూడండి | 16 / 40 |
+| wedding-sravani-karthik | cta | పూర్తి వీడియో లింక్ | 19 / 40 |
+
+</details>
 
 ## 2026-09-23-lmstudio-gemma-4-e2b
 

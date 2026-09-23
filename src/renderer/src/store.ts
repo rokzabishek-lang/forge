@@ -171,15 +171,19 @@ import type { Problem } from '@shared/director/conforms'
 import { buildSlots } from '@shared/director/menu'
 import { adSeconds, briefFor, menuFor, musicFor } from '@shared/director/run'
 import { maxTokensFor, spinePrompt } from '@shared/director/prompt'
+import { askStructured } from '@shared/director/ask'
+import { eyesOf, needsLook, needsMeasure, withVision } from '@shared/director/eyes'
+import { gate, type Measure } from '@shared/director/gate'
+import { LOOK_MAX_TOKENS, lookPrompt, lookSchema, readLook } from '@shared/director/look'
+import type { Slot } from '@shared/director/menu'
 import {
-  parseModelJson,
   type LlmProviderChoice,
   type LlmStatus,
   type OllamaConfig,
   type OpenAiConfig,
   type PublicDirectorConfig
 } from '@shared/director/provider'
-import { spineSchema, type SpinePlan, type Tone } from '@shared/director/schema'
+import { spineSchema, type Brief, type SpinePlan, type Tone } from '@shared/director/schema'
 import { validateSpine, type SegmentLayout, type SpineVerdict } from '@shared/director/validate'
 import { vocabularyPrompt, withWordText, type Transcript } from '@shared/transcript'
 
@@ -505,6 +509,11 @@ interface EditorState {
   /** What the run is doing right now, e.g. "asking the model". */
   directStage: string | null
   direct: () => Promise<void>
+  /**
+   * Measure the stills and show each to the model, caching both on the
+   * project (`vision`) without an undo step. Returns notes for the panel.
+   */
+  seeSlots: (slots: Slot[], brief: Pick<Brief, 'product' | 'language'>) => Promise<string[]>
   clearDirectorOutput: () => void
   /** What the last run did: who answered, its reasoning, every note. */
   lastDirection: { model: string; reasoning: string; problems: string[]; baseline: boolean } | null
@@ -1657,6 +1666,64 @@ export const useEditor = create<EditorState>((set, get) => ({
     set({ lastDirection: null })
   },
 
+  seeSlots: async (slots, brief) => {
+    const notes: string[] = []
+    const remember = (assetId: string, key: string, patch: Parameters<typeof withVision>[3]): void =>
+      // A cache, not an edit: no undo step, but the project is changed and saves with it.
+      set((s) => ({ project: withVision(s.project, assetId, key, patch), dirty: true }))
+
+    const stills = slots
+      .filter((s) => s.kind === 'image')
+      .map((slot) => ({ slot, path: get().project.assets.find((a) => a.id === slot.assetId)?.path ?? '' }))
+      .filter((x) => x.path)
+    if (stills.length === 0) return notes
+    const keys = await window.forge.fileKeys(stills.map((x) => x.path))
+
+    const toMeasure = stills.filter((x) => needsMeasure(get().project.vision?.[x.slot.assetId], keys[x.path] ?? null))
+    if (toMeasure.length > 0) {
+      set({ directStage: 'measuring the pictures' })
+      const out = await window.forge.measurePhotos(toMeasure.map((x) => x.path))
+      if (out.unavailable) notes.push(`the pictures were not measured — ${out.unavailable}`)
+      for (const m of out.measures) {
+        const x = toMeasure.find((t) => t.path === m.path)
+        const key = out.keys[m.path]
+        if (!x || !key || m.error || typeof m.sharpness !== 'number') continue
+        remember(x.slot.assetId, key, { measure: m as Measure })
+      }
+    }
+
+    const toLook = stills.filter((x) => needsLook(get().project.vision?.[x.slot.assetId], keys[x.path] ?? null))
+    const { system, user } = lookPrompt(brief)
+    for (let i = 0; i < toLook.length; i++) {
+      const x = toLook[i]
+      set({ directStage: `looking at picture ${i + 1} of ${toLook.length}` })
+      try {
+        const asked = await askStructured((request) => window.forge.directorComplete(request), {
+          system,
+          user,
+          schema: lookSchema(),
+          images: [x.path],
+          maxTokens: LOOK_MAX_TOKENS
+        })
+        const look = 'error' in asked.parsed ? null : readLook(asked.parsed.value)
+        if (!look) {
+          notes.push(`${x.slot.id}: the model's description could not be read`)
+          continue
+        }
+        remember(x.slot.assetId, keys[x.path]!, { look: { ...look, key: keys[x.path]!, model: asked.result.model, at: new Date().toISOString() } })
+      } catch (err) {
+        /*
+         * No model, or one that cannot see: stop, rather than failing once
+         * per photo. The Director still runs — on the measurements and the
+         * names, as it did before it had eyes.
+         */
+        notes.push(`the pictures were not looked at — ${err instanceof Error ? err.message : String(err)}`)
+        break
+      }
+    }
+    return notes
+  },
+
   direct: async () => {
     const { notify, directBrief, slotNotes } = get()
     const product = directBrief.product.trim()
@@ -1712,40 +1779,41 @@ export const useEditor = create<EditorState>((set, get) => ({
         // Only the part of the song the clip actually keeps, as the reel does.
         analysis = await window.forge.analyseBeats(music.asset.path, { startMs: music.startMs, endMs: music.endMs })
       }
-      const catalogue = useCatalog.getState().transitions
-      const menu = menuFor(cleared, slots, music, analysis, catalogue, seconds)
       const brief = briefFor(directBrief, seconds)
+      const notes: string[] = []
+
+      /*
+       * The eyes (docs/PLAN.md §4): measure the stills, show each to the
+       * model, and gate — near-copies left out, a soft, dark or blown photo
+       * flagged so it is never the product shot. Cached on the project by
+       * file, so this costs time once per photo, not once per run.
+       */
+      notes.push(...(await get().seeSlots(slots, brief)))
+      const { looks, measures } = eyesOf(get().project, slots)
+      const gated = gate(slots, looks, measures, { wantsPeople: false })
+      notes.push(...gated.leftOut.map((l) => `${l.slot} left out — ${l.why}`), ...gated.loosened)
+
+      const catalogue = useCatalog.getState().transitions
+      const menu = menuFor(cleared, gated.slots, music, analysis, catalogue, seconds)
 
       /* Ask — once with thinking off, and once more with it on if prose came back. */
       set({ directStage: 'asking the model' })
       const { system, user } = spinePrompt(brief, menu)
       const schema = spineSchema(menu)
       const maxTokens = maxTokensFor(menu)
-      const notes: string[] = []
       let verdict: SpineVerdict
       let model = BASELINE_MODEL
       let runtime = 'baseline'
       try {
-        let result = await window.forge.directorComplete({ system, user, schema, maxTokens, think: false })
-        let parsed = parseModelJson(result.text)
-        if ('error' in parsed && !result.truncated) {
-          /*
-           * Ollama has an open bug where `think: false` makes it drop the
-           * schema for Gemma 4 and Qwen 3.5 (#15260, #14645), and the answer
-           * comes back as prose. Thinking on costs seconds; the alternative is
-           * the standard cut every time, looking like a model failure.
-           */
-          set({ directStage: 'asking again, thinking on' })
-          notes.push(`the first answer was not JSON (${parsed.error}) — asked again with thinking on`)
-          result = await window.forge.directorComplete({
-            system,
-            user,
-            schema,
-            maxTokens: maxTokens + 800,
-            think: true
-          })
-          parsed = parseModelJson(result.text)
-        }
+        // Thinking off, then once more with it on if prose came back — the
+        // Ollama bug askStructured (shared/director/ask.ts) explains.
+        const asked = await askStructured(
+          (request) => window.forge.directorComplete(request),
+          { system, user, schema, maxTokens },
+          () => set({ directStage: 'asking again, thinking on' })
+        )
+        const { result, parsed } = asked
+        notes.push(...asked.notes)
         model = result.model
         runtime = result.provider
         verdict =

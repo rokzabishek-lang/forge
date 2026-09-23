@@ -6,10 +6,10 @@
   "hero": "lumen_bride_portrait.jpg",
   "media": [
     { "name": "lumen_bride_portrait.jpg", "kind": "image", "colour": "#f1faee", "size": [1080, 1350], "note": "", "truth": { "people": "one", "shot": "close", "product_visible": "no", "what": "a bride's portrait in soft window light" } },
-    { "name": "lumen_couple_beach.jpg", "kind": "image", "colour": "#a8dadc", "size": [1350, 1080], "note": "", "truth": { "people": "couple", "shot": "wide", "product_visible": "no", "what": "couple on a beach at dawn" } },
+    { "name": "lumen_couple_beach.jpg", "kind": "image", "colour": "#a8dadc", "size": [1350, 1080], "note": "", "truth": { "people": "two", "shot": "wide", "product_visible": "no", "what": "couple on a beach at dawn" } },
     { "name": "lumen_rings_detail.jpg", "kind": "image", "colour": "#e63946", "size": [1080, 1080], "note": "", "truth": { "people": "none", "shot": "detail", "product_visible": "no", "what": "two rings on a velvet box" } },
     { "name": "lumen_team_at_work.jpg", "kind": "image", "colour": "#457b9d", "size": [1350, 1080], "note": "our team shooting", "truth": { "people": "group", "shot": "medium", "product_visible": "no", "what": "three photographers working at a wedding" } },
     { "name": "lumen_album_flatlay.jpg", "kind": "image", "colour": "#1d3557", "size": [1080, 1080], "note": "the album we deliver", "truth": { "people": "none", "shot": "detail", "product_visible": "yes", "what": "a linen wedding album open on a table" } },
-    { "name": "client_testimonial.mp4", "kind": "video", "seconds": 6, "colour": "#ffb4a2", "size": [1080, 1920], "note": "Anika and Rohan, last season", "speech": "They caught moments we didn't even know happened. We cried watching the film.", "truth": { "people": "couple", "shot": "medium", "product_visible": "no", "what": "a couple talking to camera on a sofa" } }
+    { "name": "client_testimonial.mp4", "kind": "video", "seconds": 6, "colour": "#ffb4a2", "size": [1080, 1920], "note": "Anika and Rohan, last season", "speech": "They caught moments we didn't even know happened. We cried watching the film.", "truth": { "people": "two", "shot": "medium", "product_visible": "no", "what": "a couple talking to camera on a sofa" } }
   ]
 }

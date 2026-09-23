@@ -40,16 +40,22 @@ const answer = (content: string, finish = 'stop'): EvalResponse => ({
   data: { choices: [{ message: { content }, finish_reason: finish }], usage: { prompt_tokens: 800, completion_tokens: 300 } }
 })
 
-/** A plan using the first four slots on the first four cuts, hard cuts, a headline each. */
+/** The four cuts the canned plan ends on: the first three, then the end — a plan that covers the ad. */
+function ends(): Prepared['menu']['cuts'] {
+  const cuts = prepared.menu.cuts.filter((c) => c.reason !== 'start')
+  return [...cuts.slice(0, 3), cuts[cuts.length - 1]]
+}
+
+/** A plan using the first four slots, hard cuts, a headline each, ending at the end. */
 function plan(): object {
-  const ends = prepared.menu.cuts.filter((c) => c.reason !== 'start').slice(0, 4)
+  const ending = ends()
   return {
     reasoning: 'four shots, straight cuts',
     pace: 'punchy',
     segments: prepared.menu.slots.slice(0, 4).map((slot, i) => ({
       slot: slot.id,
       role: ['hook', 'problem', 'product', 'cta'][i],
-      ends_at: ends[i].id,
+      ends_at: ending[i].id,
       enter: 'cut',
       headline: ['Run faster', 'Less weight', 'Stride X2', 'Get yours'][i],
       punch_word: '',
@@ -98,11 +104,11 @@ describe('the eval pipeline', () => {
     expect(existsSync(result.renders.baseline!)).toBe(true)
 
     const fps = prepared.menu.fps
-    const ends = prepared.menu.cuts.filter((c) => c.reason !== 'start').slice(0, 4)
-    const starts = [0, ...ends.slice(0, 3).map((c) => c.frame)]
+    const ending = ends()
+    const starts = [0, ...ending.slice(0, 3).map((c) => c.frame)]
     const lines: string[] = ['# evalPipeline', '', 'The model render, sampled at the middle of each shot (540×960 centre):', '']
     for (let i = 0; i < 4; i++) {
-      const mid = (starts[i] + ends[i].frame) / 2 / fps
+      const mid = (starts[i] + ending[i].frame) / 2 / fps
       const want = fixture.media[i].colour
       const [r, g, b] = await pixelAt(result.renders.model!, mid, 270, 480, { width: 540, height: 960 })
       await saveFrame(result.renders.model!, mid, join(dir, `shot${i + 1}.png`))

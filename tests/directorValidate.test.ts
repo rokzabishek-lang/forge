@@ -3,6 +3,7 @@ import type { Menu, Slot } from '@shared/director/menu'
 import { buildCutMenu, familyMenu } from '@shared/director/menu'
 import type { Segment, SpinePlan } from '@shared/director/schema'
 import {
+  MIN_COVERAGE,
   TRANSITION_SHARE,
   headlineCapacity,
   punchIndex,
@@ -101,11 +102,30 @@ describe('validateSpine — accepts', () => {
     expect(got.layout[1].energy).toBe(m.cuts[2].energy)
   })
 
-  it('a plan may skip slots and need not end at the end', () => {
+  it('a plan may skip slots, and may end at a late cut short of the end', () => {
     const m = menu()
-    const got = ok(validateSpine(plan([segment({ slot: 'slot_02', ends_at: cutId(m, 3) })]), m))
-    expect(got.plan.segments).toHaveLength(1)
+    const late = m.cuts.length - 2
+    expect(m.cuts[late].frame / m.cuts.at(-1)!.frame).toBeGreaterThanOrEqual(MIN_COVERAGE)
+    const got = ok(
+      validateSpine(plan([segment({ slot: 'slot_02', ends_at: cutId(m, 3) }), segment({ slot: 'slot_04', ends_at: cutId(m, late) })]), m)
+    )
+    expect(got.plan.segments.map((s) => s.slot)).toEqual(['slot_02', 'slot_04'])
     expect(got.problems).toEqual([])
+  })
+
+  it('refuses a plan that stops early — a one-second ad from a thirty-second brief', () => {
+    /*
+     * Measured (docs/EVAL.md, run 2): Gemma 4 E2B twice stopped after one
+     * segment, and the plan passed as "used" — a 20 s brief became a 1 s ad.
+     */
+    const m = menu()
+    const got = validateSpine(plan([segment({ slot: 'slot_01', ends_at: cutId(m, 1) })]), m)
+    // The ad is as long as the menu's end — which snaps back onto a beat, so 28 s here, not the 30 asked for.
+    const adSeconds = ((m.cuts.at(-1)!.frame - m.cuts[0].frame) / fps).toFixed(1)
+    expect('rejected' in got && got.rejected).toBe(`The plan stops at ${(m.cuts[1].frame / fps).toFixed(1)}s of a ${adSeconds}s ad — it ended early`)
+    // Just under the line is still early; the default is the line.
+    const early = m.cuts.findIndex((c) => c.frame / m.cuts.at(-1)!.frame >= MIN_COVERAGE) - 1
+    expect('rejected' in validateSpine(plan([segment({ slot: 'slot_01', ends_at: cutId(m, early) })]), m)).toBe(true)
   })
 })
 
@@ -188,7 +208,9 @@ describe('validateSpine — repairs', () => {
           segment({ slot: 'slot_01', ends_at: cutId(m, 3) }),
           segment({ slot: 'slot_04', ends_at: cutId(m, 4) })
         ]),
-        m
+        m,
+        // A short plan on purpose: this tests another row, not coverage.
+        { minCoverage: 0 }
       )
     )
     expect(got.plan.segments.map((s) => s.slot)).toEqual(['slot_01', 'slot_04'])
@@ -227,7 +249,9 @@ describe('validateSpine — repairs', () => {
           segment({ slot: 'slot_01', ends_at: cutId(m, 2), enter: 'zoom' }),
           segment({ slot: 'slot_02', ends_at: cutId(m, 3), enter: 'glitch' })
         ]),
-        m
+        m,
+        // A short plan on purpose: this tests another row, not coverage.
+        { minCoverage: 0 }
       )
     )
     expect(got.plan.segments.map((s) => s.enter)).toEqual(['cut', 'cut'])
@@ -245,7 +269,9 @@ describe('validateSpine — repairs', () => {
           segment({ slot: 'slot_04', ends_at: cutId(m, 4), enter: 'slide' }),
           segment({ slot: 'slot_05', ends_at: cutId(m, 5), enter: 'smooth' })
         ]),
-        m
+        m,
+        // A short plan on purpose: this tests another row, not coverage.
+        { minCoverage: 0 }
       )
     )
     const allowed = Math.ceil(4 * TRANSITION_SHARE)
@@ -293,14 +319,18 @@ describe('validateSpine — repairs', () => {
     const got = ok(
       validateSpine(
         plan([segment({ slot: 'slot_01', ends_at: cutId(m, 2), headline: 'Glow in 7 days', punch_word: 'glow!' })]),
-        m
+        m,
+        // A short plan on purpose: this tests another row, not coverage.
+        { minCoverage: 0 }
       )
     )
     expect(got.layout[0].punch).toBe(0)
     const bad = ok(
       validateSpine(
         plan([segment({ slot: 'slot_01', ends_at: cutId(m, 2), headline: 'Glow in 7 days', punch_word: 'week' })]),
-        m
+        m,
+        // A short plan on purpose: this tests another row, not coverage.
+        { minCoverage: 0 }
       )
     )
     expect(bad.plan.segments[0].punch_word).toBe('')
@@ -313,7 +343,9 @@ describe('validateSpine — repairs', () => {
     const got = ok(
       validateSpine(
         plan([segment({ slot: 'slot_01', ends_at: cutId(m, 2), why: 'w'.repeat(200) })], { reasoning: 'r'.repeat(900) }),
-        m
+        m,
+        // A short plan on purpose: this tests another row, not coverage.
+        { minCoverage: 0 }
       )
     )
     expect(Array.from(got.plan.reasoning).length).toBe(300)

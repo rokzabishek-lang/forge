@@ -42,7 +42,19 @@ export type Tone = (typeof TONES)[number]
 export const MAX_REASONING_CHARS = 300
 /** A headline is six words at most; forty characters is the hard ceiling at any duration. */
 export const MAX_HEADLINE_CHARS = 40
+/** What the panel shows of a `why` — it is clipped to this on the way in. */
 export const MAX_WHY_CHARS = 60
+/**
+ * What the DECODER allows a `why` to be.
+ *
+ * Deliberately longer than what is kept. A grammar-enforced maxLength ends the
+ * string mid-thought, and a small model that has just been cut off can lose
+ * the thread: on Gemma 4 E2B a `why` stopped at 60 was followed twice by the
+ * model closing the whole plan after one segment (docs/EVAL.md, run 2). The
+ * median `why` is ~35 characters; 100 rarely binds, and the validator still
+ * clips to 60.
+ */
+export const MAX_WHY_DECODE_CHARS = 100
 export const MAX_SEGMENTS = 12
 
 export interface Segment {
@@ -132,7 +144,7 @@ export function spineSchema(
       },
       headline: { type: 'string', ...limit(MAX_HEADLINE_CHARS), description: 'On-screen line, six words at most, or empty' },
       punch_word: { type: 'string', ...limit(MAX_HEADLINE_CHARS), description: 'One word of the headline that hits, copied exactly, or empty' },
-      why: { type: 'string', ...limit(MAX_WHY_CHARS), description: 'Why this picture, here, in a few words' }
+      why: { type: 'string', ...limit(MAX_WHY_DECODE_CHARS), description: 'Why this picture, here, in a few words' }
     },
     required: ['slot', 'role', 'ends_at', 'enter', 'headline', 'punch_word', 'why'],
     additionalProperties: false

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { stat } from 'node:fs/promises'
 import type { MediaInfo } from '@shared/types'
 import type { MediaAsset } from '@shared/timeline'
 import { secondsToFrames } from '@shared/timeline'
@@ -32,5 +33,22 @@ export function toAsset(info: MediaInfo, projectFps: number): MediaAsset {
     hasVideo: info.kind !== 'audio' && info.width !== null,
     hasAudio: info.audioCodec !== null,
     size: info.size
+  }
+}
+
+/**
+ * A cheap key for a file's contents: its size and modification time.
+ *
+ * What the Director's measurements and looks are cached under (docs/PLAN.md
+ * §4.1), the same key `stems.ts` and `transitions/maskTags.ts` use — a photo
+ * replaced by a different one of the same name gets a different key, and one
+ * whose project folder moved keeps its key. Null when the file cannot be read.
+ */
+export async function fileKey(path: string): Promise<string | null> {
+  try {
+    const info = await stat(path)
+    return `${info.size}:${Math.round(info.mtimeMs)}`
+  } catch {
+    return null
   }
 }

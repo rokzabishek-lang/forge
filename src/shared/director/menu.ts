@@ -11,6 +11,8 @@ import {
 import type { TransitionFamily } from '../transitions/registry'
 import { transcriptText } from '../transcript'
 import type { Transcript } from '../transcript'
+import type { Look } from './look'
+import type { Flag } from './gate'
 
 /**
  * The menu: every legal choice the model may make, each with an opaque id.
@@ -59,6 +61,10 @@ export interface Slot {
   seconds: number | null
   /** The same, in project frames — what the validator caps a segment against. */
   frames: number | null
+  /** What the VLM saw in it, when it was shown (look.ts). */
+  look?: Look
+  /** What the measurement found wrong with it (gate.ts): never the product shot. */
+  flags?: Flag[]
 }
 
 export type CandidateReason = 'start' | 'end' | CutReason

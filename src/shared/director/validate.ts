@@ -36,6 +36,9 @@ import { MIN_CARD_SECONDS, READING_CPS } from '../automation/caption'
 /** No more than this share of the cuts may carry a transition (docs/AUTOMATION.md §5b). */
 export const TRANSITION_SHARE = 0.6
 
+/** A plan must reach at least this share of the ad — the second-last cut, yes; the first second, no. */
+export const MIN_COVERAGE = 0.75
+
 export interface SegmentLayout {
   /** Timeline frames the segment occupies. */
   startFrame: number
@@ -110,7 +113,15 @@ function normalise(word: string): string {
 export function validateSpine(
   raw: unknown,
   menu: Menu,
-  options: { truncated?: boolean } = {}
+  options: {
+    truncated?: boolean
+    /**
+     * How much of the ad the plan must reach; MIN_COVERAGE unless given. Only
+     * a test of some OTHER row, validating a deliberately short plan, passes
+     * 0 — the app always takes the default.
+     */
+    minCoverage?: number
+  } = {}
 ): SpineVerdict {
   const problems: Problem[] = []
 
@@ -188,6 +199,25 @@ export function validateSpine(
     }
     spans.push({ start: previous, end })
     previous = end
+  }
+
+  /*
+   * The ad asked for, not the first second of it.
+   *
+   * A plan could once end wherever it liked. Measured on Gemma 4 E2B
+   * (docs/EVAL.md, run 2): twice the model stopped after ONE segment — its
+   * `why` cut off by the schema's length limit mid-sentence, after which it
+   * closed the plan — and a twenty-second brief became a one-second ad that
+   * passed as "used". Ending at the second-last cut is fine; stopping early is
+   * the model having given up, and the standard cut is the honest answer.
+   */
+  const endCut = menu.cuts[menu.cuts.length - 1]
+  const whole = endCut.frame - first.frame
+  if (whole > 0 && (previous.frame - first.frame) / whole < (options.minCoverage ?? MIN_COVERAGE)) {
+    return {
+      rejected: `The plan stops at ${((previous.frame - first.frame) / fps).toFixed(1)}s of a ${(whole / fps).toFixed(1)}s ad — it ended early`,
+      problems
+    }
   }
 
   /* Now the repairs, segment by segment. */

@@ -10,6 +10,7 @@ import type { TransitionDef } from '@shared/transitions/registry'
 import type { EncodeSpec, EncoderId } from '@shared/render/encode'
 import type { FrameRange } from '@shared/render/exportShape'
 import type { MusicAnalysis } from '@shared/automation/cutPlan'
+import type { Measure } from '@shared/director/gate'
 import type { IngestRequest } from '@shared/ingest/args'
 import type {
   CompletionRequest,
@@ -296,6 +297,23 @@ const api = {
 
   cancelParallax: (assetId: string): Promise<void> =>
     ipcRenderer.invoke('depth:cancel', assetId),
+
+  /**
+   * Sharpness, exposure and a perceptual hash per photo (the Director's gate),
+   * with each file's `size:mtime` cache key. `unavailable` when the sidecar
+   * cannot measure — the gate then lets every photo through.
+   */
+  measurePhotos: (
+    paths: string[]
+  ): Promise<{
+    measures: ({ path: string; error?: string } & Partial<Measure>)[]
+    keys: Record<string, string | null>
+    unavailable?: string
+  }> => ipcRenderer.invoke('vision:measure', { paths }),
+
+  /** Each file's `size:mtime`, the key the Director's looks are cached under. */
+  fileKeys: (paths: string[]): Promise<Record<string, string | null>> =>
+    ipcRenderer.invoke('media:fileKeys', { paths }),
 
   onParallaxProgress: (
     cb: (update: { assetId: string; progress: number | null; message?: string }) => void

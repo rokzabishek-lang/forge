@@ -492,6 +492,15 @@ export function installHarnessBridge(): void {
     cancelParallax: async () => undefined,
     onParallaxProgress: () => () => undefined,
 
+    // No sidecar here: the gate lets every photo through, as it does in the app
+    // when the sidecar cannot measure. Keys by path, so a look is asked once.
+    measurePhotos: async (paths: string[]) => ({
+      measures: [],
+      keys: Object.fromEntries(paths.map((p) => [p, `harness:${p}`])),
+      unavailable: 'the harness has no sidecar'
+    }),
+    fileKeys: async (paths: string[]) => Object.fromEntries(paths.map((p) => [p, `harness:${p}`])),
+
     splitStems: async (path: string) => ({
       instrumental: path,
       voice: path,

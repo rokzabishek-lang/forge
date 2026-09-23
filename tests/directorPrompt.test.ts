@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { PLAYBOOK, maxTokensFor, spinePrompt } from '@shared/director/prompt'
+import { PLAYBOOK, languageLine, maxTokensFor, spinePrompt } from '@shared/director/prompt'
 import { buildCutMenu, familyMenu, type Menu, type Slot } from '@shared/director/menu'
 import { DEFAULT_MAX_TOKENS } from '@shared/director/provider'
 import type { Brief } from '@shared/director/schema'
@@ -71,6 +71,43 @@ describe('spinePrompt', () => {
     expect(user).toContain('video 4.2 s')
     expect(user).toContain('language for all copy: Telugu')
     expect(user).toContain('tone: premium')
+  })
+
+  it('shows what the eyes found beside each slot: the look, and a measured flag', () => {
+    const seen: Menu = {
+      ...menu,
+      slots: [
+        { ...slots[0], look: { people: 'none', shot: 'detail', mood: 'clean', product_visible: 'yes', hero: 'strong', words: 'amber bottle on white marble' } },
+        { ...slots[1] },
+        { ...slots[2], flags: ['soft', 'dark'] }
+      ]
+    }
+    const text = spinePrompt(brief, seen).user
+    expect(text).toContain('slot_01  image  "IMG 4021"  — serum bottle on marble  — shows: none, detail, clean, strong: "amber bottle on white marble"')
+    expect(text).toMatch(/slot_03 {2}image {2}"result" {2}— measured soft, dark\n/)
+    expect(text).not.toMatch(/slot_02[^\n]*shows:/)
+    expect(PLAYBOOK).toContain('"measured soft", "dark" or "blown" is never the hook or the product')
+  })
+
+  it('asks for the copy in the language’s own script, last, where it is read', () => {
+    /*
+     * Measured (docs/EVAL.md 2026-09-23): the brief line alone got 0 of 24
+     * Telugu and Hindi headlines in their language; the rule plus this line
+     * got 24 of 24. The line is the last instruction before the answer.
+     */
+    const lines = user.trim().split('\n')
+    expect(lines.at(-2)).toBe('Write all copy in Telugu, in Telugu script (తెలుగు) — a Telugu headline looks like "రుచి అదిరింది".')
+    expect(lines.at(-1)).toBe('Answer with the JSON plan.')
+    expect(PLAYBOOK).toMatch(/own script — never English when another language is asked, never transliterated/)
+  })
+
+  it('says nothing more for English, and names any other language even without a known script', () => {
+    const english = spinePrompt({ ...brief, language: 'English' }, menu).user.trim().split('\n')
+    expect(english.at(-2)).toBe('')
+    expect(languageLine('english')).toBeNull()
+    expect(languageLine(' ')).toBeNull()
+    expect(languageLine('Hindi')).toContain('Devanagari (हिन्दी)')
+    expect(languageLine('Odia')).toBe('Write all copy in Odia, in its own script.')
   })
 
   it('states the target and where the ad actually ends, naming a drop it lands on', () => {

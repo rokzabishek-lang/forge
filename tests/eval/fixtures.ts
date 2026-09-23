@@ -16,7 +16,7 @@ import { segmentIntoSentences, type Transcript, type Word } from '@shared/transc
 
 export const FIXTURE_DIR = resolve(__dirname, '..', 'fixtures', 'director')
 
-export type People = 'none' | 'one' | 'couple' | 'group'
+export type People = 'none' | 'one' | 'two' | 'group'
 export type Shot = 'wide' | 'medium' | 'close' | 'detail'
 
 export interface Truth {

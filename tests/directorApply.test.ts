@@ -130,7 +130,8 @@ const segment = (over: Partial<Segment> & Pick<Segment, 'slot' | 'ends_at'>): Se
 })
 
 const validated = (plan: SpinePlan, menu: Menu): Validated => {
-  const v = validateSpine(plan, menu)
+  // Short plans on purpose: these test apply, not the coverage row (validate.ts).
+  const v = validateSpine(plan, menu, { minCoverage: 0 })
   if ('rejected' in v) throw new Error(v.rejected)
   return v
 }

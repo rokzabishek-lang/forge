@@ -6,11 +6,11 @@
   "hero": "IMG_5542.jpg",
   "media": [
     { "name": "IMG_5501.jpg", "kind": "image", "colour": "#6d597a", "size": [1080, 1350], "note": "pelli kuthuru ready", "truth": { "people": "one", "shot": "medium", "product_visible": "no", "what": "bride in a silk saree with jewellery" } },
-    { "name": "IMG_5514.jpg", "kind": "image", "colour": "#b56576", "size": [1080, 1350], "note": "talambralu", "truth": { "people": "couple", "shot": "medium", "product_visible": "no", "what": "couple pouring rice over each other's heads" } },
-    { "name": "IMG_5530.jpg", "kind": "image", "colour": "#e56b6f", "size": [1080, 1080], "note": "mangalsutram close-up", "truth": { "people": "couple", "shot": "detail", "product_visible": "no", "what": "hands tying the mangalsutra" } },
-    { "name": "IMG_5542.jpg", "kind": "image", "colour": "#eaac8b", "size": [1080, 1350], "note": "couple laughing", "truth": { "people": "couple", "shot": "close", "product_visible": "no", "what": "couple laughing together under a canopy" } },
+    { "name": "IMG_5514.jpg", "kind": "image", "colour": "#b56576", "size": [1080, 1350], "note": "talambralu", "truth": { "people": "two", "shot": "medium", "product_visible": "no", "what": "couple pouring rice over each other's heads" } },
+    { "name": "IMG_5530.jpg", "kind": "image", "colour": "#e56b6f", "size": [1080, 1080], "note": "mangalsutram close-up", "truth": { "people": "two", "shot": "detail", "product_visible": "no", "what": "hands tying the mangalsutra" } },
+    { "name": "IMG_5542.jpg", "kind": "image", "colour": "#eaac8b", "size": [1080, 1350], "note": "couple laughing", "truth": { "people": "two", "shot": "close", "product_visible": "no", "what": "couple laughing together under a canopy" } },
     { "name": "IMG_5561.jpg", "kind": "image", "colour": "#355070", "size": [1350, 1080], "note": "baraat dance", "truth": { "people": "group", "shot": "wide", "product_visible": "no", "what": "relatives dancing in the baraat" } },
-    { "name": "IMG_5580.jpg", "kind": "image", "colour": "#f6bd60", "size": [1350, 1080], "note": "sunset portrait", "truth": { "people": "couple", "shot": "wide", "product_visible": "no", "what": "couple silhouetted against a sunset" } },
+    { "name": "IMG_5580.jpg", "kind": "image", "colour": "#f6bd60", "size": [1350, 1080], "note": "sunset portrait", "truth": { "people": "two", "shot": "wide", "product_visible": "no", "what": "couple silhouetted against a sunset" } },
     { "name": "sangeet.mp4", "kind": "video", "seconds": 5, "colour": "#84a59d", "size": [1080, 1920], "note": "sangeet dance", "truth": { "people": "group", "shot": "wide", "product_visible": "no", "what": "cousins dancing at the sangeet" } }
   ]
 }
