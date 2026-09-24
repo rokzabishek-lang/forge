@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { evalPath } from './eval/relay'
 import { fixtureProblems, loadFixtures, transcriptFor, type Fixture } from './eval/fixtures'
 import { headlinesOf } from './eval/pipeline'
@@ -16,7 +16,9 @@ import type { Menu } from '@shared/director/menu'
  */
 
 describe('the relay writes only inside tests/output/eval', () => {
-  const root = '/srv/eval'
+  // Absolute on THIS platform: '/srv/eval' is drive-relative on Windows, where the relay's
+  // `resolve` puts the drive letter on it and a plain `join` of it never could (CI #89).
+  const root = resolve('/srv/eval')
 
   it('accepts a relative path inside the folder', () => {
     expect(evalPath('run/responses/a.json', root)).toBe(join(root, 'run', 'responses', 'a.json'))
