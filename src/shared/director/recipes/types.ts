@@ -39,6 +39,16 @@ export interface SoundRule {
   on: SoundCue
 }
 
+/**
+ * What a shot does in the ad. `spine@1` had one sales skeleton for every ad —
+ * hook, problem, product, proof, offer, cta — and C0 measured it forced onto a
+ * wedding ("Moments fade quickly" as a wedding film's problem, docs/EVAL.md).
+ * Each recipe now names the roles it has; `story` is the wedding's and the
+ * reveal's middle.
+ */
+export const ROLES2 = ['hook', 'story', 'problem', 'product', 'proof', 'offer', 'cta'] as const
+export type Role2 = (typeof ROLES2)[number]
+
 export type HeroMove = 'push-in' | 'hold' | 'parallax'
 export type StillMove = MotionMove | 'hold'
 export type EndCard = 'names-date' | 'product-cta' | 'title-cta'
@@ -50,6 +60,8 @@ export interface Recipe {
   intent: string
   /** The kind of shoot it is for, so the model can tell recipes apart. */
   forKind: string
+  /** The roles this kind of ad has, in the order they come. */
+  roles: Role2[]
   /**
    * Target shot length in BEATS at position p∈[0,1] of the body. The rhythm
    * engine multiplies by the holds, fits the window and snaps to legal cuts.

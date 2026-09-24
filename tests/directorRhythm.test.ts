@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { MusicAnalysis } from '@shared/automation/cutPlan'
-import { ENERGY, PRODUCT_REVEAL, RECIPES, WEDDING_HIGHLIGHT, type Recipe } from '@shared/director/recipes'
-import { MIN_SHOT_SECONDS, layout, rhythmGrid, snapIndices, type Layout, type ShotIntent } from '@shared/director/rhythm'
+import { ENERGY, FASHION, PRODUCT_REVEAL, RECIPES, WEDDING_HIGHLIGHT, type Recipe } from '@shared/director/recipes'
+import { MIN_SHOT_SECONDS, fit, layout, rhythmGrid, snapIndices, type Layout, type ShotIntent } from '@shared/director/rhythm'
 
 /** The hero's lead, as a literal: a check computed from the constant under test moves with it. */
 const LEAD = 1.3
@@ -167,23 +167,36 @@ describe('the ending and the edges', () => {
     expect(grid.beats).toContain(section)
   })
 
+  const dropSet = (): ShotIntent[] => [
+    still(1, { sharpness: 10 }),
+    // The softest of all, but it carries a headline: a shot without one goes first.
+    still(2, { sharpness: 1, headline: 'keep me' }),
+    still(3, { sharpness: 5 }),
+    still(4, { sharpness: 800 }),
+    still(5, { hero: true, sharpness: 1 }),
+    ...Array.from({ length: 10 }, (_, i) => still(6 + i, { sharpness: 500 }))
+  ]
+
   it('the dropped shot is the softest without a headline — never the hook or the hero', () => {
+    // 10 s at 160 BPM: a 19-beat body. The hero's floor is 6 beats, every other shot at least 2 — seven shots hold.
+    const grid = rhythmGrid(song(160, 10), { fps, seconds: 10, tempo: 160 })
+    const l = layout(ENERGY, grid, dropSet())
+    const gone = l.dropped.map((d) => d.slotId)
+    expect(gone.length).toBeGreaterThan(0)
+    expect(gone[0]).toBe('slot_03')
+    expect(gone).not.toContain('slot_01')
+    expect(gone).not.toContain('slot_05')
+    expect(gone).not.toContain('slot_02')
+    expect(l.shots.map((s) => s.slotId)).toContain('slot_02')
+  })
+
+  it('when only the hook and the hero fit at the hero’s floor, the headlined shot goes last — the floor does not yield to keep it', () => {
+    // 6 s at 160 BPM: a 9-beat body. The hero's floor (2 s = 6 beats) and the hook (2) leave one beat — no third shot.
     const grid = rhythmGrid(song(160, 6), { fps, seconds: 6, tempo: 160 })
-    const intents = [
-      still(1, { sharpness: 10 }),
-      // The softest of all, but it carries a headline: a shot without one goes first.
-      still(2, { sharpness: 1, headline: 'keep me' }),
-      still(3, { sharpness: 5 }),
-      still(4, { sharpness: 800 }),
-      still(5, { hero: true, sharpness: 1 }),
-      ...Array.from({ length: 10 }, (_, i) => still(6 + i, { sharpness: 500 }))
-    ]
-    const l = layout(ENERGY, grid, intents)
-    expect(l.dropped.length).toBeGreaterThan(0)
-    expect(l.dropped[0].slotId).toBe('slot_03')
-    expect(l.dropped.map((d) => d.slotId)).not.toContain('slot_01')
-    expect(l.dropped.map((d) => d.slotId)).not.toContain('slot_05')
-    expect(l.dropped.map((d) => d.slotId)).not.toContain('slot_02')
+    const l = layout(ENERGY, grid, dropSet())
+    expect(l.shots.map((s) => s.slotId)).toEqual(['slot_01', 'slot_05'])
+    expect(l.dropped.at(-1)!.slotId).toBe('slot_02')
+    expect(spans(l)[1]).toBeGreaterThanOrEqual(2 * fps)
   })
 
   it('a structural beat one beat from the target wins the cut; without one, the nearest beat does', () => {
@@ -228,6 +241,59 @@ describe('the ending and the edges', () => {
       expect(grid.start).toBe(60)
       expect(grid.end).toBeGreaterThan(60 + 14 * fps)
     }
+  })
+})
+
+describe('what the fit is for — not only what the repairs catch', () => {
+  it('an accelerating ad keeps its shape with the hero last: every earlier shot no longer than the one before', () => {
+    // The fit scales the whole design; a post-snap repair alone would take the hero's time from ONE shot and break the curve.
+    const grid = rhythmGrid(song(120, 16), { fps, seconds: 16, tempo: 120 })
+    const intents = Array.from({ length: 8 }, (_, i) => still(i + 1, { hero: i === 7 }))
+    const l = layout(ENERGY, grid, intents)
+    const body = spans(l).slice(0, -1)
+    for (let i = 1; i < body.length; i++) expect(body[i], `shot ${i + 1}`).toBeLessThanOrEqual(body[i - 1] + grid.beatFrames)
+  })
+
+  it('the design itself gives the hero its lead, before any repair', () => {
+    // Where the lead binds: the hero last on Energy's curve (0.5 beats × 2) with a floor of three
+    // beats at 80 BPM, and a first shot held (2 × 1.5 = 3 beats). 1.3 × 3 = 3.9 is more than the floor.
+    const beatSeconds = 60 / 80
+    const intents = [still(1, { weight: 'hold' }), still(2), still(3), still(4, { hero: true })]
+    const out = fit(ENERGY, intents, 12, beatSeconds, 1, fps)!
+    expect(out).not.toBeNull()
+    const hero = out.lengths[3]
+    for (const l of out.lengths.slice(0, 3)) expect(hero).toBeGreaterThanOrEqual(LEAD * l - 1e-9)
+  })
+
+  it('the hero never goes under its floor, even when every other shot is held at its minimum', () => {
+    // Six stills at their one-beat minimum leave four beats; a wedding's floor at 100 BPM is ten.
+    const intents = Array.from({ length: 7 }, (_, i) => still(i + 1, { hero: i === 3, weight: 'quick' }))
+    expect(fit(WEDDING_HIGHLIGHT, intents, 10, 0.6, 1, fps)).toBeNull()
+    expect(fit(WEDDING_HIGHLIGHT, intents.slice(2, 5), 12, 0.6, 1, fps)).not.toBeNull()
+  })
+
+  it('a short song drops shots before the hero gives up its floor', () => {
+    // Eight photos in 12 s of a wedding: keeping all eight would squeeze the six-second hold.
+    const grid = rhythmGrid(song(100, 12), { fps, seconds: 12, tempo: 90 })
+    const intents = Array.from({ length: 8 }, (_, i) => still(i + 1, { hero: i === 3 }))
+    const l = layout(WEDDING_HIGHLIGHT, grid, intents)
+    expect(l.dropped.length).toBeGreaterThan(0)
+    const hero = l.shots.find((x) => x.hero)!
+    expect(hero.endFrame - hero.startFrame).toBeGreaterThanOrEqual(6 * fps)
+  })
+
+  it('a clip held to its footage gives its time back to every shot, not only the next one', () => {
+    // Fashion paces evenly; a one-second clip second in line. Its unused time is shared out,
+    // so the shot after it is not twice the length of the shot before it.
+    const grid = rhythmGrid(song(100, 30), { fps, seconds: 30, tempo: 90 })
+    const intents = [still(1), { ...still(2), kind: 'video' as const, footageFrames: fps }, still(3), still(4, { hero: true }), still(5)]
+    const l = layout(FASHION, grid, intents)
+    const [a, clip, c] = spans(l)
+    expect(clip).toBeLessThanOrEqual(fps)
+    // The design's own ratio between shot 3 and shot 1 — the curve makes the middle longer on purpose.
+    const design = FASHION.pacing(2 / 4) / FASHION.pacing(0)
+    expect(c / a).toBeLessThan(design * 1.15)
+    expect(c / a).toBeGreaterThan(design * 0.85)
   })
 })
 

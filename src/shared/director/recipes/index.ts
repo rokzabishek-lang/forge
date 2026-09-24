@@ -21,6 +21,7 @@ export const WEDDING_HIGHLIGHT: Recipe = {
   name: 'Wedding highlight',
   intent: 'Emotional holds on faces, a gentle build, one warm grade — the day, not a sale.',
   forKind: 'weddings, engagements, family events',
+  roles: ['hook', 'story', 'cta'],
   // A gentle build: four beats a shot at the start, two by the end.
   pacing: (p) => lerp(4, 2, p),
   tempo: 90,
@@ -43,6 +44,7 @@ export const PRODUCT_REVEAL: Recipe = {
   name: 'Product reveal',
   intent: 'Slow wides and details building to one hero shot, then silence, black, and the name.',
   forKind: 'a product: cosmetics, gadgets, food and drink, fashion items',
+  roles: ['hook', 'story', 'product', 'offer', 'cta'],
   // Slow at first, tightening to a beat a shot before the reveal.
   pacing: (p) => (p < 0.5 ? lerp(4, 2, p * 2) : lerp(2, 1, (p - 0.5) * 2)),
   tempo: 100,
@@ -65,6 +67,7 @@ export const ENERGY: Recipe = {
   name: 'Energy',
   intent: 'Accelerating cuts on the beat, hits on the drops, a ramp — sport, launches, hype.',
   forKind: 'sport, fitness, launches, events with a crowd',
+  roles: ['hook', 'problem', 'product', 'proof', 'offer', 'cta'],
   // Accelerating: two beats a shot down to half a beat, exponentially.
   pacing: (p) => 2 * Math.pow(0.25, Math.max(0, Math.min(1, p))),
   tempo: 124,
@@ -87,6 +90,7 @@ export const TRAILER: Recipe = {
   name: 'Trailer',
   intent: 'Three acts: slow set-up, rising stakes, a climax into black and the title.',
   forKind: 'films, launches with a story, events with a build-up',
+  roles: ['hook', 'story', 'product', 'cta'],
   // Act one slow, act two rising, act three a cut every half beat.
   pacing: (p) => (p < 0.3 ? 4 : p < 0.8 ? lerp(4, 1, (p - 0.3) / 0.5) : 0.5),
   tempo: 100,
@@ -109,6 +113,7 @@ export const FASHION: Recipe = {
   name: 'Fashion / perfume',
   intent: 'Slow, spare, negative space, minimal type — let the picture carry it.',
   forKind: 'fashion, perfume, jewellery, luxury',
+  roles: ['hook', 'story', 'product', 'cta'],
   // Slow throughout, five to seven beats, longest in the middle.
   pacing: (p) => 5 + 2 * Math.sin(Math.PI * Math.max(0, Math.min(1, p))),
   tempo: 90,

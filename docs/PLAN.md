@@ -456,6 +456,35 @@ left out — near-duplicate of slot_03 (slot_03 is sharper)".
 >   many shots as it needs, one at a time.
 > - A calm or premium brief that says wedding (in English, Telugu or Hindi
 >   words) is a wedding without a model.
+>
+> **Built 2026-09-24, second part: `spine@2` without a model** —
+> `schema2.ts`, `prompt2.ts`, `validate2.ts`, `baseline2.ts`, `compose.ts`,
+> `apply2.ts`, each recipe's `roles`; tests `directorSpine2` and the render
+> check `spine2Render` (the standard cut of a product reveal, applied and read
+> back frame by frame). As built:
+> - **One flat decode, so the enums are unions** across the recipes (styles,
+>   animations, moves); the validator repairs a choice from another recipe to
+>   the chosen recipe's own, where `spine@1` would have rejected it. It also
+>   repairs order, an unknown recipe (to the tone's), a hero that is not a
+>   candidate, a speed on a still, a ramp on a clip that speaks, and a punch
+>   word not in its headline. It still rejects a cut-off answer, the wrong
+>   shape, and a plan with no usable shot.
+> - **The prompt gives the music in one sentence** and no table of cuts; the
+>   playbook is one constant, so a server caches it.
+> - **Headline room is counted in graphemes** after timing, and a line too
+>   long for its card is dropped from a copy — the model's plan is not edited.
+> - **The look is one adjustment layer below the cards**, so the type is not
+>   graded; the black and the end card's colour card are on V1.
+> - **The render check found an export bug**: a look at partial strength was
+>   blended the wrong way round (`EFFECTS.md` §LUTs) — 0.75 exported as 0.25.
+>   Fixed in `plan.ts` for both a clip's look and an adjustment layer's.
+> - **The hero's floor holds when every other shot is at its minimum** (the
+>   engine let it fall to 1.9 s of a 2 s floor there); a shot is dropped
+>   instead, and a headlined shot is the last to go.
+> - **Not yet**: `direct()`, the eval and the Director panel still run
+>   `spine@1`; no Recipe picker; ramps are noted and played at normal speed;
+>   the hold clip, J/L cuts and treatments are not drawn; stills are still
+>   letterboxed (C0), as the render check's frames show.
 
 This is the step that removes the slideshow tell. Everything the research
 found — a shape to the rhythm, hierarchy, motivated cuts, a designed ending,

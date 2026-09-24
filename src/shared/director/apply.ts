@@ -36,7 +36,11 @@ import { fitHeadline } from './baseline'
 
 export const SPINE_RULE = 'director.spine'
 export const COPY_RULE = 'director.copy'
-export const DIRECTOR_RULES: readonly string[] = [SPINE_RULE, COPY_RULE]
+/** The black before the end card and the end card itself (apply2.ts). */
+export const ENDING_RULE = 'director.ending'
+/** The recipe's one grade, an adjustment layer over the shots (apply2.ts). */
+export const LOOK_RULE = 'director.look'
+export const DIRECTOR_RULES: readonly string[] = [SPINE_RULE, COPY_RULE, ENDING_RULE, LOOK_RULE]
 
 /**
  * The accent on the punch word.
@@ -108,8 +112,9 @@ export function clearDirector(project: Project): Project {
   const gone = new Set(removed.map((c) => c.id))
   const survivors = project.clips.filter((c) => !gone.has(c.id))
   const stillUsed = new Set(survivors.map((c) => c.assetId))
-  // Only the cards — never footage, even when a shot was its only reference.
-  const cardAssets = new Set(removed.filter((c) => c.text).map((c) => c.assetId))
+  // Only what the director DREW — cards, colour cards, the look layer — never footage,
+  // even when a shot was its only reference.
+  const cardAssets = new Set(removed.filter((c) => c.text || c.solid || c.adjustment).map((c) => c.assetId))
 
   return {
     ...project,
@@ -395,7 +400,8 @@ export function trimMusic(music: Clip, adEnd: number, fps: number): Clip {
   }
 }
 
-function hasSpeech(project: Project, asset: MediaAsset, frames: number, fps: number): boolean {
+/** Does someone speak in the first `frames` of this clip — from the transcript, never the model. */
+export function hasSpeech(project: Project, asset: MediaAsset, frames: number, fps: number): boolean {
   const transcript = project.transcripts[asset.id]
   if (!transcript) return false
   return wordsInRange(transcript, 0, (frames / fps) * 1000).length > 0

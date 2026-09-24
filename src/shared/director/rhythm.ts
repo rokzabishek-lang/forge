@@ -270,7 +270,7 @@ function scaleTo(lengths: number[], total: number): number[] {
  * the ad then ends early; null when the shots cannot fit at their shortest,
  * and one must go.
  */
-function fit(
+export function fit(
   recipe: Recipe,
   shots: ShotIntent[],
   W: number,
@@ -366,7 +366,8 @@ function solveFree(
 
   const hero0 = Math.max(heroTarget, HERO_LEAD * M, HERO_LEAD * Mfixed)
   if (R === 0) {
-    if (Wr < minBeats) return null
+    // Every other shot is held at a bound: the hero takes what is left — never less than its floor.
+    if (Wr < Math.max(minBeats, floor, HERO_LEAD * Mfixed)) return null
     return Wr > hero0 * MAX_STRETCH ? { lengths: assemble(0, hero0 * MAX_STRETCH), short: true } : { lengths: assemble(0, Wr), short: false }
   }
   const f = Wr / (R + hero0)
