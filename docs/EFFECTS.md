@@ -74,6 +74,18 @@ Alpha is held at full through that blend (`c3_opacity=1`). Without it a
 half-strength look would also make a sticker half-transparent. Measured on a
 40%-alpha source, the alpha comes out `0x66` either way.
 
+**`blend`'s opacity weights its FIRST input** — measured: red first, blue
+second, `all_mode=normal` at 0.8 gives `rgb(202, 0, 47)`, at 0.2
+`rgb(49, 0, 202)`. The first input is the ungraded copy (it has to be: a
+`blend` disabled by `enable` passes its first input through, which is how an
+adjustment layer stops outside its span), so its opacity is `1 − intensity`.
+Until 24 Sept 2026 it was `intensity`, and every partial look exported
+inverted — 0.8 came out at 0.2, and the preview, which mixes the right way
+round, disagreed with every export. **Every render check used 0.5**, the one
+value at which a mix and its inverse are the same picture. Found by the
+`spine@2` render check, whose recipe look is 0.75. Test partial strengths at
+an asymmetric value.
+
 Seven looks ship generated rather than licensed — lift/gamma/gain, an S-curve,
 split-toning — written out as ordinary `.cube` files. There is therefore one
 kind of LUT in the product: a file with a path. A look the user loads goes down

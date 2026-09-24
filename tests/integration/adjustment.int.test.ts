@@ -177,6 +177,22 @@ describe('adjustment layers', () => {
     }
   }, 120_000)
 
+  it('an adjustment layer’s look at 0.8 is stronger than at 0.2 — the intensity is the look’s share', async () => {
+    // At 0.5 a mix and its inverse are the same picture; this layer's blend had them the wrong way round.
+    const cube = join(dir, 'white.cube')
+    await writeFile(cube, `LUT_3D_SIZE 2\n${'1 1 1\n'.repeat(8)}`)
+    const plain = await meanAt(await render({ ...adjustedProject({}), clips: [clip('c-under', 'grey', 'v1')] }), 1)
+    const at = async (intensity: number): Promise<number> =>
+      meanAt(await render(adjustedProject({ color: { brightness: 0, contrast: 1, saturation: 1, lut: { file: cube, intensity } } })), 1)
+    const full = await at(1)
+    const strong = await at(0.8)
+    const weak = await at(0.2)
+    // A white look at 0.8 takes the grey most of the way to what full strength does; at 0.2, a fifth of it.
+    expect(full - plain, 'the look at full strength').toBeGreaterThan(30)
+    expect(strong - plain, 'the lift at 0.8').toBeGreaterThan(0.6 * (full - plain))
+    expect(weak - plain, 'the lift at 0.2').toBeLessThan(0.4 * (full - plain))
+  }, 120_000)
+
   it('carries a LUT as well as the sliders', () => {
     const graph = buildRenderPlan({
       project: adjustedProject({

@@ -1242,7 +1242,10 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
       if (lut!.intensity >= 0.999) {
         filters.push(`${input}${inRgb([`lut3d=file=${file}:interp=tetrahedral`])}[${prefix}r${i}]`)
       } else {
-        const mix = lut!.intensity.toFixed(3)
+        // `blend`'s opacity weights its FIRST input, which is the ungraded copy (measured:
+        // red over blue at 0.8 comes out 80 % red). So the ungraded copy gets 1 − intensity.
+        // Every render check used 0.5, where the inverted mix and the right one agree.
+        const mix = (1 - lut!.intensity).toFixed(3)
         filters.push(`${input}split[${prefix}a${i}][${prefix}b${i}]`)
         filters.push(`[${prefix}b${i}]${inRgb([`lut3d=file=${file}:interp=tetrahedral`])}[${prefix}l${i}]`)
         filters.push(
@@ -1311,7 +1314,8 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
           filters.push(`${stream}${inRgb([`lut3d=file=${file}:interp=tetrahedral:${gate}`], 'yuv420p')}${out}`)
           stream = out
         } else {
-          const mix = look.intensity.toFixed(3)
+          // The first input — the ungraded copy — is the one `blend`'s opacity weights (see applyLook).
+          const mix = (1 - look.intensity).toFixed(3)
           const a = nextLabel()
           const b = nextLabel()
           const graded = nextLabel()

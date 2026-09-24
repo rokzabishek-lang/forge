@@ -191,6 +191,19 @@ describe('grading', () => {
       expect(b).toBeGreaterThan(60)
     }, 120_000)
 
+    it('the intensity is the LOOK’s share: most of the swap at 0.8, most of the picture at 0.2', async () => {
+      /*
+       * Half strength cannot tell a mix from its inverse — both are purple. The
+       * export blended the ungraded copy AT the intensity for as long as every
+       * check used 0.5: a look at 0.8 came out at 0.2, and the preview (which
+       * mixes the right way round) disagreed with the export everywhere else.
+       */
+      const strong = await centreColour({ ...NEUTRAL, lut: { file: swapLut, intensity: 0.8 } })
+      const weak = await centreColour({ ...NEUTRAL, lut: { file: swapLut, intensity: 0.2 } })
+      expect(strong[2], 'blue at 0.8').toBeGreaterThan(strong[0] + 60)
+      expect(weak[0], 'red at 0.2').toBeGreaterThan(weak[2] + 60)
+    }, 120_000)
+
     it('does nothing at zero intensity', async () => {
       const [r, , b] = await centreColour({ ...NEUTRAL, lut: { file: swapLut, intensity: 0 } })
       expect(r).toBeGreaterThan(180)
