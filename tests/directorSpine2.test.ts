@@ -201,6 +201,23 @@ describe('the standard cut, composed and applied', () => {
     expect(cleared.assets.map((x) => x.id).sort()).toEqual(p.assets.map((x) => x.id).sort())
   })
 
+  it('a clip that speaks keeps its sound and the music ducks under it; a silent clip is muted', () => {
+    // Words from a third of a second in: a speech test that compared seconds with milliseconds looked at the
+    // first millisecond and heard nothing (a mutation check found it untested).
+    const words = [{ index: 0, text: 'Hello', startMs: 350, endMs: 700, confidence: 1 }, { index: 1, text: 'there.', startMs: 750, endMs: 1100, confidence: 1 }]
+    const withSpeech = project()
+    withSpeech.transcripts = { clip: { assetId: 'clip', language: 'en', model: 'm', durationMs: 4000, words, segments: segmentIntoSentences(words) } }
+    for (const [p, speaks] of [[withSpeech, true], [project(), false]] as const) {
+      const m = menu(p)
+      const v = ok(validateSpine2(plan([shot('slot_01', { role: 'hook' }), shot('slot_02'), shot('slot_04', { weight: 'hold' })], { recipe: 'fashion', style: 'clean', animation: 'fade' }), m))
+      const a = applyRecipe(p, composeAd(v.plan, v.recipe, m, grid), m, { fps, videoTrackId: 'v1', brief, model: 'm', catalogue: [], musicClipId: 'music', newId: (x) => `${x}-${Math.random()}` })
+      const clip = a.project.clips.find((x) => x.assetId === 'clip')!
+      expect(clip.volume, speaks ? 'speaking' : 'silent').toBe(speaks ? 1 : 0)
+      const musicTrack = a.project.tracks.find((t) => t.id === 'a1')!
+      expect(Boolean(musicTrack.duck), speaks ? 'ducked under speech' : 'not ducked').toBe(speaks)
+    }
+  })
+
   it('a slow hero clip plays at half speed and still fits its footage', () => {
     const p = project()
     const m = { ...menu(p), heroCandidates: ['slot_04'] }

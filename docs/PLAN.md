@@ -481,10 +481,30 @@ left out — near-duplicate of slot_03 (slot_03 is sharper)".
 > - **The hero's floor holds when every other shot is at its minimum** (the
 >   engine let it fall to 1.9 s of a 2 s floor there); a shot is dropped
 >   instead, and a headlined shot is the last to go.
-> - **Not yet**: `direct()`, the eval and the Director panel still run
->   `spine@1`; no Recipe picker; ramps are noted and played at normal speed;
->   the hold clip, J/L cuts and treatments are not drawn; stills are still
->   letterboxed (C0), as the render check's frames show.
+> - ~~`direct()`, the eval and the Director panel still run `spine@1`; no
+>   Recipe picker~~ — **wired 2026-09-25** (below).
+> - **Not yet**: ramps are noted and played at normal speed; the hold clip,
+>   J/L cuts and treatments are not drawn; coherence.ts (§5.4) is not built;
+>   stills are still letterboxed (C0), as the render check's frames show.
+>
+> **Built 2026-09-25, third part: wired in (§5.6)** — `direct()` runs
+> `spine@2` through `run.ts`'s `gridsFor` / `menu2For` / `settle2`, the same
+> functions the eval now uses; the Director panel has the **Recipe** picker
+> (Auto or one recipe; a pinned recipe is the only one offered and the one the
+> standard cut uses) and says which recipe directed the ad and which picture it
+> was built around; the decision is recorded as `spine@2`; the store draws the
+> black, the end card's ground and the look layer's transparent picture
+> history-less. The eval prepares, asks and scores `spine@2` (a pinned recipe
+> with `FORGE_EVAL_RECIPE`), and its renders now carry the black and the grade.
+> `holds` — how many shots the music holds — is asked of the rhythm engine
+> itself: the most it keeps, and the fewest that fill the ad.
+> **Mutation check, C2: 51 of 51 caught** after four gaps were closed — the
+> stretch limit (a design stretched 1.31× must fill, 1.79× must end early),
+> the post-snap repair's giver order (reversed, it changed 299 of 3,000 random
+> ads), Energy's curve run backwards (it climbs one beat a shot, inside the
+> step test's one-beat tolerance — the ends are now compared too), and
+> `hasSpeech` comparing seconds with milliseconds. C1's two survivors re-check
+> as caught.
 
 This is the step that removes the slideshow tell. Everything the research
 found — a shape to the rhythm, hierarchy, motivated cuts, a designed ending,

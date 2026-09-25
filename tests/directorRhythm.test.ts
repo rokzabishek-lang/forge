@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { MusicAnalysis } from '@shared/automation/cutPlan'
-import { ENERGY, FASHION, PRODUCT_REVEAL, RECIPES, WEDDING_HIGHLIGHT, type Recipe } from '@shared/director/recipes'
+import { ENERGY, FASHION, PRODUCT_REVEAL, RECIPES, TRAILER, WEDDING_HIGHLIGHT, type Recipe } from '@shared/director/recipes'
 import { MIN_SHOT_SECONDS, fit, layout, rhythmGrid, snapIndices, type Layout, type ShotIntent } from '@shared/director/rhythm'
 
 /** The hero's lead, as a literal: a check computed from the constant under test moves with it. */
@@ -247,11 +247,49 @@ describe('the ending and the edges', () => {
 describe('what the fit is for — not only what the repairs catch', () => {
   it('an accelerating ad keeps its shape with the hero last: every earlier shot no longer than the one before', () => {
     // The fit scales the whole design; a post-snap repair alone would take the hero's time from ONE shot and break the curve.
-    const grid = rhythmGrid(song(120, 16), { fps, seconds: 16, tempo: 120 })
-    const intents = Array.from({ length: 8 }, (_, i) => still(i + 1, { hero: i === 7 }))
-    const l = layout(ENERGY, grid, intents)
-    const body = spans(l).slice(0, -1)
-    for (let i = 1; i < body.length; i++) expect(body[i], `shot ${i + 1}`).toBeLessThanOrEqual(body[i - 1] + grid.beatFrames)
+    // Two songs: the step rule allows a beat of rounding, so a curve run BACKWARDS can climb a beat a shot and
+    // pass it — measured, with Energy's curve inverted: 15 30 30 30 45 45 60. The ends must also be in order.
+    for (const [bpm, seconds, n] of [[120, 16, 8], [100, 24, 10]]) {
+      const grid = rhythmGrid(song(bpm, seconds), { fps, seconds, tempo: 120 })
+      const intents = Array.from({ length: n }, (_, i) => still(i + 1, { hero: i === n - 1 }))
+      const l = layout(ENERGY, grid, intents)
+      const body = spans(l).slice(0, -1)
+      const ctx = `${bpm} BPM, ${n} shots`
+      for (let i = 1; i < body.length; i++) expect(body[i], `${ctx}: shot ${i + 1}`).toBeLessThanOrEqual(body[i - 1] + grid.beatFrames)
+      expect(body[0], `${ctx}: the first shot is longer than the last before the hero`).toBeGreaterThanOrEqual(body.at(-1)! + 2 * grid.beatFrames)
+    }
+  })
+
+  it('a song up to half again as long as the design is filled by stretching; past that, the ad ends early', () => {
+    // Six stills, the hero fourth, at 100 BPM: the wedding's design is 25.2 beats (measured: at the stretch limit
+    // it lays out 6, 5.4, 4.8, 15, 3.6, 3 beats = 37.8). A 33-beat window is 1.31× — stretched to fill it;
+    // a 45-beat window is 1.79× — the ad stops at the limit and ends early.
+    const intents = [1, 2, 3, 4, 5, 6].map((n) => still(n, { hero: n === 4 }))
+    const sum = (xs: number[]): number => xs.reduce((a, b) => a + b, 0)
+    const filled = fit(WEDDING_HIGHLIGHT, intents, 33, 0.6, 1, fps)!
+    expect(filled.short).toBe(false)
+    expect(sum(filled.lengths)).toBeCloseTo(33, 6)
+    const long = fit(WEDDING_HIGHLIGHT, intents, 45, 0.6, 1, fps)!
+    expect(long.short).toBe(true)
+    expect(sum(long.lengths)).toBeCloseTo(1.5 * 25.2, 6)
+  })
+
+  it('the hero’s lead after snapping is taken from the longest shot that can give, not from a short one', () => {
+    // Found by a mutation check (the giver order reversed changed 299 of 3,000 random ads): a Trailer at 120 BPM,
+    // the hero second. The long opening still gives the beat; the short clip after the hero keeps its two
+    // beats, so the last act still tightens — reversed, the clip was cut to one beat and the curve went flat.
+    const grid = rhythmGrid(song(120, 28, { sections: [5382] }), { fps, seconds: 28, tempo: 100 })
+    const intents = [
+      still(1, { weight: 'hold', face: true }),
+      still(2, { weight: 'quick', hero: true }),
+      { ...still(3, { weight: 'quick' }), kind: 'video' as const, footageFrames: 175 },
+      still(4, { weight: 'hold', face: true })
+    ]
+    const l = layout(TRAILER, grid, intents)
+    invariants(TRAILER, grid, intents, l)
+    const s = spans(l)
+    expect(s[2], 'the clip after the hero keeps its two beats').toBe(2 * grid.beatFrames)
+    expect(s[2]).toBeGreaterThan(s[3])
   })
 
   it('the design itself gives the hero its lead, before any repair', () => {
