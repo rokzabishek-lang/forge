@@ -2,11 +2,15 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { TRANSITIONS } from '@shared/transitions/registry'
-import { maxTokensFor } from '@shared/director/prompt'
+import { maxTokensFor2 } from '@shared/director/prompt2'
+import type { Menu2 } from '@shared/director/schema2'
+import { lookById, type Rgb } from '@shared/render/looks'
+import { ENERGY } from '@shared/director/recipes'
 import type { Fixture } from '../eval/fixtures'
 import { loadFixtures } from '../eval/fixtures'
 import { makeFixtureMedia } from '../eval/media'
 import {
+  menuOf,
   prepareFixture,
   requestFor,
   scoreFixture,
@@ -17,21 +21,24 @@ import {
 import { outputDir, pixelAt, saveFrame, writeNote } from './output'
 
 /**
- * The Director eval's pipeline, end to end, without a model (docs/PLAN.md §3).
+ * The Director eval's pipeline, end to end, without a model (docs/PLAN.md §3),
+ * on `spine@2`.
  *
  * The eval is how every later change to the Director is judged, so its own
  * accounting has to be right: a brief must become the request the app would
- * send, and an answer must be scored and RENDERED the way `direct()` applies it.
- * This drives one committed brief through prepare → a canned answer → score,
- * and reads the rendered frames: each shot shows the photo the plan put there.
- * No sidecar (CI has a bare interpreter), so the menu is the even grid — the
- * same fallback the app takes without the beat analysis.
+ * send, and an answer must be settled and RENDERED the way `direct()` applies
+ * it. This drives one committed brief through prepare → a canned answer →
+ * score, and reads the rendered frames: each shot shows the photo the plan put
+ * there, for the span the rhythm engine gave it; the black is black. No sidecar (CI has a bare
+ * interpreter), so the grid is the song's tempo from the recipe — the same
+ * fallback the app takes without the beat analysis.
  */
 
 let dir = ''
 let fixture: Fixture
 let prepared: Prepared
 let request: EvalRequest
+let menu: Menu2
 
 const answer = (content: string, finish = 'stop'): EvalResponse => ({
   id: request.id,
@@ -40,28 +47,33 @@ const answer = (content: string, finish = 'stop'): EvalResponse => ({
   data: { choices: [{ message: { content }, finish_reason: finish }], usage: { prompt_tokens: 800, completion_tokens: 300 } }
 })
 
-/** The four cuts the canned plan ends on: the first three, then the end — a plan that covers the ad. */
-function ends(): Prepared['menu']['cuts'] {
-  const cuts = prepared.menu.cuts.filter((c) => c.reason !== 'start')
-  return [...cuts.slice(0, 3), cuts[cuts.length - 1]]
-}
-
-/** A plan using the first four slots, hard cuts, a headline each, ending at the end. */
-function plan(): object {
-  const ending = ends()
+/** An Energy plan over the first four pictures, the second the hero, a headline each — every choice from Energy's own lists. */
+function plan(): { reasoning: string; recipe: string; hero: string; style: string; animation: string; shots: Record<string, string>[] } {
+  const slots = menu.slots.slice(0, 4)
   return {
-    reasoning: 'four shots, straight cuts',
-    pace: 'punchy',
-    segments: prepared.menu.slots.slice(0, 4).map((slot, i) => ({
+    reasoning: 'four shots, fast',
+    recipe: 'energy',
+    hero: slots[1].id,
+    style: 'poster-3d',
+    animation: 'pop',
+    shots: slots.map((slot, i) => ({
       slot: slot.id,
       role: ['hook', 'problem', 'product', 'cta'][i],
-      ends_at: ending[i].id,
-      enter: 'cut',
+      weight: i === 1 ? 'hold' : 'normal',
+      move: 'in',
+      speed: 'normal',
       headline: ['Run faster', 'Less weight', 'Stride X2', 'Get yours'][i],
       punch_word: '',
       why: 'test'
     }))
   }
+}
+
+/** A colour through a look at a strength: what the export's LUT blend should produce. */
+function graded(hex: string, lookId: string, intensity: number): number[] {
+  const rgb = [1, 3, 5].map((k) => parseInt(hex.slice(k, k + 2), 16) / 255) as Rgb
+  const looked = lookById(lookId)!.apply(rgb)
+  return rgb.map((v, i) => Math.round(255 * (v + (looked[i] - v) * intensity)))
 }
 
 beforeAll(async () => {
@@ -70,10 +82,11 @@ beforeAll(async () => {
   const made = await makeFixtureMedia(fixture, join(dir, 'media'), undefined)
   prepared = await prepareFixture(fixture, made, { analyseBeats: null, transitions: TRANSITIONS })
   request = requestFor(prepared, { provider: 'openai', model: 'fake-model', think: false })
+  menu = menuOf(prepared).menu
 }, 300_000)
 
 describe('the eval pipeline', () => {
-  it('builds the request the app would send', () => {
+  it('builds the spine@2 request the app would send', () => {
     const body = request.body as {
       model: string
       max_tokens: number
@@ -81,54 +94,94 @@ describe('the eval pipeline', () => {
       messages: { role: string; content: string }[]
     }
     expect(request.path).toBe('/v1/chat/completions')
+    expect(request.id).toBe('product-sneaker.spine2')
     expect(body.model).toBe('fake-model')
-    expect(body.max_tokens).toBe(maxTokensFor(prepared.menu))
+    expect(body.max_tokens).toBe(maxTokensFor2(menu))
     expect(body.response_format.json_schema.strict).toBe(true)
-    expect(Object.keys(body.response_format.json_schema.schema.properties)[0]).toBe('reasoning')
+    const properties = Object.keys(body.response_format.json_schema.schema.properties)
+    expect(properties[0]).toBe('reasoning')
+    expect(properties).toContain('recipe')
     expect(body.messages[1].content).toContain('product: Stride X2 running shoe')
     // The user's order, the user's notes — what the model reads about each picture.
     expect(body.messages[1].content).toMatch(/slot_01 {2}image {2}"IMG 0911" {2}— shoe side profile/)
+    // The music as a sentence; no cut table to time.
+    expect(body.messages[1].content).toMatch(/MUSIC: 15\.0 s at \d+ BPM/)
+    expect(body.messages[1].content).not.toContain('cut_')
     expect(prepared.beats).toBe('grid')
+    // The menu survives the prepared file: rebuilt from it, the same.
+    expect(menuOf(JSON.parse(JSON.stringify(prepared)) as Prepared).menu.holds).toEqual(menu.holds)
   })
 
-  it('scores a good answer as used, and renders each photo in its own span', async () => {
+  it('scores a good answer as used, and renders each photo in the span the engine gave it', async () => {
     const result = await scoreFixture(fixture, prepared, request, answer(JSON.stringify(plan())), {
       model: 'fake-model',
       render: { dir: join(dir, 'renders'), extraTransitions: [] }
     })
+    // Four shots do not fill 15 s of Energy, so the engine notes the ad ends early — a note about the
+    // music, not a repair of the model's plan: the plan is still "used".
+    expect(result.problems.join(' ')).toMatch(/the ad ends at/)
     expect(result.verdict).toBe('used')
+    expect(result.recipe).toBe('energy')
     expect(result.promptTokens).toBe(800)
     expect(result.headlines.map((h) => h.text)).toEqual(['Run faster', 'Less weight', 'Stride X2', 'Get yours'])
-    expect(result.renders.model).not.toBeNull()
     expect(existsSync(result.renders.model!)).toBe(true)
     expect(existsSync(result.renders.baseline!)).toBe(true)
 
-    const fps = prepared.menu.fps
-    const ending = ends()
-    const starts = [0, ...ending.slice(0, 3).map((c) => c.frame)]
-    const lines: string[] = ['# evalPipeline', '', 'The model render, sampled at the middle of each shot (540×960 centre):', '']
-    for (let i = 0; i < 4; i++) {
-      const mid = (starts[i] + ending[i].frame) / 2 / fps
-      const want = fixture.media[i].colour
-      const [r, g, b] = await pixelAt(result.renders.model!, mid, 270, 480, { width: 540, height: 960 })
+    const fps = menu.fps
+    const intensity = 0.6 + 0.3 * ENERGY.intensity
+    const lines: string[] = [
+      '# evalPipeline',
+      '',
+      `The model render (Energy, teal-orange at ${intensity.toFixed(3)}), each shot three frames before its end (540×960 centre).`,
+      'Sampled late: a transition blends over the FIRST frames of the incoming shot (anchorTransition), so a short',
+      'shot\'s middle can still be mid-blend. The expected colour is the photo through the look; on colours this',
+      'saturated the look moves a channel by 4–10, inside the tolerance, so this checks the PICTURE — the grade\'s',
+      'strength is spine2Render\'s check, with a LUT that maps everything to black.',
+      ''
+    ]
+    const colourOf = new Map(menu.slots.map((s, i) => [s.id, fixture.media[i].colour]))
+    // Measure everything and write it down first, so a failure can be read from the note.
+    const samples: { i: number; got: number[]; want: number[]; plain: number[] }[] = []
+    for (const [i, shot] of result.timing.entries()) {
+      const mid = (shot.endFrame - 3) / fps
+      const want = graded(colourOf.get(shot.slot)!, 'teal-orange', intensity)
+      const plain = graded(colourOf.get(shot.slot)!, 'teal-orange', 0)
+      const got = await pixelAt(result.renders.model!, mid, 270, 480, { width: 540, height: 960 })
       await saveFrame(result.renders.model!, mid, join(dir, `shot${i + 1}.png`))
-      lines.push(`- shot ${i + 1} at ${mid.toFixed(2)} s: rgb(${r}, ${g}, ${b}), want ${want}`)
-      const hex = [1, 3, 5].map((k) => parseInt(want.slice(k, k + 2), 16))
-      expect(Math.abs(r - hex[0]), `shot ${i + 1} red`).toBeLessThan(14)
-      expect(Math.abs(g - hex[1]), `shot ${i + 1} green`).toBeLessThan(14)
-      expect(Math.abs(b - hex[2]), `shot ${i + 1} blue`).toBeLessThan(14)
+      samples.push({ i, got, want, plain })
+      lines.push(`- shot ${i + 1} ${shot.slot}${shot.hero ? ' (hero)' : ''} at ${mid.toFixed(2)} s: rgb(${got.join(', ')}), want rgb(${want.join(', ')}) — ungraded rgb(${plain.join(', ')})`)
     }
+    const afterBody = (result.timing.at(-1)!.endFrame + 2) / fps
+    const black = await pixelAt(result.renders.model!, afterBody, 270, 480, { width: 540, height: 960 })
+    lines.push('', `- just after the last shot, ${afterBody.toFixed(2)} s: rgb(${black.join(', ')}) — the black`)
     await writeNote(dir, lines)
+
+    for (const { i, got, want } of samples) {
+      for (let k = 0; k < 3; k++) expect(Math.abs(got[k] - want[k]), `shot ${i + 1} channel ${k}`).toBeLessThan(16)
+    }
+    // The hero holds longest; the black after the last shot is black.
+    const heroSpan = result.timing.filter((s) => s.hero).map((s) => s.endFrame - s.startFrame)[0]
+    for (const s of result.timing.filter((x) => !x.hero)) expect(heroSpan).toBeGreaterThan(s.endFrame - s.startFrame)
+    expect(Math.max(...black)).toBeLessThan(24)
   })
 
-  it('an answer the validator had to repair is counted as repaired, with the repair named', async () => {
-    const long = plan() as { segments: { headline: string }[] }
-    long.segments[0].headline = 'A headline far too long to read on a two second shot'
+  it('a style from another recipe is repaired, not rejected, and the repair is named', async () => {
+    const other = plan()
+    other.style = 'soft-fade'
+    const result = await scoreFixture(fixture, prepared, request, answer(JSON.stringify(other)), { model: 'fake-model', render: null })
+    expect(result.verdict).toBe('repaired')
+    expect(result.applied.style).toBe('poster-3d')
+    expect(result.problems.join(' ')).toMatch(/style/)
+  })
+
+  it('a headline too long for its shot is counted against the shot before it is dropped', async () => {
+    const long = plan()
+    long.shots[0].headline = 'A headline far too long to read on a shot this short at this tempo'
     const result = await scoreFixture(fixture, prepared, request, answer(JSON.stringify(long)), { model: 'fake-model', render: null })
     expect(result.verdict).toBe('repaired')
     expect(result.problems.join(' ')).toMatch(/too long to read/)
-    // Counted against its span BEFORE the repair took it off.
     expect(result.headlines[0]).toMatchObject({ fits: false })
+    expect(result.applied.shots[0].headline).toBe('')
   })
 
   it('builds Ollama’s request with the schema as its format, and thinking as asked', () => {
@@ -149,6 +202,8 @@ describe('the eval pipeline', () => {
     expect(result.why).toMatch(/no JSON object/)
     expect(result.renders.model).toBeNull()
     expect(existsSync(result.renders.baseline!)).toBe(true)
+    // The standard cut is the tone's recipe: an energetic brief is an Energy ad.
+    expect(result.recipe).toBe('energy')
   })
 
   it('an answer cut off at the token cap is rejected as running out of room', async () => {

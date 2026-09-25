@@ -165,12 +165,15 @@ import {
   type SplitLayout
 } from '@shared/render/layout'
 import type { DecisionRecord } from '@shared/project'
-import { applySpine, clearDirector, decisionFor, occupiedBy } from '@shared/director/apply'
-import { BASELINE_MODEL, baselineSpine } from '@shared/director/baseline'
+import { clearDirector, occupiedBy } from '@shared/director/apply'
+import { applyRecipe, decisionFor2 } from '@shared/director/apply2'
+import { BASELINE_MODEL } from '@shared/director/baseline'
 import type { Problem } from '@shared/director/conforms'
 import { buildSlots } from '@shared/director/menu'
-import { adSeconds, briefFor, menuFor, musicFor } from '@shared/director/run'
-import { maxTokensFor, spinePrompt } from '@shared/director/prompt'
+import { adSeconds, briefFor, gridsFor, menu2For, musicFor, settle2 } from '@shared/director/run'
+import { maxTokensFor2, spine2Prompt } from '@shared/director/prompt2'
+import { spine2Schema } from '@shared/director/schema2'
+import { recipeById, type RecipeId } from '@shared/director/recipes'
 import { askStructured } from '@shared/director/ask'
 import { eyesOf, needsLook, needsMeasure, withVision } from '@shared/director/eyes'
 import { gate, type Measure } from '@shared/director/gate'
@@ -183,8 +186,7 @@ import {
   type OpenAiConfig,
   type PublicDirectorConfig
 } from '@shared/director/provider'
-import { spineSchema, type Brief, type SpinePlan, type Tone } from '@shared/director/schema'
-import { validateSpine, type SegmentLayout, type SpineVerdict } from '@shared/director/validate'
+import type { Brief, Tone } from '@shared/director/schema'
 import { vocabularyPrompt, withWordText, type Transcript } from '@shared/transcript'
 
 /*
@@ -505,6 +507,9 @@ interface EditorState {
   /** A line about each picture, by asset id — what the model reads instead of a filename. */
   slotNotes: Record<string, string>
   setSlotNote: (assetId: string, note: string) => void
+  /** The recipe the user pinned, or 'auto' — the model chooses among them all (docs/PLAN.md §5.6). */
+  directRecipe: RecipeId | 'auto'
+  setDirectRecipe: (recipe: RecipeId | 'auto') => void
   directing: boolean
   /** What the run is doing right now, e.g. "asking the model". */
   directStage: string | null
@@ -515,8 +520,16 @@ interface EditorState {
    */
   seeSlots: (slots: Slot[], brief: Pick<Brief, 'product' | 'language'>) => Promise<string[]>
   clearDirectorOutput: () => void
-  /** What the last run did: who answered, its reasoning, every note. */
-  lastDirection: { model: string; reasoning: string; problems: string[]; baseline: boolean } | null
+  /** What the last run did: who answered, its reasoning, the recipe and hero it chose, every note. */
+  lastDirection: {
+    model: string
+    reasoning: string
+    problems: string[]
+    baseline: boolean
+    /** The recipe that directed it and the picture it was built around (spine@2). */
+    recipe?: { id: RecipeId; name: string; intent: string }
+    hero?: string
+  } | null
   directorStatus: LlmStatus[] | null
   directorConfig: PublicDirectorConfig | null
   refreshDirector: () => Promise<void>
@@ -1620,6 +1633,8 @@ export const useEditor = create<EditorState>((set, get) => ({
   setDirectBrief: (patch) => set((s) => ({ directBrief: { ...s.directBrief, ...patch } })),
   slotNotes: {},
   setSlotNote: (assetId, note) => set((s) => ({ slotNotes: { ...s.slotNotes, [assetId]: note } })),
+  directRecipe: 'auto',
+  setDirectRecipe: (recipe) => set({ directRecipe: recipe }),
   directing: false,
   directStage: null,
   lastDirection: null,
@@ -1725,7 +1740,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
 
   direct: async () => {
-    const { notify, directBrief, slotNotes } = get()
+    const { notify, directBrief, slotNotes, directRecipe } = get()
     const product = directBrief.product.trim()
     if (!product) {
       notify('Name the product first — everything else can stay blank', 'info')
@@ -1793,15 +1808,21 @@ export const useEditor = create<EditorState>((set, get) => ({
       const gated = gate(slots, looks, measures, { wantsPeople: false })
       notes.push(...gated.leftOut.map((l) => `${l.slot} left out — ${l.why}`), ...gated.loosened)
 
+      /*
+       * The spine@2 menu (docs/PLAN.md §5.2): the recipes on offer — all of
+       * them, or the one the user pinned — and the music in a sentence. The
+       * model chooses; the rhythm engine times every frame (shared/director/run.ts,
+       * the same code the Director eval runs).
+       */
       const catalogue = useCatalog.getState().transitions
-      const menu = menuFor(cleared, gated.slots, music, analysis, catalogue, seconds)
+      const pinned = directRecipe === 'auto' ? null : recipeById(directRecipe)
+      const grids = gridsFor(cleared, music, analysis, seconds)
+      const menu = menu2For(cleared, gated, grids, brief, { pinned })
 
       /* Ask — once with thinking off, and once more with it on if prose came back. */
       set({ directStage: 'asking the model' })
-      const { system, user } = spinePrompt(brief, menu)
-      const schema = spineSchema(menu)
-      const maxTokens = maxTokensFor(menu)
-      let verdict: SpineVerdict
+      const { system, user } = spine2Prompt(brief, menu)
+      let answer: Parameters<typeof settle2>[0]
       let model = BASELINE_MODEL
       let runtime = 'baseline'
       try {
@@ -1809,73 +1830,86 @@ export const useEditor = create<EditorState>((set, get) => ({
         // Ollama bug askStructured (shared/director/ask.ts) explains.
         const asked = await askStructured(
           (request) => window.forge.directorComplete(request),
-          { system, user, schema, maxTokens },
+          { system, user, schema: spine2Schema(menu), maxTokens: maxTokensFor2(menu) },
           () => set({ directStage: 'asking again, thinking on' })
         )
         const { result, parsed } = asked
         notes.push(...asked.notes)
         model = result.model
         runtime = result.provider
-        verdict =
-          'error' in parsed
-            ? { rejected: parsed.error, problems: [] }
-            : validateSpine(parsed.value, menu, { truncated: result.truncated })
+        answer = 'error' in parsed ? { error: parsed.error } : { value: parsed.value, truncated: result.truncated }
       } catch (err) {
-        verdict = { rejected: err instanceof Error ? err.message : String(err), problems: [] }
+        answer = { error: err instanceof Error ? err.message : String(err) }
       }
 
-      /* A plan that cannot be used is replaced by the standard cut — never by nothing. */
-      let baseline = false
-      let plan: SpinePlan
-      let layout: SegmentLayout[]
-      if ('rejected' in verdict) {
-        baseline = true
-        notes.unshift(`The model's plan could not be used — ${verdict.rejected}. Built the standard cut instead`)
-        notes.push(...verdict.problems.map(describeProblem))
-        const fallback = validateSpine(baselineSpine(brief, menu), menu)
-        if ('rejected' in fallback) {
-          throw new Error(`Even the standard cut did not fit this music: ${fallback.rejected}`)
-        }
-        plan = fallback.plan
-        layout = fallback.layout
-        notes.push(...fallback.problems.map(describeProblem))
-        model = BASELINE_MODEL
-        runtime = 'baseline'
-      } else {
-        plan = verdict.plan
-        layout = verdict.layout
-        notes.push(...verdict.problems.map(describeProblem))
-      }
-
-      /* Apply, as ONE update: the whole plan is one undo. */
-      set({ directStage: 'placing the shots' })
+      /* Validated and timed — or, when the plan cannot be used, the standard cut. Never nothing. */
       const current = get().project
       const parallaxAssets = new Set(
         Object.entries(current.parallax ?? {})
           .filter(([, bake]) => bake.separated)
           .map(([id]) => id)
       )
-      const applied = applySpine(current, plan, layout, menu, {
+      const settled = settle2(answer, menu, brief, grids, {
+        measures,
+        subjects: parallaxAssets,
+        installed: new Set(catalogue.map((c) => c.family))
+      })
+      const { composed, baseline } = settled
+      if (baseline) {
+        notes.unshift(`The model's plan could not be used — ${settled.rejected}. Built the standard cut instead`)
+        model = BASELINE_MODEL
+        runtime = 'baseline'
+      }
+      notes.push(...settled.problems.map(describeProblem))
+      set({ directStage: `laying out the ${composed.recipe.name}` })
+
+      // The recipe's grade, when the look library has it installed. A library that
+      // will not list is "not installed" — the ad lands ungraded, with a note (apply2).
+      let look: { file: string; name: string } | null = null
+      if (composed.recipe.look !== 'none') {
+        try {
+          look = (await window.forge.builtInLooks()).find((l) => l.id === composed.recipe.look) ?? null
+        } catch (err) {
+          console.warn('The looks could not be listed', err)
+        }
+      }
+
+      /* Apply, as ONE update: the whole plan is one undo. */
+      set({ directStage: 'placing the shots' })
+      const applied = applyRecipe(get().project, composed, menu, {
         fps,
         videoTrackId: videoTrack.id,
         brief,
         model,
         catalogue,
         ...(musicClip ? { musicClipId: musicClip.id } : {}),
-        parallaxAssets
+        parallaxAssets,
+        lookFile: look
       })
       notes.push(...applied.problems.map(describeProblem))
       get().update(() => applied.project)
+      const heroSlot = menu.slots.find((s) => s.id === composed.plan.hero)
       set((s) => ({
-        decisions: [...s.decisions, decisionFor(plan, { id: model, runtime })],
-        lastDirection: { model, reasoning: plan.reasoning, problems: notes, baseline }
+        decisions: [...s.decisions, decisionFor2(composed, { id: model, runtime })],
+        lastDirection: {
+          model,
+          reasoning: composed.plan.reasoning,
+          problems: notes,
+          baseline,
+          recipe: { id: composed.recipe.id, name: composed.recipe.name, intent: composed.recipe.intent },
+          ...(heroSlot ? { hero: heroSlot.label } : {})
+        }
       }))
 
       /*
-       * The cards' PNGs, in the background and history-less. The preview draws
-       * the type live and the export rebakes every generated card, so a missed
-       * write cannot produce a wrong frame — and an undo step per landing PNG
-       * would mean pressing Undo once per card before the plan itself went.
+       * The drawn pictures, in the background and history-less: the headline
+       * cards, the black and the end card's colour card, and the look layer's
+       * own picture — the transparent square every adjustment layer carries,
+       * as addAdjustmentLayer draws it. The preview draws type and colour
+       * live, and the export redraws every generated card (exportBake.ts), so
+       * a missed write cannot produce a wrong frame — and an undo step per
+       * landing PNG would mean pressing Undo once per card before the plan
+       * itself went.
        */
       const { width, height } = applied.project.settings
       for (const clipId of applied.cardClipIds) {
@@ -1885,13 +1919,24 @@ export const useEditor = create<EditorState>((set, get) => ({
           .then((path) => get().fillAssetPath(card.assetId, { path }))
           .catch((err) => console.warn('A headline card did not bake', err))
       }
+      for (const clipId of applied.solidClipIds) {
+        const clip = applied.project.clips.find((c) => c.id === clipId)
+        if (!clip) continue
+        const picture = clip.solid
+          ? { color: clip.solid.color, opacity: clip.solid.opacity, width, height }
+          : { color: '#000000', opacity: 0, width: 16, height: 16 }
+        Promise.resolve()
+          .then(() => window.forge.renderSolid({ ...picture, clipId }))
+          .then((path) => get().fillAssetPath(clip.assetId, { path, width: picture.width, height: picture.height }))
+          .catch((err) => console.warn('A colour card did not draw', err))
+      }
 
       const count = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`
       notify(
-        `${baseline ? 'Standard cut' : `Directed by ${model}`}: ${count(applied.clipIds.length, 'shot')}, ${count(
-          applied.cardClipIds.length,
-          'card'
-        )}${notes.length > 0 ? ` — ${count(notes.length, 'note')}` : ''}`,
+        `${baseline ? `Standard cut, ${composed.recipe.name}` : `${composed.recipe.name}, directed by ${model}`}: ${count(
+          applied.clipIds.length,
+          'shot'
+        )}, ${count(applied.cardClipIds.length, 'card')}${notes.length > 0 ? ` — ${count(notes.length, 'note')}` : ''}`,
         'info'
       )
     } catch (err) {

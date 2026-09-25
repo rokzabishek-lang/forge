@@ -1,8 +1,15 @@
 import type { Clip, MediaAsset, Project } from '../timeline'
 import { framesToSeconds } from '../timeline'
 import type { MusicAnalysis } from '../automation/cutPlan'
+import type { Problem } from './conforms'
 import { buildCutMenu, buildSlots, familyMenu, type Menu, type Slot } from './menu'
-import type { Brief, Tone } from './schema'
+import { MAX_SEGMENTS, type Brief, type Tone } from './schema'
+import { RECIPES, recipeForTone, type Recipe } from './recipes'
+import { layout, rhythmGrid, type Grid, type ShotIntent } from './rhythm'
+import type { Menu2 } from './schema2'
+import { validateSpine2 } from './validate2'
+import { baselineSpine2 } from './baseline2'
+import { composeAd, type Composed } from './compose'
 
 /**
  * The pure half of a Director run: what the music is, how long the ad is, the
@@ -104,6 +111,116 @@ export function menuFor(
     seconds,
     fps
   }
+}
+
+/* ---------------------------------------------------------------- spine@2 */
+
+/**
+ * The beats an ad is cut on, for whichever recipe ends up directing it.
+ *
+ * A function rather than a grid because the recipe is not known until the
+ * model has answered, and with no music the grid IS the recipe's tempo.
+ */
+export function gridsFor(
+  project: Project,
+  music: MusicChoice | null,
+  analysis: MusicAnalysis | null,
+  seconds: number
+): (recipe: Recipe) => Grid {
+  const fps = project.settings.fps
+  return (recipe) =>
+    rhythmGrid(analysis, {
+      fps,
+      seconds,
+      offsetFrames: music?.clip.start ?? 0,
+      ...(music ? { windowMs: music.windowMs } : {}),
+      tempo: recipe.tempo
+    })
+}
+
+/**
+ * How many shots the music holds under a recipe, asked of the rhythm engine
+ * itself: the most it keeps out of what there is, and the fewest that still
+ * fill the ad — fewer than that and it ends early (MAX_STRETCH).
+ */
+export function holdsFor(recipe: Recipe, grid: Grid, available: number): { min: number; max: number } {
+  const stills = (k: number): ShotIntent[] =>
+    Array.from({ length: k }, (_, i) => ({
+      slotId: `s${i}`, kind: 'image', footageFrames: null, weight: 'normal', face: false, hero: i === Math.floor(k / 2), headline: ''
+    }))
+  const all = layout(recipe, grid, stills(Math.max(1, Math.min(MAX_SEGMENTS, available))))
+  const max = Math.max(1, all.shots.length)
+  for (let k = 1; k < max; k++) if (layout(recipe, grid, stills(k)).endFrame >= all.endFrame) return { min: k, max }
+  return { min: max, max }
+}
+
+/**
+ * The `spine@2` menu (docs/PLAN.md §5.2): the gated slots, the recipes on
+ * offer — all of them, or the one the user pinned — the tone's recipe for
+ * when the model's choice cannot be used, the gate's heroes, and the music
+ * as the sentence the prompt gives it.
+ */
+export function menu2For(
+  project: Project,
+  gated: { slots: Slot[]; heroCandidates: string[] },
+  grids: (recipe: Recipe) => Grid,
+  brief: Brief,
+  options: { pinned?: Recipe | null } = {}
+): Menu2 {
+  const fps = project.settings.fps
+  const peopleInSet = gated.slots.some((s) => s.look !== undefined && s.look.people !== 'none')
+  const fallback =
+    options.pinned ?? recipeForTone(brief.tone, { briefText: [brief.product, brief.benefit, brief.audience, brief.cta].join(' '), peopleInSet })
+  const grid = grids(fallback)
+  const drops = [...grid.structural.entries()]
+    .filter(([, s]) => s.reason === 'drop')
+    .map(([frame]) => (frame - grid.start) / fps)
+    .sort((a, b) => a - b)
+  return {
+    slots: gated.slots,
+    recipes: options.pinned ? [options.pinned] : [...RECIPES],
+    fallback,
+    heroCandidates: gated.heroCandidates,
+    fps,
+    seconds: brief.seconds,
+    bpm: (60 * fps) / grid.beatFrames,
+    holds: holdsFor(fallback, grid, gated.slots.length),
+    drops
+  }
+}
+
+export interface Settled2 {
+  composed: Composed
+  /** The standard cut was built because the model's plan could not be used. */
+  baseline: boolean
+  /** Why the model's plan could not be used, when it could not. */
+  rejected: string | null
+  problems: Problem[]
+}
+
+/**
+ * The model's answer as the ad that lands: validated and timed, or — when it
+ * cannot be used — the standard cut, validated and timed the same way. Never
+ * nothing. The app's `direct()` and the Director eval both settle an answer
+ * here, so what the eval scores is what the user would have got.
+ */
+export function settle2(
+  answer: { value: unknown; truncated: boolean } | { error: string },
+  menu: Menu2,
+  brief: Brief,
+  grids: (recipe: Recipe) => Grid,
+  extras: Parameters<typeof composeAd>[4] = {}
+): Settled2 {
+  const verdict = 'error' in answer ? { rejected: answer.error, problems: [] } : validateSpine2(answer.value, menu, { truncated: answer.truncated })
+  if (!('rejected' in verdict)) {
+    const composed = composeAd(verdict.plan, verdict.recipe, menu, grids(verdict.recipe), extras)
+    return { composed, baseline: false, rejected: null, problems: [...verdict.problems, ...composed.problems] }
+  }
+  // The pinned recipe, when there is one, is the menu's fallback — so the standard cut honours it too.
+  const standard = validateSpine2(baselineSpine2(brief, menu), menu)
+  if ('rejected' in standard) throw new Error(`Even the standard cut could not be laid out: ${standard.rejected}`)
+  const composed = composeAd(standard.plan, standard.recipe, menu, grids(standard.recipe), extras)
+  return { composed, baseline: true, rejected: verdict.rejected, problems: [...verdict.problems, ...standard.problems, ...composed.problems] }
 }
 
 export { buildSlots }

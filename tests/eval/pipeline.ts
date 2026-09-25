@@ -6,12 +6,19 @@ import { dirname, join } from 'node:path'
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg'
 import { emptyProject, type Clip, type MediaAsset, type Project } from '@shared/timeline'
 import type { MusicAnalysis } from '@shared/automation/cutPlan'
-import type { Menu } from '@shared/director/menu'
-import { maxTokensFor, spinePrompt } from '@shared/director/prompt'
-import { spineSchema, type Brief, type SpinePlan } from '@shared/director/schema'
-import { headlineCapacity, validateSpine, type SegmentLayout } from '@shared/director/validate'
-import { baselineSpine } from '@shared/director/baseline'
-import { applySpine, COPY_RULE } from '@shared/director/apply'
+import type { Slot } from '@shared/director/menu'
+import { maxTokensFor2, spine2Prompt } from '@shared/director/prompt2'
+import { SPINE2_PASS, spine2Schema, type Menu2, type SpinePlan2 } from '@shared/director/schema2'
+import type { Brief } from '@shared/director/schema'
+import { headlineCapacity } from '@shared/director/validate'
+import { applyRecipe } from '@shared/director/apply2'
+import { COPY_RULE, LOOK_RULE } from '@shared/director/apply'
+import { graphemes, type Composed } from '@shared/director/compose'
+import { gate } from '@shared/director/gate'
+import { recipeById, type Recipe, type RecipeId } from '@shared/director/recipes'
+import type { Grid } from '@shared/director/rhythm'
+import { bakeForExport } from '@shared/render/exportBake'
+import { cubeFor, lookById } from '@shared/render/looks'
 import {
   ollamaAnswer,
   ollamaRequestBody,
@@ -20,7 +27,7 @@ import {
   parseModelJson,
   type ModelAnswer
 } from '@shared/director/provider'
-import { adSeconds, briefFor, buildSlots, menuFor, musicFor } from '@shared/director/run'
+import { adSeconds, briefFor, buildSlots, gridsFor, menu2For, musicFor, settle2, type Settled2 } from '@shared/director/run'
 import { buildRenderPlan } from '@shared/render/plan'
 import type { TransitionDef } from '@shared/transitions/registry'
 import { probeMany } from '../../src/main/ffmpeg/probe'
@@ -36,9 +43,11 @@ import type { Made } from './media'
  *            (shared/director/run.ts, prompt.ts, provider.ts)
  *   ask      the body goes to the model: from node on the user's machine, or
  *            through the harness relay where the shell cannot reach localhost
- *   score    the raw answer is read, parsed, validated and applied as
- *            `direct()` does — the standard cut when it is rejected — and the
- *            model's ad and the standard cut are both rendered for rating
+ *   score    the raw answer is read, parsed and settled as `direct()`
+ *            settles it (shared/director/run.ts `settle2`: validated and
+ *            timed by the rhythm engine, the standard cut when it cannot be
+ *            used), and the model's ad and the standard cut are both applied
+ *            and rendered for rating
  *
  * Every step writes its output to a file, so a run can be resumed, re-scored
  * without asking again, and read afterwards.
@@ -57,8 +66,9 @@ export interface EvalConfig {
 
 export interface Prepared {
   fixtureId: string
+  /** The plan format the request asks for. */
+  pass: typeof SPINE2_PASS
   brief: Brief
-  menu: Menu
   project: Project
   videoTrackId: string
   musicClipId: string | null
@@ -68,6 +78,24 @@ export interface Prepared {
   beats: 'analysed' | 'grid'
   beatsNote: string | null
   realMedia: string[]
+  /**
+   * What the menu is rebuilt from when scoring. A recipe carries its pacing as
+   * a function, which JSON drops, so the menu itself is not saved — the app's
+   * own `menu2For` rebuilds it from these, the same every time (menuOf).
+   */
+  analysis: MusicAnalysis | null
+  gated: { slots: Slot[]; heroCandidates: string[] }
+  /** What the gate left out and why — as `direct()` notes it. */
+  gateNotes: string[]
+  /** A recipe pinned for the run (FORGE_EVAL_RECIPE), or null: the model chooses. */
+  pinned: RecipeId | null
+}
+
+/** The run's menu and grids, rebuilt from a prepared brief by the app's own functions. */
+export function menuOf(prepared: Prepared): { menu: Menu2; grids: (recipe: Recipe) => Grid } {
+  const grids = gridsFor(prepared.project, musicFor(prepared.project), prepared.analysis, prepared.brief.seconds)
+  const pinned = prepared.pinned ? recipeById(prepared.pinned) : null
+  return { menu: menu2For(prepared.project, prepared.gated, grids, prepared.brief, { pinned }), grids }
 }
 
 export interface EvalRequest {
@@ -88,6 +116,7 @@ export interface EvalResponse {
 }
 
 export interface HeadlineRecord {
+  /** The shot's index in the model's plan. */
   segment: number
   role: string
   text: string
@@ -106,8 +135,13 @@ export interface BriefResult {
   tone: string
   seconds: number
   slots: number
+  /** The legal cuts: every beat of the tone's recipe's grid. */
   cuts: number
   beats: Prepared['beats']
+  pass: typeof SPINE2_PASS
+  /** The recipe that directed the ad that landed, and the picture it was built around. */
+  recipe: RecipeId
+  hero: string
   status: number
   ms: number
   promptTokens: number | null
@@ -120,12 +154,14 @@ export interface BriefResult {
   /** The validator's repairs, as sentences. */
   problems: string[]
   reasoning: string | null
-  /** Every headline the model wrote, before repairs, against the time its segment gives it. */
+  /** Every headline the model wrote, before repairs, against the time the engine gave its shot. */
   headlines: HeadlineRecord[]
-  /** The plan that was applied — the model's, or the standard cut's. */
-  applied: SpinePlan
+  /** The plan that was applied — the model's, or the standard cut's — as the engine laid it out. */
+  applied: SpinePlan2
   /** The standard cut from the same menu: what the model's ad is rated against. */
-  baseline: SpinePlan
+  baseline: SpinePlan2
+  /** Where each shot of the ad that landed starts and ends, in frames. */
+  timing: { slot: string; startFrame: number; endFrame: number; hero: boolean }[]
   renders: { model: string | null; baseline: string | null }
   raw: string | null
 }
@@ -143,7 +179,7 @@ export type AnalyseBeats = (path: string, window: { startMs: number; endMs: numb
 export async function prepareFixture(
   fixture: Fixture,
   made: Made,
-  options: { analyseBeats: AnalyseBeats | null; transitions: TransitionDef[] }
+  options: { analyseBeats: AnalyseBeats | null; transitions: TransitionDef[]; pinned?: RecipeId | null }
 ): Promise<Prepared> {
   const fps = 30
   const base = emptyProject(fixture.id)
@@ -207,36 +243,42 @@ export async function prepareFixture(
   }
 
   const catalogue = catalogueOf(options.transitions)
-  const menu = menuFor(withMedia, slots, music, analysis, catalogue, seconds)
   const brief = briefFor({ ...fixture.brief, seconds: fixture.brief.seconds }, seconds)
+  // The gate as `direct()` runs it when the eyes saw nothing: no looks, no measures.
+  const gated = gate(slots, {}, {}, { wantsPeople: false })
 
   return {
     fixtureId: fixture.id,
+    pass: SPINE2_PASS,
     brief,
-    menu,
     project: withMedia,
     videoTrackId: 'v1',
     musicClipId: music?.clip.id ?? null,
     catalogue,
     beats: analysis ? 'analysed' : 'grid',
     beatsNote,
-    realMedia: made.real
+    realMedia: made.real,
+    analysis,
+    gated: { slots: gated.slots, heroCandidates: gated.heroCandidates },
+    gateNotes: [...gated.leftOut.map((l) => `${l.slot} left out — ${l.why}`), ...gated.loosened],
+    pinned: options.pinned ?? null
   }
 }
 
 /** The exact request the app would send for this menu. */
 export function requestFor(prepared: Prepared, config: EvalConfig): EvalRequest {
-  const { system, user } = spinePrompt(prepared.brief, prepared.menu)
+  const { menu } = menuOf(prepared)
+  const { system, user } = spine2Prompt(prepared.brief, menu)
   const request = {
     system,
     user,
-    schema: spineSchema(prepared.menu),
-    maxTokens: maxTokensFor(prepared.menu),
+    schema: spine2Schema(menu),
+    maxTokens: maxTokensFor2(menu),
     think: config.think
   }
   const openai = config.provider === 'openai'
   return {
-    id: `${prepared.fixtureId}.spine`,
+    id: `${prepared.fixtureId}.spine2`,
     fixtureId: prepared.fixtureId,
     provider: config.provider,
     path: openai ? '/v1/chat/completions' : '/api/chat',
@@ -276,29 +318,28 @@ export async function askNode(request: EvalRequest, server: string, timeoutMs = 
 /* ------------------------------------------------------------------ score */
 
 /**
- * The model's headlines against the time each segment actually gives them.
+ * The model's headlines against the time the engine gave each shot.
  *
- * Measured on the RAW plan, before the validator drops the long ones, because
+ * Measured on the RAW plan, before anything drops the long ones, because
  * "wrote a headline too long for its shot" is a finding about the model and
- * the repaired plan hides it. Spans are walked the way the validator walks
- * them; a segment whose end is unknown or not after its start gets no span.
+ * the settled plan hides it. A card never outlasts its shot, so the shot's
+ * span is the most time a headline can have — the same bound compose.ts
+ * checks, counted in graphemes as it counts them. A headline on a shot the
+ * engine left out, or the validator removed, gets no record: nothing timed it.
  */
-export function headlinesOf(raw: unknown, menu: Menu): HeadlineRecord[] {
-  const segments = (raw as { segments?: unknown })?.segments
-  if (!Array.isArray(segments)) return []
-  const cuts = new Map(menu.cuts.map((c) => [c.id, c]))
-  let previous = menu.cuts.find((c) => c.reason === 'start') ?? menu.cuts[0]
+export function headlinesOf(raw: unknown, composed: Pick<Composed, 'layout'>, fps: number): HeadlineRecord[] {
+  const shots = (raw as { shots?: unknown })?.shots
+  if (!Array.isArray(shots)) return []
+  const spans = new Map(composed.layout.shots.map((s) => [s.slotId, (s.endFrame - s.startFrame) / fps]))
   const out: HeadlineRecord[] = []
-  segments.forEach((s, i) => {
-    const seg = s as { role?: unknown; ends_at?: unknown; headline?: unknown }
-    const end = typeof seg.ends_at === 'string' ? cuts.get(seg.ends_at) : undefined
-    const seconds = end && previous && end.frame > previous.frame ? (end.frame - previous.frame) / menu.fps : 0
-    if (end && previous && end.frame > previous.frame) previous = end
-    const text = typeof seg.headline === 'string' ? seg.headline.trim() : ''
-    if (!text) return
+  shots.forEach((s, i) => {
+    const shot = s as { slot?: unknown; role?: unknown; headline?: unknown }
+    const text = typeof shot.headline === 'string' ? shot.headline.trim() : ''
+    const seconds = typeof shot.slot === 'string' ? spans.get(shot.slot) : undefined
+    if (!text || seconds === undefined) return
     const capacity = headlineCapacity(seconds)
-    const chars = Array.from(text).length
-    out.push({ segment: i, role: typeof seg.role === 'string' ? seg.role : '', text, chars, seconds, capacity, fits: chars <= capacity })
+    const chars = graphemes(text)
+    out.push({ segment: i, role: typeof shot.role === 'string' ? shot.role : '', text, chars, seconds, capacity, fits: chars <= capacity })
   })
   return out
 }
@@ -313,26 +354,54 @@ function counter(): (prefix: string) => string {
   return (prefix) => `${prefix}-${++n}`
 }
 
-/** Apply a validated plan the way `direct()` does. */
-function applied(prepared: Prepared, plan: SpinePlan, layout: SegmentLayout[], model: string): Project {
-  return applySpine(prepared.project, plan, layout, prepared.menu, {
-    fps: prepared.menu.fps,
+/**
+ * The recipe's look as a file an eval render can read: the same generated
+ * .cube the app writes on launch (main/looks.ts), written beside the renders.
+ */
+async function lookFileFor(recipe: Recipe, dir: string): Promise<{ file: string; name: string } | null> {
+  const look = recipe.look === 'none' ? undefined : lookById(recipe.look)
+  if (!look) return null
+  const file = join(dir, 'looks', `${look.id}.cube`)
+  if (!existsSync(file)) {
+    await mkdir(dirname(file), { recursive: true })
+    await writeFile(file, cubeFor(look), 'utf8')
+  }
+  return { file, name: look.name }
+}
+
+/** Apply a settled ad the way `direct()` does. */
+function applied(prepared: Prepared, composed: Composed, menu: Menu2, model: string, lookFile: { file: string; name: string } | null): Project {
+  return applyRecipe(prepared.project, composed, menu, {
+    fps: menu.fps,
     videoTrackId: prepared.videoTrackId,
     brief: prepared.brief,
     model,
     catalogue: prepared.catalogue,
     ...(prepared.musicClipId ? { musicClipId: prepared.musicClipId } : {}),
     parallaxAssets: new Set(),
+    lookFile,
     newId: counter()
   }).project
+}
+
+const RENDER_CANVAS = { width: 540, height: 960 }
+
+/** A still of one colour, or the transparent square an adjustment layer carries — what the store draws, drawn with ffmpeg. */
+async function drawSolid(file: string, color: string, opacity: number, width: number, height: number): Promise<string> {
+  await mkdir(dirname(file), { recursive: true })
+  const alpha = Math.max(0, Math.min(1, opacity)).toFixed(3)
+  await run(FFMPEG, ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', `color=c=${color.replace('#', '0x')}@${alpha}:s=${width}x${height},format=rgba`, '-frames:v', '1', file])
+  return file
 }
 
 /**
  * Render an applied project, small.
  *
  * Node has no canvas, so the headline cards — which the app draws in the
- * renderer — are left out and rated as text; the shots, the transitions, the
- * camera moves and the music are what is rendered (said in the run's README).
+ * renderer — are left out and rated as text (the run's README says so). The
+ * colour cards and the look layer's own picture are drawn here with ffmpeg,
+ * as the store draws them in the app, so the black, the end card's ground and
+ * the recipe's grade are all in the render.
  */
 export async function renderEval(
   project: Project,
@@ -341,16 +410,32 @@ export async function renderEval(
 ): Promise<void> {
   const cards = new Set(project.clips.filter((c) => c.generatedBy?.rule === COPY_RULE).map((c) => c.id))
   const without: Project = { ...project, clips: project.clips.filter((c) => !cards.has(c.id)) }
+  const drawn = join(dirname(out), 'drawn')
+  const looks = new Set(without.clips.filter((c) => c.generatedBy?.rule === LOOK_RULE).map((c) => c.assetId))
+  const blank = looks.size > 0 ? await drawSolid(join(drawn, 'adjustment.png'), '#000000', 0, 16, 16) : ''
+  const withLook: Project = { ...without, assets: without.assets.map((a) => (looks.has(a.id) ? { ...a, path: blank, width: 16, height: 16 } : a)) }
+  const unused = async (): Promise<never> => {
+    throw new Error('not drawn in an eval render')
+  }
+  const baked = await bakeForExport(withLook, RENDER_CANVAS, {
+    solid: (spec, key, w, h) => drawSolid(join(drawn, `${key}.png`), spec.color, spec.opacity, w, h),
+    text: unused, textSequence: unused, title: unused, paper: unused, carousel: unused
+  }, (clip, err) => {
+    throw new Error(`${clip.id} could not be drawn: ${String(err)}`)
+  })
   const plan = buildRenderPlan({
-    project: without,
+    project: baked,
     outputPath: out,
-    canvas: { width: 540, height: 960 },
+    canvas: RENDER_CANVAS,
     extraTransitions: options.extraTransitions,
     ...(options.resolveAsset ? { resolveAsset: options.resolveAsset } : {})
   })
   await mkdir(dirname(out), { recursive: true })
   await run(FFMPEG, plan.args, { maxBuffer: 64 * 1024 * 1024 })
 }
+
+/** A problem the model caused, as opposed to a note about the music (the engine's layout notes and dropped shots). */
+const isRepair = (p: { path: string }): boolean => p.path !== '$.layout' && p.path !== '$.shots'
 
 export async function scoreFixture(
   fixture: Fixture,
@@ -362,15 +447,17 @@ export async function scoreFixture(
     render: { dir: string; extraTransitions: TransitionDef[]; resolveAsset?: (rel: string) => string } | null
   }
 ): Promise<BriefResult> {
-  const { menu, brief } = prepared
+  const { brief } = prepared
+  const { menu, grids } = menuOf(prepared)
+  const extras = { installed: new Set(prepared.catalogue.map((c) => c.family)) }
   let answer: ModelAnswer | null = null
   let why: string | null = null
   let verdict: Verdict = 'error'
   let raw: unknown = null
   let parsed = false
-  let plan: SpinePlan | null = null
-  let layout: SegmentLayout[] = []
+  let settled: Settled2 | null = null
   let problems: string[] = []
+  const describe = (p: { path: string; message: string }): string => `${p.path.replace(/^\$\.?/, '')}: ${p.message}`
 
   if (!response) why = 'no answer was recorded'
   else if (response.error) why = response.error
@@ -391,31 +478,33 @@ export async function scoreFixture(
     } else {
       parsed = true
       raw = json.value
-      const checked = validateSpine(json.value, menu, { truncated: answer.truncated })
-      problems = checked.problems.map((p) => `${p.path.replace(/^\$\.?/, '')}: ${p.message}`)
-      if ('rejected' in checked) {
+      // Settled exactly as `direct()` settles it.
+      settled = settle2({ value: json.value, truncated: answer.truncated }, menu, brief, grids, extras)
+      problems = settled.problems.map(describe)
+      if (settled.baseline) {
         verdict = 'rejected'
-        why = checked.rejected
+        why = settled.rejected
+        settled = null
       } else {
-        plan = checked.plan
-        layout = checked.layout
-        verdict = checked.problems.length > 0 ? 'repaired' : 'used'
+        verdict = settled.problems.some(isRepair) ? 'repaired' : 'used'
       }
     }
   }
 
   // The standard cut, always: it is what a rejected plan becomes, and what every plan is rated against.
-  const standard = validateSpine(baselineSpine(brief, menu), menu)
-  if ('rejected' in standard) throw new Error(`${fixture.id}: the standard cut does not fit — ${standard.rejected}`)
+  const standard = settle2({ error: 'the standard cut' }, menu, brief, grids, extras)
+  const landed = settled ?? standard
 
   const renders: BriefResult['renders'] = { model: null, baseline: null }
   if (options.render) {
     const { dir, extraTransitions, resolveAsset } = options.render
     renders.baseline = join(dir, `${fixture.id}.baseline.mp4`)
-    await renderEval(applied(prepared, standard.plan, standard.layout, 'baseline'), renders.baseline, { extraTransitions, resolveAsset })
-    if (plan) {
+    const standardLook = await lookFileFor(standard.composed.recipe, dir)
+    await renderEval(applied(prepared, standard.composed, menu, 'baseline', standardLook), renders.baseline, { extraTransitions, resolveAsset })
+    if (settled) {
       renders.model = join(dir, `${fixture.id}.model.mp4`)
-      await renderEval(applied(prepared, plan, layout, options.model), renders.model, { extraTransitions, resolveAsset })
+      const look = await lookFileFor(settled.composed.recipe, dir)
+      await renderEval(applied(prepared, settled.composed, menu, options.model, look), renders.model, { extraTransitions, resolveAsset })
     }
   }
 
@@ -426,8 +515,11 @@ export async function scoreFixture(
     tone: brief.tone,
     seconds: brief.seconds,
     slots: menu.slots.length,
-    cuts: menu.cuts.length,
+    cuts: grids(menu.fallback).beats.length,
     beats: prepared.beats,
+    pass: SPINE2_PASS,
+    recipe: landed.composed.recipe.id,
+    hero: landed.composed.plan.hero,
     status: response?.status ?? 0,
     ms: response?.ms ?? 0,
     promptTokens: answer?.promptTokens ?? null,
@@ -437,10 +529,12 @@ export async function scoreFixture(
     verdict,
     why,
     problems,
-    reasoning: plan?.reasoning ?? (typeof (raw as { reasoning?: unknown })?.reasoning === 'string' ? (raw as { reasoning: string }).reasoning : null),
-    headlines: headlinesOf(raw, menu),
-    applied: plan ?? standard.plan,
-    baseline: standard.plan,
+    reasoning: settled?.composed.plan.reasoning ?? (typeof (raw as { reasoning?: unknown })?.reasoning === 'string' ? (raw as { reasoning: string }).reasoning : null),
+    // Timed as the plan would have been: the model's own layout when it landed, else the standard cut's.
+    headlines: headlinesOf(raw, landed.composed, menu.fps),
+    applied: landed.composed.plan,
+    baseline: standard.composed.plan,
+    timing: landed.composed.layout.shots.map((s) => ({ slot: s.slotId, startFrame: s.startFrame, endFrame: s.endFrame, hero: s.hero })),
     renders,
     raw: answer?.text ?? null
   }

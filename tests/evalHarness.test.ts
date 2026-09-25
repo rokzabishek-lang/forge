@@ -5,7 +5,7 @@ import { fixtureProblems, loadFixtures, transcriptFor, type Fixture } from './ev
 import { headlinesOf } from './eval/pipeline'
 import { buildReport, meetsBar, summarise } from '../scripts/eval-report.mjs'
 import { modelIsA } from '../scripts/eval-rate.mjs'
-import type { Menu } from '@shared/director/menu'
+import type { Composed } from '@shared/director/compose'
 
 /**
  * The Director eval's own machinery (docs/PLAN.md §3). The eval is only as
@@ -87,52 +87,49 @@ describe('the ten briefs', () => {
   })
 })
 
-describe('headlines are counted against the span their segment really has', () => {
-  const menu = {
-    fps: 30,
-    seconds: 6,
-    slots: [],
-    families: [],
-    cuts: [
-      { id: 'cut_00', ms: 0, frame: 0, reason: 'start', energy: 1 },
-      { id: 'cut_01', ms: 1000, frame: 30, reason: 'grid', energy: 1 },
-      { id: 'cut_02', ms: 4000, frame: 120, reason: 'grid', energy: 1 },
-      { id: 'cut_end', ms: 6000, frame: 180, reason: 'end', energy: 1 }
-    ]
-  } as unknown as Menu
-
-  it('walks the spans in order, from the start', () => {
-    const raw = {
-      segments: [
-        { role: 'hook', ends_at: 'cut_01', headline: 'A headline that is far too long for one second' },
-        { role: 'product', ends_at: 'cut_02', headline: 'Fits in three seconds' },
-        { role: 'cta', ends_at: 'cut_end', headline: '' }
+describe('headlines are counted against the time the engine gave their shot', () => {
+  // The engine's timing: slot_01 one second, slot_02 three, slot_03 two. slot_04 was left out.
+  const composed = {
+    layout: {
+      shots: [
+        { slotId: 'slot_01', startFrame: 0, endFrame: 30, clipFrames: 30, hero: false },
+        { slotId: 'slot_02', startFrame: 30, endFrame: 120, clipFrames: 90, hero: true },
+        { slotId: 'slot_03', startFrame: 120, endFrame: 180, clipFrames: 60, hero: false }
       ]
     }
-    const records = headlinesOf(raw, menu)
-    expect(records.map((r) => [r.role, r.seconds, r.fits])).toEqual([
-      ['hook', 1, false],
-      ['product', 3, true]
+  } as unknown as Composed
+
+  it('each headline against its own shot, in the model’s order', () => {
+    const raw = {
+      shots: [
+        { slot: 'slot_01', role: 'hook', headline: 'A headline that is far too long for one second' },
+        { slot: 'slot_02', role: 'product', headline: 'Fits in three seconds' },
+        { slot: 'slot_03', role: 'cta', headline: '' }
+      ]
+    }
+    const records = headlinesOf(raw, composed, 30)
+    expect(records.map((r) => [r.segment, r.role, r.seconds, r.fits])).toEqual([
+      [0, 'hook', 1, false],
+      [1, 'product', 3, true]
     ])
-    // 1 s is under the 1.2 s floor, so it is given the floor's 19 characters, not 16.
+    // 1 s is under the card's 1.2 s floor, so it is given the floor's 19 characters, not 16.
     expect(records[0].capacity).toBe(19)
   })
 
-  it('an end that is not after its start gives no span, and does not move the start', () => {
-    const raw = {
-      segments: [
-        { role: 'hook', ends_at: 'cut_02', headline: 'first' },
-        { role: 'proof', ends_at: 'cut_01', headline: 'backwards' },
-        { role: 'cta', ends_at: 'cut_end', headline: 'last' }
-      ]
-    }
-    const records = headlinesOf(raw, menu)
-    expect(records.map((r) => r.seconds)).toEqual([4, 0, 2])
+  it('counts what a reader sees: a Telugu line is its graphemes, not its code points', () => {
+    const line = 'పెళ్లి కూతురు సిద్ధం'
+    const [r] = headlinesOf({ shots: [{ slot: 'slot_03', role: 'cta', headline: line }] }, composed, 30)
+    expect(r.chars).toBeLessThan(Array.from(line).length)
   })
 
-  it('a plan without segments has no headlines', () => {
-    expect(headlinesOf({ reasoning: 'x' }, menu)).toEqual([])
-    expect(headlinesOf(null, menu)).toEqual([])
+  it('a headline on a shot the engine left out, or one not in the menu, has nothing to be timed against', () => {
+    const raw = { shots: [{ slot: 'slot_04', role: 'story', headline: 'left out' }, { slot: 'slot_99', role: 'story', headline: 'unknown' }] }
+    expect(headlinesOf(raw, composed, 30)).toEqual([])
+  })
+
+  it('a plan without shots has no headlines', () => {
+    expect(headlinesOf({ reasoning: 'x' }, composed, 30)).toEqual([])
+    expect(headlinesOf(null, composed, 30)).toEqual([])
   })
 })
 

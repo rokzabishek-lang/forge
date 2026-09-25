@@ -28,7 +28,8 @@ export function modelIsA(id) {
   return sum % 2 === 0
 }
 
-const headlinesOf = (plan) => (plan?.segments ?? []).filter((s) => s.headline).map((s) => `  ${s.role.padEnd(8)} ${s.headline}`)
+// spine@2 plans have shots; runs recorded before it have segments.
+const headlinesOf = (plan) => (plan?.shots ?? plan?.segments ?? []).filter((s) => s.headline).map((s) => `  ${s.role.padEnd(8)} ${s.headline}`)
 
 async function main() {
   const args = process.argv.slice(2)

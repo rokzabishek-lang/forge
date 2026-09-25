@@ -306,6 +306,50 @@ three months.
 
 ---
 
+## Built — `spine@2`, 24–25 September 2026
+
+`direct()` and the eval now run `spine@2` (docs/PLAN.md §5.2–5.6). C0
+measured `spine@1` failing where it asked a small model to TIME the ad — every
+rejection was the model running out of cuts — so the model no longer times
+anything. It chooses a **recipe**, a **hero** among the gate's candidates, one
+text style and animation for the ad, and per shot a role, a weight (quick /
+normal / hold), a camera move, a speed and a headline. The rhythm engine
+(`rhythm.ts`) decides every frame on every beat of the song.
+
+| file | what |
+|---|---|
+| `src/shared/director/schema2.ts` | the flat plan; the enums are the UNION of the offered recipes' lists (one decode, built before the model answers) |
+| `src/shared/director/prompt2.ts` | one constant playbook (a server caches it); the music as a sentence, the recipes with their roles, the heroes, the slots — no cut table |
+| `src/shared/director/validate2.ts` | repairs what `spine@1` rejected: order, a choice from another recipe's list, a hero that is not a candidate, a speed on a still, a ramp on a clip that speaks; still rejects a cut-off answer or the wrong shape |
+| `src/shared/director/baseline2.ts` | the standard cut, as a directed ad: the tone's recipe (or the pinned one), the gate's best hero |
+| `src/shared/director/compose.ts` | the plan handed to the rhythm engine; headline room checked in graphemes after timing |
+| `src/shared/director/apply2.ts` | the ad as clips: shots, transitions on the engine's boundaries, the black and end card on V1, the recipe's look as one adjustment layer below the cards, the cards, the music trimmed and ducked |
+| `src/shared/director/run.ts` | `gridsFor`, `menu2For` (how many shots the music holds is asked of the engine itself), `settle2` — the answer to the ad, the SAME code for the app and the eval |
+
+**The recipe is the user's too**: the panel's Recipe picker pins one (Auto
+lets the model choose among them all; without a model the tone decides —
+`recipeForTone`), and a pinned recipe is the only one the prompt offers and
+the one the standard cut uses. The panel says which recipe directed the ad and
+which picture it was built around.
+
+**The drawn pictures** — cards, the black and the end card's colour card, and
+the look layer's own transparent square — are drawn after the one update,
+history-less, as `spine@1`'s cards always were. A look library that will not
+list leaves the ad ungraded, with a note, rather than failing the run.
+
+**The eval's prepared files cannot hold the menu** — a recipe carries its
+pacing as a function, which JSON drops — so they hold what the menu is built
+FROM (the beat analysis, the gated slots, a pinned recipe) and `menuOf`
+rebuilds it with `menu2For`. Its renders now carry the black, the end card's
+ground and the recipe's grade; only the headline cards (drawn by the renderer)
+are missing, as before.
+
+`spine@1` decisions already in a project still load, as history; its code
+(`schema.ts`, `validate.ts`, `apply.ts`'s `applySpine`) stays for them and for
+the C0 numbers in docs/EVAL.md.
+
+---
+
 ## Built — 21–22 September 2026
 
 The spine pass, end to end, with **no model run against it yet**. That last

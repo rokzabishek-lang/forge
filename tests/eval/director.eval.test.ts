@@ -22,6 +22,7 @@ import {
   type RunRecord
 } from './pipeline'
 import { EVAL_ROOT } from './relay'
+import { recipeById, type RecipeId } from '@shared/director/recipes'
 
 /**
  * `npm run eval` — the Director measured on a real model (docs/PLAN.md §3).
@@ -38,6 +39,7 @@ import { EVAL_ROOT } from './relay'
  *   FORGE_EVAL_ONLY     comma-separated fixture ids
  *   FORGE_EVAL_MEDIA    a folder of real photos, <fixture-id>/<name>
  *   FORGE_EVAL_RENDER   off to skip the renders
+ *   FORGE_EVAL_RECIPE   a recipe id to pin, as the panel's Recipe picker does (default: the model chooses)
  *
  * `all` asks from node. Where node cannot reach the model — the development
  * sandbox — run `prepare`, then `window.__forgeEvalRelay('<run>')` in the
@@ -106,6 +108,8 @@ describe.skipIf(!PROVIDER)('the Director on a real model', () => {
       const fixtures = (await loadFixtures()).filter((f) => only.size === 0 || only.has(f.id))
       const library = await libraryTransitions()
       const transitions = [...TRANSITIONS, ...library.transitions]
+      const pinned = (process.env.FORGE_EVAL_RECIPE ?? '') || null
+      expect(pinned === null || recipeById(pinned) !== null, `FORGE_EVAL_RECIPE ${pinned} is not a recipe`).toBe(true)
 
       /* prepare */
       if (STEP === 'prepare' || STEP === 'all') {
@@ -114,7 +118,7 @@ describe.skipIf(!PROVIDER)('the Director on a real model', () => {
           const requests: EvalRequest[] = []
           for (const fixture of fixtures) {
             const made = await makeFixtureMedia(fixture, join(EVAL_ROOT, 'media', fixture.id))
-            const prepared = await prepareFixture(fixture, made, { analyseBeats: beats.analyse, transitions })
+            const prepared = await prepareFixture(fixture, made, { analyseBeats: beats.analyse, transitions, pinned: pinned as RecipeId | null })
             if (beats.note && !prepared.beatsNote) prepared.beatsNote = beats.note
             await writeJson(join(runDir, 'prepared', `${fixture.id}.json`), prepared)
             requests.push(requestFor(prepared, config))
@@ -186,7 +190,8 @@ describe.skipIf(!PROVIDER)('the Director on a real model', () => {
             `${config.provider} · ${config.model} · think ${config.think ? 'on' : 'off'} · ${record.transport}`,
             '',
             'renders/<brief>.model.mp4 is the model\'s ad; <brief>.baseline.mp4 the standard cut from the same menu.',
-            'The headline cards are drawn by the renderer in the app, so they are not in these renders — the',
+            'Each is a spine@2 ad, timed by the rhythm engine: the black, the end card\'s ground and the recipe\'s look',
+            'are drawn. The headline cards are drawn by the renderer in the app, so they are not in these renders — the',
             'headlines are in results.json, and `npm run eval:rate` shows them.',
             ''
           ].join('\n')

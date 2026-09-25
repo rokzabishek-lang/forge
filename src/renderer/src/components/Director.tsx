@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { ChevronDown, ChevronRight, Loader2, Settings2, Sparkles } from 'lucide-react'
-import { COPY_RULE, SPINE_RULE } from '@shared/director/apply'
+import { DIRECTOR_RULES } from '@shared/director/apply'
+import { RECIPES, type RecipeId } from '@shared/director/recipes'
 import { buildSlots } from '@shared/director/menu'
 import { isLoopback, type LlmProviderChoice, type LlmStatus } from '@shared/director/provider'
 import { TONES } from '@shared/director/schema'
@@ -53,6 +54,8 @@ export function Director(): ReactNode {
   const config = useEditor((s) => s.directorConfig)
   const refresh = useEditor((s) => s.refreshDirector)
   const setProvider = useEditor((s) => s.setDirectorProvider)
+  const recipe = useEditor((s) => s.directRecipe)
+  const setRecipe = useEditor((s) => s.setDirectRecipe)
 
   const [showSettings, setShowSettings] = useState(false)
   const [showNotes, setShowNotes] = useState(false)
@@ -64,9 +67,9 @@ export function Director(): ReactNode {
   }, [refresh])
 
   const slots = buildSlots(project, slotNotes)
-  const made = project.clips.filter(
-    (c) => c.generatedBy?.rule === SPINE_RULE || c.generatedBy?.rule === COPY_RULE
-  ).length
+  // Everything the director made — shots, cards, the black and end card, the look.
+  const made = project.clips.filter((c) => c.generatedBy !== undefined && DIRECTOR_RULES.includes(c.generatedBy.rule)).length
+  const pinned = recipe === 'auto' ? null : RECIPES.find((r) => r.id === recipe) ?? null
 
   const fps = project.settings.fps
   const musicClip = project.clips.find((clip) => {
@@ -155,8 +158,8 @@ export function Director(): ReactNode {
       </div>
 
       <p className="text-[10.5px] leading-snug text-ink-600">
-        An ad from your pictures, your music and a line about the product. The model chooses
-        the beats and writes the words; you place the pictures.
+        An ad from your pictures, your music and a line about the product. The model picks the
+        recipe, the hero shot and the words; the app cuts it to the beat. You place the pictures.
       </p>
 
       <Field label="Product">
@@ -167,6 +170,27 @@ export function Director(): ReactNode {
           onChange={(e) => setBrief({ product: e.target.value })}
         />
       </Field>
+      {/*
+        The recipe: how the ad is paced, held, graded and ended (docs/PLAN.md §5).
+        Auto lets the model choose among them all; without a model, the tone decides.
+      */}
+      <Field label="Recipe">
+        <select
+          className={input}
+          value={recipe}
+          onChange={(e) => setRecipe(e.target.value as RecipeId | 'auto')}
+        >
+          <option value="auto">Auto — the model chooses</option>
+          {RECIPES.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.name}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <p className="pl-[4.5rem] text-[10px] leading-snug text-ink-600">
+        {pinned ? pinned.intent : 'Chosen for the brief and the pictures; without a model, by the tone.'}
+      </p>
       {/*
         Everything except Product, folded away.
         
@@ -390,8 +414,10 @@ export function Director(): ReactNode {
       {last && (
         <div className="space-y-1 rounded bg-ink-950/60 px-2 py-1.5">
           <div className="text-[10.5px] text-ink-300">
-            {last.baseline ? 'Standard cut' : `Directed by ${last.model}`}
+            {last.recipe ? `${last.recipe.name} · ` : ''}
+            {last.baseline ? 'standard cut' : `directed by ${last.model}`}
           </div>
+          {last.hero && <div className="text-[10px] text-ink-500">Built around {last.hero}</div>}
           {last.reasoning && <div className="text-[10.5px] italic leading-snug text-ink-500">{last.reasoning}</div>}
           {last.problems.length > 0 && (
             <>
