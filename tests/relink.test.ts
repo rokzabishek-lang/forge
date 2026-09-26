@@ -258,3 +258,46 @@ describe('what reaches the project file', () => {
     expect(file.project.assets[0].relativeTo).toBe('clips/shot.mp4')
   })
 })
+
+describe('a converted still travels as the file it was made from', () => {
+  /*
+   * An AVIF or HEIC is read through a PNG in the app's cache (main/imports.ts):
+   * `path` is the copy, `source` the file the user imported. Everything that
+   * moves a project follows the file, never the copy — the copy is not under
+   * the project, does not exist on the other machine, and is remade on open.
+   */
+  const converted = asset({ id: 'c', path: '/Users/me/Library/Forge/converted/123-456-photo2.png', source: '/work/ad/photos/photo2.avif', name: 'photo2.avif', kind: 'image', size: 240_000 })
+
+  it('is looked for as its source: absolute, relative to the project, then in the known folders — never as its copy', () => {
+    const where = candidatePaths({ ...converted, relativeTo: 'photos/photo2.avif' }, '/moved/ad', ['/drive/photos'])
+    expect(where).toEqual(['/work/ad/photos/photo2.avif', '/moved/ad/photos/photo2.avif', '/drive/photos/photo2.avif'])
+    expect(where.some((p) => p.endsWith('.png'))).toBe(false)
+  })
+
+  it('is matched to a folder by the source’s name and size', () => {
+    const found = matchByName(
+      [{ id: 'c', path: converted.path, size: converted.size, source: converted.source }],
+      [
+        { path: '/drive/photos/photo2.avif', size: 240_000 },
+        { path: '/drive/photos/123-456-photo2.png', size: 999 }
+      ]
+    )
+    expect(found).toEqual({ c: '/drive/photos/photo2.avif' })
+  })
+
+  it('is saved with a relative path to the source, so the project finds it on the other machine', () => {
+    const file = serializeProject({ ...emptyProject(), assets: [converted] }, { appVersion: '1.0.0', projectDir: '/work/ad' })
+    expect(file.project.assets[0].relativeTo).toBe('photos/photo2.avif')
+    expect(file.project.assets[0].source).toBe('/work/ad/photos/photo2.avif')
+  })
+
+  it('a relink hands back the copy to read and the file it came from; relinked to a plain file, the source goes', () => {
+    const before: Project = { ...emptyProject(), assets: [{ ...converted, offline: true }] }
+    const again = applyRelink(before, { c: { path: '/cache/789-photo2.png', source: '/drive/photos/photo2.avif' } })
+    expect(again.assets[0]).toMatchObject({ path: '/cache/789-photo2.png', source: '/drive/photos/photo2.avif' })
+    expect('offline' in again.assets[0]).toBe(false)
+    const plain = applyRelink(before, { c: '/drive/photos/photo2.jpg' })
+    expect(plain.assets[0].path).toBe('/drive/photos/photo2.jpg')
+    expect('source' in plain.assets[0]).toBe(false)
+  })
+})

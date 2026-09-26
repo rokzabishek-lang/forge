@@ -140,6 +140,13 @@ describe('direct() runs spine@2', () => {
     expect(second.tracks.filter((t) => t.director)).toHaveLength(1)
     expect(second.tracks.length).toBe(first.tracks.length)
     expect(second.clips.filter((c) => c.generatedBy?.rule === 'director.spine').every((c) => c.trackId === 'v1')).toBe(true)
+
+    // A photo double-clicked in the pool goes on V1 after the ad — not on the Director's lane, under it.
+    useEditor.getState().addAssetToTimeline('b')
+    const added = useEditor.getState().project.clips.find((c) => c.assetId === 'b' && !c.generatedBy)!
+    expect(added.trackId).toBe('v1')
+    const adEnd = Math.max(...second.clips.filter((c) => c.trackId === 'v1').map((c) => c.start + c.duration))
+    expect(added.start).toBeGreaterThanOrEqual(adEnd)
   })
 
   it('a plan the model wrote lands as directed, in the recipe it chose', async () => {

@@ -13,7 +13,8 @@ import type { Slot } from '@shared/director/menu'
  * for another.
  */
 
-const measure: Measure = { sharpness: 400, luma: 0.5, lumaStd: 0.2, darkClip: 0, brightClip: 0, dhash: 'ab', width: 10, height: 10 }
+// A current measurement carries the backdrop share; one without it is from before that was measured, and is taken again.
+const measure: Measure = { sharpness: 400, luma: 0.5, lumaStd: 0.2, darkClip: 0, brightClip: 0, backdropClip: 0, dhash: 'ab', width: 10, height: 10 }
 const look: StoredLook = { people: 'one', shot: 'close', mood: 'joyful', product_visible: 'no', hero: 'strong', words: 'bride laughing', key: 'k1', model: 'm', at: 't' }
 
 describe('when to look again', () => {
@@ -90,5 +91,16 @@ describe('the look pass', () => {
   it('reads as one line in the spine’s table', () => {
     expect(lookLine(look)).toBe('one, close, joyful, strong: "bride laughing"')
     expect(lookLine({ ...look, words: '' })).toBe('one, close, joyful, strong')
+  })
+})
+
+describe('a measurement from before the backdrop was measured', () => {
+  it('is taken again, so a white-backdrop photo stops being called blown', () => {
+    const old: AssetVision = { key: 'k1', measure: { sharpness: 400, luma: 0.9, lumaStd: 0.1, darkClip: 0, brightClip: 0.7, dhash: 'ab', width: 10, height: 10 } }
+    expect(needsMeasure(old, 'k1')).toBe(true)
+    const fresh: AssetVision = { key: 'k1', measure: { ...old.measure!, backdropClip: 0.7 } }
+    expect(needsMeasure(fresh, 'k1')).toBe(false)
+    // The look is not re-asked for: the model saw the same file.
+    expect(needsLook({ ...old, look }, 'k1')).toBe(false)
   })
 })

@@ -389,7 +389,17 @@ an adjustment layer on the lane above, headline cards above that, and the
 music trimmed to the ad — as ONE undo. A square or landscape picture in a
 tall ad is shown whole over a blurred, darkened copy of itself: the copy sits
 on a lane the Director adds UNDER V1 (the same thing the Blurred background
-drop makes, so it edits like your own), and goes when the ad is cleared. The result box names the recipe and
+drop makes, so it edits like your own), and goes when the ad is cleared;
+nothing else — a double-clicked photo, a reel — is ever built onto that lane.
+A blend into or out of such a shot is a cut, and the result box says so.
+
+**Importing AVIF or HEIC** — the file is converted to a PNG in the app's own
+cache on import (the bundled ffmpeg cannot read either), and the pool shows
+it under its own name. The project remembers the file you chose, not the copy:
+move the project, relink to a folder, or open it on the other machine and the
+AVIF is found and converted again there. A HEIC from a phone will not convert
+on this build (no HEVC decoder) — save it as JPEG or PNG first, as the message
+says. The result box names the recipe and
 the picture the ad was built around. When the model's plan cannot be used you
 get the standard cut of the recipe and a note saying why. Clear takes exactly
 its own work back, music included. See `docs/LLM.md`.

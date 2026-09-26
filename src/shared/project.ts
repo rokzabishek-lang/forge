@@ -88,7 +88,8 @@ export function serializeProject(
          * the job.
          */
         if (!options.projectDir) return rest
-        const relative = relativeToProject(asset.path, options.projectDir)
+        // A converted still travels as the file the user imported, not as its copy in the app's cache.
+        const relative = relativeToProject(asset.source ?? asset.path, options.projectDir)
         return relative ? { ...rest, relativeTo: relative } : rest
       })
     },

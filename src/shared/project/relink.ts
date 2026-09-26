@@ -56,6 +56,11 @@ export function joinPath(root: string, relative: string): string {
  * would need `../..` segments that stop meaning anything the moment either end
  * moves, so those keep their absolute path alone and rely on relinking.
  */
+/** The file an asset stands for on disk: what the user imported, when `path` is a converted copy of it (imports.ts). */
+export function fileOf(asset: Pick<MediaAsset, 'path' | 'source'>): string {
+  return asset.source ?? asset.path
+}
+
 export function relativeToProject(assetPath: string, projectDir: string): string | null {
   if (!projectDir) return null
   const norm = (p: string): string => p.replace(/\\/g, '/').replace(/\/+$/, '')
@@ -76,13 +81,15 @@ export function relativeToProject(assetPath: string, projectDir: string): string
  * trying anything else first would find a same-named file in the wrong folder.
  */
 export function candidatePaths(
-  asset: Pick<MediaAsset, 'path' | 'relativeTo'>,
+  asset: Pick<MediaAsset, 'path' | 'relativeTo' | 'source'>,
   projectDir: string | null,
   searchFolders: string[] = []
 ): string[] {
-  const out = [asset.path]
+  // A converted still is looked for as the file the user imported, not as its copy in the app's cache.
+  const file = fileOf(asset)
+  const out = [file]
   if (asset.relativeTo && projectDir) out.push(joinPath(projectDir, asset.relativeTo))
-  const name = baseNameOf(asset.path)
+  const name = baseNameOf(file)
   for (const folder of searchFolders) out.push(joinPath(folder, name))
   // Deduplicated, because a stat per candidate is the expensive part and the
   // same path arrives twice whenever a project sits beside its footage.
@@ -103,7 +110,7 @@ export function candidatePaths(
  * nothing says it is the wrong take.
  */
 export function matchByName(
-  assets: Pick<MediaAsset, 'id' | 'path' | 'size'>[],
+  assets: Pick<MediaAsset, 'id' | 'path' | 'size' | 'source'>[],
   files: { path: string; size: number }[]
 ): Record<string, string> {
   const byName = new Map<string, { path: string; size: number }[]>()
@@ -114,7 +121,7 @@ export function matchByName(
 
   const found: Record<string, string> = {}
   for (const asset of assets) {
-    const candidates = byName.get(baseNameOf(asset.path).toLowerCase())
+    const candidates = byName.get(baseNameOf(fileOf(asset)).toLowerCase())
     if (!candidates || candidates.length === 0) continue
     if (candidates.length === 1) {
       found[asset.id] = candidates[0].path
@@ -131,18 +138,26 @@ export function matchByName(
   return found
 }
 
+/**
+ * What a relink found for an asset: the file itself, or — for a still the
+ * bundled ffmpeg cannot read — the converted copy to read and the file it was
+ * made from (main/imports.ts converts it before answering).
+ */
+export type Relinked = string | { path: string; source: string }
+
 /** Repoint assets at the files found for them. Ids not present are untouched. */
-export function applyRelink(project: Project, found: Record<string, string>): Project {
+export function applyRelink(project: Project, found: Record<string, Relinked>): Project {
   if (Object.keys(found).length === 0) return project
   return {
     ...project,
     assets: project.assets.map((asset) => {
-      const path = found[asset.id]
-      if (!path) return asset
+      const to = found[asset.id]
+      if (!to) return asset
       // `offline` is runtime-only, so it is cleared rather than set false —
-      // a false that reached the project file would be serialised noise.
-      const { offline: _gone, ...rest } = asset
-      return { ...rest, path }
+      // a false that reached the project file would be serialised noise. An old
+      // `source` goes too: the asset now stands for whatever was found.
+      const { offline: _gone, source: _old, ...rest } = asset
+      return typeof to === 'string' ? { ...rest, path: to } : { ...rest, path: to.path, source: to.source }
     })
   }
 }

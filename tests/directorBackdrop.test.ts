@@ -9,6 +9,8 @@ import { validateSpine2 } from '@shared/director/validate2'
 import { baselineSpine2 } from '@shared/director/baseline2'
 import { composeAd } from '@shared/director/compose'
 import { BACKDROP_BRIGHTNESS, BACKDROP_KEEP, applyRecipe, type Applied2 } from '@shared/director/apply2'
+import { SLOW_SPEED } from '@shared/director/compose'
+import { MAX_TRACKS, addTrack } from '@shared/timeline'
 import { BACKDROP_RULE, SPINE_RULE, clearDirector } from '@shared/director/apply'
 import { BACKGROUND_BLUR } from '@shared/render/dropIntent'
 import { TRANSITIONS } from '@shared/transitions/registry'
@@ -63,15 +65,19 @@ function menuOf(p: Project): Menu2 {
   return { slots, recipes: [PRODUCT_REVEAL], fallback: PRODUCT_REVEAL, heroCandidates: slots.map((s) => s.id), fps, seconds: 20, bpm: 100, holds: { min: 4, max: 8 }, drops: [] }
 }
 
-/** The standard cut applied; `transitions` replaces the engine's, so a boundary can be made to blend on purpose. */
-function direct(p: Project, transitions?: { shot: number; family: 'dissolve' }[]): Applied2 {
+/**
+ * The standard cut applied. `transitions` replaces the engine's, so a boundary
+ * can be made to blend on purpose; `slow` names slots whose shot plays slow.
+ */
+function direct(p: Project, transitions?: { shot: number; family: 'dissolve' }[], slow: string[] = []): Applied2 {
   const menu = menuOf(p)
   const checked = validateSpine2(baselineSpine2(brief, menu, PRODUCT_REVEAL), menu)
   if ('rejected' in checked) throw new Error(checked.rejected)
   const grid = rhythmGrid(song(100, 20), { fps, seconds: 20, tempo: PRODUCT_REVEAL.tempo })
   const composed = composeAd(checked.plan, checked.recipe, menu, grid)
+  const plan = { ...composed.plan, shots: composed.plan.shots.map((s) => (slow.includes(s.slot) ? { ...s, speed: 'slow' as const } : s)) }
   let n = 0
-  return applyRecipe(p, transitions ? { ...composed, layout: { ...composed.layout, transitions } } : composed, menu, {
+  return applyRecipe(p, { ...composed, plan, layout: transitions ? { ...composed.layout, transitions } : composed.layout }, menu, {
     fps, videoTrackId: 'v1', brief, model: 'baseline', catalogue: TRANSITIONS.map((t) => ({ id: t.id, family: t.family })), musicClipId: 'music',
     newId: (x) => `${x}-${++n}`
   })
@@ -109,16 +115,21 @@ describe('a picture whose shape is far from the frame’s', () => {
     // The largest centred 9:16 window of the square, as the frame's crop would have been.
     expect(back.crop!.width / back.crop!.height).toBeCloseTo(1080 / 1920, 2)
     expect(back.mask).toMatchObject({ mode: 'blur', blur: BACKGROUND_BLUR, shape: { kind: 'rectangle', x: 0.5, y: 0.5, width: 0.5, height: 0.5 } })
+    // Darker — a real amount, not merely whatever the constant says.
     expect(back.color.brightness).toBe(BACKDROP_BRIGHTNESS)
+    expect(back.color.brightness).toBeLessThanOrEqual(-0.15)
     expect(back.motion).toBeUndefined()
     const lanes = p.tracks.filter((t) => t.kind === 'video')
     expect(lanes.findIndex((t) => t.id === back.trackId)).toBeLessThan(lanes.findIndex((t) => t.id === 'v1'))
   })
 
   it('a landscape clip’s backdrop plays the same footage at the same speed, muted', () => {
-    const shot = shotFor(p, 'wide')
-    const back = backdropsOf(p).find((b) => b.assetId === 'wide')!
-    expect([back.inPoint, back.duration, back.speed, back.ramp]).toEqual([shot.inPoint, shot.duration, shot.speed, shot.ramp])
+    // The clip slowed on purpose, so "the same speed" is a real value and not undefined against undefined.
+    const slowed = direct(edit(SET), undefined, ['slot_02']).project
+    const shot = shotFor(slowed, 'wide')
+    const back = backdropsOf(slowed).find((b) => b.assetId === 'wide')!
+    expect(shot.speed).toBe(SLOW_SPEED)
+    expect([back.inPoint, back.duration, back.speed, back.ramp]).toEqual([shot.inPoint, shot.duration, SLOW_SPEED, shot.ramp])
     expect(back.volume).toBe(0)
   })
 
@@ -133,10 +144,11 @@ describe('a picture whose shape is far from the frame’s', () => {
     for (let i = 1; i < sorted.length; i++) expect(sorted[i].start).toBeGreaterThanOrEqual(sorted[i - 1].start + sorted[i - 1].duration - (sorted[i].transitionIn?.durationFrames ?? 0))
   })
 
-  it('a transition into a shot crosses its backdrop the same way — and only when the shot before it has one too', () => {
+  it('a transition between two backdropped shots crosses both backdrops the same way; one into or out of a filled shot is a cut, with a note', () => {
     expect(TRANSITIONS.some((t) => t.family === 'dissolve'), 'a built-in dissolve to anchor').toBe(true)
-    // The standard cut keeps the user's order: square, wide, tall, threeFour. A dissolve into each of the last three.
-    const p2 = direct(edit(SET), [{ shot: 1, family: 'dissolve' }, { shot: 2, family: 'dissolve' }, { shot: 3, family: 'dissolve' }]).project
+    // The standard cut keeps the user's order: square, wide, tall, threeFour. A dissolve asked into each of the last three.
+    const applied = direct(edit(SET), [{ shot: 1, family: 'dissolve' }, { shot: 2, family: 'dissolve' }, { shot: 3, family: 'dissolve' }])
+    const p2 = applied.project
     const backs = backdropsOf(p2)
     const wide = shotFor(p2, 'wide')
     const wideBack = backs.find((b) => b.assetId === 'wide')!
@@ -148,14 +160,45 @@ describe('a picture whose shape is far from the frame’s', () => {
     const squareBack = backs.find((b) => b.assetId === 'square')!
     expect(squareBack.duration).toBe(square.duration)
     expect(squareBack.start + squareBack.duration).toBeGreaterThan(wideBack.start)
-    // Into the cropped 4:5 photo there is no backdrop to blend; into the cropped 3:4 neither.
-    expect(shotFor(p2, 'tall').transitionIn).toBeDefined()
+    /*
+     * Into the cropped 4:5 photo from the landscape clip: a blend would blend the pictures and not the
+     * clip's borders — the clip runs on past the cut while its backdrop ends there, and the bars would
+     * show the black base. So it is a cut, said so, and the clip and its backdrop end together.
+     */
+    const tall = shotFor(p2, 'tall')
+    expect(tall.transitionIn).toBeUndefined()
+    expect(wide.start + wide.duration).toBe(tall.start)
+    expect(wideBack.start + wideBack.duration).toBe(tall.start)
+    expect(applied.problems.map((x) => x.message).join(' ')).toMatch(/slot_03 enters with a cut — a blend between a picture shown whole and one that fills the frame/)
+    // Between two cropped photos the dissolve is placed as ever.
+    expect(shotFor(p2, 'threeFour').transitionIn).toBeDefined()
     expect(backs.some((b) => b.assetId === 'tall' || b.assetId === 'threeFour')).toBe(false)
 
-    // The other way round — a square after a cropped photo: its backdrop has nothing before it on the lane, so it cuts.
-    const p3 = direct(edit([asset('tall', 1080, 1350), asset('square', 2000, 2000), asset('threeFour', 1500, 2000), asset('wide', 1920, 1080, { name: 'wide.mp4', kind: 'video', durationFrames: 4 * fps, fps })]), [{ shot: 1, family: 'dissolve' }]).project
-    expect(shotFor(p3, 'square').transitionIn).toBeDefined()
-    expect(backdropsOf(p3).find((b) => b.assetId === 'square')!.transitionIn).toBeUndefined()
+    // The other way round — a square after a cropped photo: the same cut, for the same reason.
+    const p3 = direct(edit([asset('tall', 1080, 1350), asset('square', 2000, 2000), asset('threeFour', 1500, 2000), asset('wide', 1920, 1080, { name: 'wide.mp4', kind: 'video', durationFrames: 4 * fps, fps })]), [{ shot: 1, family: 'dissolve' }])
+    expect(shotFor(p3.project, 'square').transitionIn).toBeUndefined()
+    expect(backdropsOf(p3.project).find((b) => b.assetId === 'square')!.transitionIn).toBeUndefined()
+    expect(p3.problems.map((x) => x.message).join(' ')).toMatch(/slot_02 enters with a cut/)
+  })
+
+  it('with no room for a lane under the ad, the picture is cropped to the frame as before — never bars of black', () => {
+    let full = edit(SET)
+    while (full.tracks.length < MAX_TRACKS) full = addTrack(full, 'video', 'top')
+    expect(full.tracks.length).toBe(MAX_TRACKS)
+    const applied = direct(full)
+    const shot = shotFor(applied.project, 'square')
+    expect(shot.crop).toBeDefined()
+    expect(backdropsOf(applied.project)).toEqual([])
+    expect(applied.project.tracks.some((t) => t.director)).toBe(false)
+    expect(applied.problems.map((x) => x.message).join(' ')).toMatch(/slot_01 is cropped to the frame — no lane under the ad/)
+  })
+
+  it('clearing never leaves the project without a video track, even when the Director’s lane is the last one', () => {
+    const lane = p.tracks.find((t) => t.director)!
+    const onlyLane: Project = { ...p, tracks: [lane, ...p.tracks.filter((t) => t.kind === 'audio')], clips: p.clips.filter((c) => c.trackId === lane.id) }
+    const cleared = clearDirector(onlyLane)
+    expect(cleared.tracks.some((t) => t.kind === 'video')).toBe(true)
+    expect(backdropsOf(cleared)).toEqual([])
   })
 
   it('clearing the ad takes the backdrops and their lane with it; a re-run adds one lane, not another', () => {

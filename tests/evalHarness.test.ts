@@ -189,3 +189,15 @@ describe('the blind rating order', () => {
     expect(orders).toContain(false)
   })
 })
+
+describe('the real run’s measurements', () => {
+  it('carry every field the gate reads — the backdrop share included — and drop a photo the sidecar could not open', async () => {
+    const { measureOf } = await import('./eval/local')
+    const m = measureOf({ path: '/p.png', sharpness: 900, luma: 0.94, lumaStd: 0.13, darkClip: 0, brightClip: 0.71, backdropClip: 0.7, dhash: '0c0c', width: 2000, height: 2000 })
+    expect(m).toMatchObject({ brightClip: 0.71, backdropClip: 0.7, dhash: '0c0c', width: 2000 })
+    // Without the backdrop share, the gate would read the whole 71 % as blown.
+    expect(measureOf({ path: '/p.png', sharpness: 1, luma: 0.5, lumaStd: 0.1, darkClip: 0, brightClip: 0.1, width: 1, height: 1 })?.backdropClip).toBeUndefined()
+    expect(measureOf({ path: '/p.png', error: 'No such image' })).toBeNull()
+    expect(measureOf({ path: '/p.png', sharpness: 1, luma: 0.5 })).toBeNull()
+  })
+})

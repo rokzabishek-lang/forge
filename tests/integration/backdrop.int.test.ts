@@ -122,10 +122,14 @@ describe('a square photo in a 9:16 ad', () => {
     expect(left[2]).toBeLessThan(60)
     expect(right[1]).toBeGreaterThan(120)
     expect(right[0]).toBeLessThan(60)
-    // The copy above it: blue, and darker than the picture's blue.
+    // The copy above it: blue, and darker than the picture's blue — by more than the blur alone takes
+    // (measured: the blurred copy reads 198 of 252 undarkened, 150 darkened; the line is drawn between).
     expect(above[2]).toBeGreaterThan(above[0] + 40)
     expect(above[2]).toBeGreaterThan(above[1] + 40)
-    expect(above[2]).toBeLessThan(centre[2] - 30)
+    expect(above[2]).toBeLessThan(centre[2] * 0.7)
+    // The whole-frame blur is taken without drawing its shape: no geq in the graph, the blur itself in it.
+    expect(graph).toContain('gblur=sigma=20.00')
+    expect(graph).not.toContain('geq=')
     // Blurred: the copy's red edge has run into the blue beside it — at x=6 neither pure red nor pure
     // blue, and bluer again further in. Unblurred, x=6 is past the 4.8-px strip: pure blue.
     expect(aboveEdge[0]).toBeGreaterThan(25)

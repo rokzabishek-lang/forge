@@ -72,6 +72,23 @@ export const beatsVia =
 /** One photo's measurement as `vision.measure` returns it — with an error instead when the photo would not open. */
 export type Measured = { path: string; error?: string } & Partial<Measure>
 
+/**
+ * A measurement the gate can use, or null when the sidecar reported an error
+ * or a number is missing. Every field the gate reads is carried — a first
+ * version listed them by hand and dropped `backdropClip`, so the white-backdrop
+ * fix never reached the real run.
+ */
+export function measureOf(m: Measured): Measure | null {
+  const { sharpness, luma, lumaStd, darkClip, brightClip, backdropClip, width, height } = m
+  if (m.error) return null
+  if ([sharpness, luma, lumaStd, darkClip, brightClip, width, height].some((v) => typeof v !== 'number')) return null
+  return {
+    sharpness: sharpness!, luma: luma!, lumaStd: lumaStd!, darkClip: darkClip!, brightClip: brightClip!,
+    ...(typeof backdropClip === 'number' ? { backdropClip } : {}),
+    dhash: m.dhash ?? null, width: width!, height: height!
+  }
+}
+
 /** The photos measured through the sidecar, as the app's `measurePhotos` asks (main/ipc.ts). */
 export const measureVia =
   (client: SidecarClient) =>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { existsSync, readdirSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { readdir, writeFile } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
@@ -17,7 +17,7 @@ import { recipeById, type RecipeId } from '@shared/director/recipes'
 import { probeMany } from '../../src/main/ffmpeg/probe'
 import { toAsset } from '../../src/main/assets'
 import type { Fixture } from './fixtures'
-import { FFPROBE, REPO, beatsVia, capability, libraryTransitions, measureVia, startSidecar, type Measured } from './local'
+import { FFPROBE, REPO, beatsVia, capability, libraryTransitions, measureOf, measureVia, startSidecar, type Measured } from './local'
 import {
   applied,
   cardsOf,
@@ -128,23 +128,10 @@ function stamp(): string {
   return new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
 }
 
-/** A measurement the gate can use, or null when the sidecar reported an error or a number is missing. */
-function measureOf(m: Measured): Measure | null {
-  const { sharpness, luma, lumaStd, darkClip, brightClip, width, height } = m
-  if (m.error) return null
-  if ([sharpness, luma, lumaStd, darkClip, brightClip, width, height].some((v) => typeof v !== 'number')) return null
-  return {
-    sharpness: sharpness!, luma: luma!, lumaStd: lumaStd!, darkClip: darkClip!, brightClip: brightClip!,
-    dhash: m.dhash ?? null, width: width!, height: height!
-  }
-}
-
 async function durationOf(file: string): Promise<number> {
   const { stdout } = await run(FFPROBE, ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', file])
   return Number(String(stdout).trim())
 }
-
-const pngsIn = (dir: string): number => (existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith('.png')).length : 0)
 
 describe.skipIf(!PROVIDER || !REAL)('a real ad from the user’s own pictures and song', () => {
   it(
@@ -179,7 +166,9 @@ describe.skipIf(!PROVIDER || !REAL)('a real ad from the user’s own pictures an
         const assets: MediaAsset[] = photos.map((name, i) => ({ ...toAsset(byPath.get(paths[i])!, FPS), id: `a${String(i + 1).padStart(2, '0')}`, name }))
         const musicAsset: MediaAsset = { ...toAsset(byPath.get(song)!, FPS), id: 'music', name: songs[0] }
         expect(musicAsset.hasAudio, `${songs[0]} has sound`).toBe(true)
-        const inPoint = Math.min(secondsToFrames(draft.musicFrom, FPS), Math.max(0, musicAsset.durationFrames - FPS))
+        // A start past the song would quietly become a one-second window, and a one-second ad.
+        expect(draft.musicFrom >= 0 && secondsToFrames(draft.musicFrom, FPS) <= musicAsset.durationFrames - FPS, `brief.json musicFrom ${draft.musicFrom} s is not inside "${songs[0]}" (${(musicAsset.durationFrames / FPS).toFixed(1)} s)`).toBe(true)
+        const inPoint = secondsToFrames(draft.musicFrom, FPS)
         const window = Math.min(musicAsset.durationFrames - inPoint, secondsToFrames(MAX_WINDOW_SECONDS, FPS))
         const musicClip: Clip = {
           id: 'music-clip', assetId: 'music', trackId: 'a1', start: 0, duration: window, inPoint, volume: 1,
@@ -372,7 +361,25 @@ describe.skipIf(!PROVIDER || !REAL)('a real ad from the user’s own pictures an
 
         if (STEP === 'render') {
           const library = await libraryTransitions()
-          const drawn = { model: pngsIn(cardDirs.model), baseline: pngsIn(cardDirs.baseline) }
+          /*
+           * The cards the render will ask for — the same ids `scoreFixture` applies them under — must all be
+           * drawn. Ids come from one counter the shots, backdrops, black, look and cards all advance, so a code
+           * change since the score step moves them: a card without its picture would silently be left out.
+           */
+          const modelLook = await lookFileFor(landed.composed.recipe, rendersDir)
+          const standardLook = await lookFileFor(standard.composed.recipe, rendersDir)
+          const expected = [
+            ...(settled ? cardsOf(applied(prepared, settled.composed, menu, config.model, modelLook), CANVAS, 'cards/model') : []),
+            ...cardsOf(applied(prepared, standard.composed, menu, 'baseline', standardLook), CANVAS, 'cards/baseline')
+          ]
+          const missing = expected.filter((c) => !existsSync(join(runDir, c.file)))
+          if (missing.length > 0) {
+            throw new Error(`${missing.length} of ${expected.length} cards are not drawn (${missing.map((c) => c.file).join(', ')}) — run STEP=score and window.__forgeEvalCards('${runId}') again`)
+          }
+          const drawn = {
+            model: expected.filter((c) => c.file.startsWith('cards/model/')).length,
+            baseline: expected.filter((c) => c.file.startsWith('cards/baseline/')).length
+          }
           const result = await scoreFixture({ id: 'real', kind: real.draft.kind }, prepared, request, response, {
             model: config.model,
             render: {

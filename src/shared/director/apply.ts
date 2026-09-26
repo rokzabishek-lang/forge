@@ -119,10 +119,12 @@ export function clearDirector(project: Project): Project {
   // even when a shot was its only reference.
   const cardAssets = new Set(removed.filter((c) => c.text || c.solid || c.adjustment).map((c) => c.assetId))
 
+  // The track the Director added under the ad goes with the ad; one the user has since put a clip on stays —
+  // and, as removeTrack keeps it, a project is never left without a video track.
+  const tracks = project.tracks.filter((t) => !emptyDirectorTrack(survivors)(t))
   return {
     ...project,
-    // The track the Director added under the ad goes with the ad; one the user has since put a clip on stays.
-    tracks: project.tracks.filter((t) => !emptyDirectorTrack(survivors)(t)),
+    tracks: tracks.some((t) => t.kind === 'video') ? tracks : project.tracks,
     clips: survivors.map((c) => (c.directorTrim ? restoreTrim(c) : c)),
     assets: project.assets.filter((a) => !(cardAssets.has(a.id) && !stillUsed.has(a.id)))
   }

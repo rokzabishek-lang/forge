@@ -251,7 +251,12 @@ export function applyRecipe(project: Project, composed: Composed, menu: Menu2, c
     if (!s.backdrop) continue
     const lane = laneBelow(s.clip.start, s.clip.duration)
     if (!lane) {
-      problems.push({ path: `$.shots[${s.index}]`, message: `${s.slotId} is shown whole with nothing behind it — no lane under the ad for its backdrop` })
+      // No lane for the copy: the frame's crop it would have had, rather than bars of black.
+      const cropped: Clip = { ...s.clip, crop: s.backdrop }
+      next = { ...next, clips: next.clips.map((c) => (c.id === s.clip.id ? cropped : c)) }
+      s.clip = cropped
+      s.backdrop = null
+      problems.push({ path: `$.shots[${s.index}]`, message: `${s.slotId} is cropped to the frame — no lane under the ad for its backdrop` })
       continue
     }
     const copy: Clip = {
@@ -300,10 +305,21 @@ export function applyRecipe(project: Project, composed: Composed, menu: Menu2, c
       problems.push({ path: at, message: `no "${t.family}" transition is installed — entered with a cut` })
       continue
     }
-    next = anchorTransition(next, shot.clip.id, member, frames)
-    // A backdrop crosses the same boundary the same way, when the shot before it has one on the same lane.
+    /*
+     * A blend between a picture shown whole and one that fills the frame would
+     * blend the pictures and not their borders: for the whole overlap the
+     * contained picture's bars would show the black base (its backdrop ends at
+     * the cut, the shot it belongs to is lengthened past it), or the filled
+     * shot until the backdrop snaps in. So such a boundary is a cut, with a
+     * note. Two backdropped shots on one lane blend, their backdrops with them.
+     */
     const under = backdropOf.get(t.shot)
     const underPrev = backdropOf.get(t.shot - 1)
+    if ((under === undefined) !== (underPrev === undefined)) {
+      problems.push({ path: at, message: `${shot.slotId} enters with a cut — a blend between a picture shown whole and one that fills the frame would leave its borders behind` })
+      continue
+    }
+    next = anchorTransition(next, shot.clip.id, member, frames)
     if (under && underPrev && under.trackId === underPrev.trackId && clipEnd(underPrev) === under.start) {
       next = anchorTransition(next, under.id, member, frames)
     }

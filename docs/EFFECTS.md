@@ -2475,13 +2475,48 @@ AVIF with ffmpeg alone each run and writes the refusal to its note, so the day
 a build reads them is the day the note says so.
 
 sharp 0.35.4's libvips (8.18.6, libheif 1.23.2) decodes AVIF on every platform
-sharp ships prebuilt. HEIC needs an HEVC decoder sharp does not ship, so a
-HEIC reports why instead of importing. So `src/main/imports.ts` converts a
-still of either kind to a PNG under `userData/converted/` on import — keyed
-by the file's `size:mtime` like the other caches, with the colon replaced
-because Windows forbids it in a name — and the asset points at the PNG under
-the file's own name. `rotate()` with no argument bakes the EXIF orientation
-in, which a phone's HEIC nearly always carries and ffmpeg would never see.
-The render check: a solid colour written as AVIF, imported, placed, rendered
-— the frame is that colour, and the same file imported again is not converted
-twice.
+sharp ships prebuilt. HEIC needs an HEVC decoder sharp does not ship; sharp's
+own words for one are "bad seek" and "unable to write to target", so the
+import says instead that HEIC needs a decoder this build lacks. So
+`src/main/imports.ts` converts a still of either kind to a PNG under
+`userData/converted/` on import — keyed by the file's size and mtime like the
+other caches, with the colon replaced because Windows forbids it in a name,
+and the original's name cut to 48 characters because a 241-character name
+made a 258-character one that could not be opened for writing (Windows'
+MAX_PATH is 260). The copy is written under a name of its own and moved into
+place whole, and a cached copy that will not open is made again — a quit
+mid-write once left a fragment `ffprobe` accepted at 640×640.
+
+**The asset stands for the file, and reads the copy.** `path` is the PNG;
+`source` is the AVIF. Everything that moves a project follows `source`
+(`relink.ts` `fileOf`): the relative path is to the AVIF, a folder relink
+matches the AVIF's name and size, "already imported" compares the AVIF, and
+on open (`locateAsset`) the AVIF is found wherever it now is and the copy
+remade if the cache lost it. A relink to an AVIF converts it before answering.
+`rotate()` with no argument bakes the EXIF orientation in, which a phone's
+HEIC nearly always carries and ffmpeg would never see. Nothing prunes the
+cache yet: every converted still, and every earlier version of a re-saved
+source, stays (a 6000×6000 AVIF of noise became a 103 MB PNG).
+
+## 32. A blur over the whole picture needs no shape — `geq` is ten times the blur
+
+The Director's backdrop (a square photo in a 9:16 ad, shown whole over a
+blurred copy of itself) is the editor's "Blurred background" drop: a blur
+mask whose rectangle covers the whole frame. The mask route draws the shape
+with `geq` over every pixel of every frame, then splits, merges and overlays.
+Measured 2026-09-26 on a 540×960 still, 90 frames, the bundled macOS build:
+
+| chain | time |
+|---|---|
+| the mask route — `geq` shape, split, `gblur`, alphamerge, overlay | 3.86 s |
+| `gblur` alone on the opaque planes, alpha off and back on | 0.36 s |
+| `geq` alone | 0.03 s (it is the shape-and-merge chain per frame, not geq by itself) |
+
+CI #98 timed out on four of them on the 2018 Windows build. So `plan.ts`
+takes a blur mask whose shape `isWholeFrameShape` (an upright, hard-edged,
+uninverted rectangle reaching every edge, not animated) without the shape:
+alpha out, `gblur` on the colour, alpha back — the same picture, and a
+picture that does not fill its box keeps its see-through bars exactly as the
+shaped route keeps them. A feathered, turned, inverted or smaller shape goes
+the old way. `tests/integration/mask.int.test.ts` checks both, and the
+backdrop render check asserts the graph has no `geq`.

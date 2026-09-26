@@ -54,16 +54,22 @@ def _block_means(grey: "Any", rows: int, cols: int) -> "Any":
 
 
 def backdrop_share(clipped: "Any") -> float:
-    """The share of the picture that is clipped white AND in a region reaching the frame's edge.
+    """The share of the picture that is clipped white AND in a region that spans the frame.
 
     A product on a white studio backdrop clips most of its pixels to white by
     design — measured 2026-09-26 on four real product-listing photos: 71 % and
     61 % for the box and the bottle on white, 1 % for the same bottle on teal —
     and a rule that reads ``brightClip`` alone calls both blown, so neither may
     ever be the hero. What is blown is a highlight INSIDE the picture, on the
-    face or the product. So the clipped regions that touch the border are
-    counted apart here, and the gate judges what is left. A white sky counts as
-    backdrop too, which is right: a portrait against it is not a reject.
+    face or the product. So the clipped regions that SPAN the frame are counted
+    apart here, and the gate judges what is left.
+
+    Spanning, not merely touching: a backdrop or a white sky reaches three
+    edges, or two facing ones (a band across). A blown dress running off the
+    bottom of a portrait touches one edge, perhaps a corner's two, and stays
+    what it is — blown. (The first version exempted anything touching an edge,
+    and a reviewer measured a clipped dress and a clipped face joined to a
+    white sky both passing as backdrop.)
     """
     import numpy as np
     from scipy import ndimage
@@ -73,11 +79,18 @@ def backdrop_share(clipped: "Any") -> float:
     labels, count = ndimage.label(clipped)
     if count == 0:
         return 0.0
-    edge = np.unique(np.concatenate([labels[0, :], labels[-1, :], labels[:, 0], labels[:, -1]]))
-    edge = edge[edge != 0]
-    if edge.size == 0:
+    edges = [np.unique(labels[0, :]), np.unique(labels[-1, :]), np.unique(labels[:, 0]), np.unique(labels[:, -1])]
+    top, bottom, left, right = (set(int(v) for v in e if v != 0) for e in edges)
+    spanning = {
+        region
+        for region in top | bottom | left | right
+        if sum(region in side for side in (top, bottom, left, right)) >= 3
+        or (region in top and region in bottom)
+        or (region in left and region in right)
+    }
+    if not spanning:
         return 0.0
-    return float(np.isin(labels, edge).mean())
+    return float(np.isin(labels, list(spanning)).mean())
 
 
 def measure_rgb(rgb: "Any") -> dict[str, Any]:

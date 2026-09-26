@@ -369,7 +369,7 @@ callers noticing. Image decode through the bundled ffmpeg, as `depth.py` does
 | measurement | how | reads as |
 |---|---|---|
 | sharpness | variance of `scipy.ndimage.laplace` on grey | soft below 0.35 × the set's median — **relative to the set**, because a soft-focus wedding set is a look, not ten rejects |
-| exposure | mean luma; clipped fraction at < 8 and > 247; `backdropClip`, the clipped-white share in regions touching the frame's edge (`scipy.ndimage.label`) | too dark < 0.18 mean; blown > 6 % clipped **inside** — `brightClip − backdropClip`. Added 2026-09-26 from the first real run: a product on a white studio backdrop clips 61–71 % by design and was never a hero |
+| exposure | mean luma; clipped fraction at < 8 and > 247; `backdropClip`, the clipped-white share in regions that SPAN the frame — three edges, or two facing ones (`scipy.ndimage.label`) | too dark < 0.18 mean; blown > 6 % clipped **inside** — `brightClip − backdropClip`. Added 2026-09-26 from the first real run: a product on a white studio backdrop clips 61–71 % by design and was never a hero. Spanning, not touching: a blown dress running off one edge stays blown (a review found the first version exempting it) |
 | duplicate | 64-bit dHash on 9×8 grey; Hamming ≤ 6 = near-duplicate | of the pair, keep the sharper; say which was left out |
 | orientation | `ffprobe` (already in `depth.py`) | portrait / landscape / square — the recipe's framing rules read it |
 | faces (footage only, later) | — | not in C1; `people` comes from the look |
@@ -879,6 +879,14 @@ All on filters listed in §8; each with a render check.
   transition) and `tests/integration/backdrop.int.test.ts` (a banded square
   rendered: its bands at the frame's edges, the copy above it blue, darker,
   and blurred); seven mutants and the store's own test all fail as they should.
+  After review (2026-09-26 evening): a transition between a backdropped shot
+  and a filled one is a **cut, with a note** — a blend would blend the pictures
+  and not the contained one's borders; with no lane to be had (MAX_TRACKS)
+  the picture keeps the frame's crop rather than bars of black; `clearDirector`
+  never removes the last video track; and every "first free video track"
+  picker in the store goes through `buildTrack`, which skips the Director's
+  lane — a double-clicked photo used to land on it, under the ad. The render
+  takes the whole-frame blur without drawing its shape (EFFECTS.md §32).
 
 ### 5.6 Apply, decisions, panel
 

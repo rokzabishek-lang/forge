@@ -65,6 +65,16 @@ export interface MediaAsset {
    */
   relativeTo?: string
   /**
+   * The file the user imported, when `path` is a converted copy of it.
+   *
+   * An AVIF or HEIC still is converted to a PNG under the app's cache on
+   * import (main/imports.ts), because the bundled ffmpeg cannot open it. The
+   * PNG is what ffmpeg reads; THIS is the file the project travels with — the
+   * relative path, relinking and "already imported" all follow it, and the
+   * copy is remade from it when the cache is gone.
+   */
+  source?: string
+  /**
    * The file is not where the project says it is. RUNTIME ONLY.
    *
    * Never written to a project file: it describes this machine at this moment,
@@ -1037,6 +1047,17 @@ export function stackedSlot(
 /** True when the project cannot hold another track. */
 export function trackLimitReached(project: Project): boolean {
   return project.tracks.length >= MAX_TRACKS
+}
+
+/**
+ * The track something new is built onto: the first of its kind that is not
+ * locked and not the Director's own (`Track.director` — the lane under an ad
+ * that holds its backdrops, which sits first in the stack and would otherwise
+ * be where a double-clicked photo, a reel or an ad landed, under the ad).
+ * Undefined when there is none, for the caller to say so.
+ */
+export function buildTrack(project: Project, kind: Track['kind']): Track | undefined {
+  return project.tracks.find((t) => t.kind === kind && !t.locked && !t.director)
 }
 
 /**

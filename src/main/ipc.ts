@@ -10,7 +10,7 @@ import {
   worthRecovering,
   type AutosaveRecord
 } from '@shared/project/recovery'
-import { candidatePaths, dirNameOf, matchByName } from '@shared/project/relink'
+import { dirNameOf, matchByName } from '@shared/project/relink'
 import { safeTakeBase, voiceOverArgs } from '@shared/render/voiceover'
 import { execFile } from 'node:child_process'
 import { probeMany } from './ffmpeg/probe'
@@ -28,7 +28,7 @@ import { transitionsFromMasks, type TransitionDef } from '@shared/transitions/re
 import type { MaskTag } from '@shared/transitions/classify'
 import { entriesOfKind, isClipSticker, type ClipStickerMeta } from '@shared/assets/catalog'
 import { fileKey, toAsset } from './assets'
-import { probeImports } from './imports'
+import { locateAsset, probeImports, relinkable } from './imports'
 import {
   prepareCaptions,
   writeCaptionFrame,
@@ -1369,30 +1369,22 @@ export function registerIpc(getWindow: () => BrowserWindow | null): JobQueue {
     const searchFolders = [
       ...new Set(
         file.project.assets
-          .map((a) => dirNameOf(a.path))
+          // A converted still is known by the file it was made from, not by its copy in the cache.
+          .map((a) => dirNameOf(a.source ?? a.path))
           .filter((d) => d.length > 0)
       )
     ]
 
+    /*
+     * A self-drawn asset (size 0) has no file to find: text cards, colour
+     * cards and clippings are baked into the app's own cache and re-baked on
+     * demand; marking one offline would put a red card over a caption that
+     * draws itself perfectly well. Everything else: found, remade (a converted
+     * still whose copy the cache lost), or marked offline — imports.ts.
+     */
     file.project = {
       ...file.project,
-      assets: await Promise.all(
-        file.project.assets.map(async (asset) => {
-          /*
-           * A self-drawn asset has no file to find.
-           *
-           * Text cards, colour cards and clippings are baked into the app's own
-           * cache and re-baked on demand; marking one offline would put a red
-           * card over a caption that draws itself perfectly well.
-           */
-          if (asset.size === 0) return asset
-          for (const candidate of candidatePaths(asset, projectDir, searchFolders)) {
-            const found = await access(candidate).then(() => true, () => false)
-            if (found) return candidate === asset.path ? asset : { ...asset, path: candidate }
-          }
-          return { ...asset, offline: true }
-        })
-      )
+      assets: await Promise.all(file.project.assets.map((asset) => locateAsset(asset, projectDir, searchFolders)))
     }
 
     app.addRecentDocument(target)
@@ -1423,7 +1415,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): JobQueue {
         filters: [{ name: 'Media', extensions: [...ALL_EXTENSIONS] }]
       })
       if (result.canceled || result.filePaths.length === 0) return {}
-      return { [assetId]: result.filePaths[0] }
+      return relinkable({ [assetId]: result.filePaths[0] })
     }
 
     const result = await dialog.showOpenDialog(window, {
@@ -1457,7 +1449,8 @@ export function registerIpc(getWindow: () => BrowserWindow | null): JobQueue {
       if (entry.isDirectory()) await scan(join(folder, entry.name))
     }
 
-    return matchByName(assets, files)
+    // A still ffmpeg cannot read is converted before it is handed back, as on import.
+    return relinkable(matchByName(assets, files))
   })
 
   /* ---------------------------------------------------------------- shell */

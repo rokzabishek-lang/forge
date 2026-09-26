@@ -127,6 +127,7 @@ import {
   removeTransition as removeTransitionFrom,
   addTrack as addTrackTo,
   clipBefore,
+  buildTrack,
   clipEnd,
   clipsOnTrack,
   crossfadeAt,
@@ -1108,7 +1109,8 @@ export const useEditor = create<EditorState>((set, get) => ({
   importAssets: async (paths) => {
     if (paths.length === 0) return
     const { project, notify } = get()
-    const known = new Set(project.assets.map((a) => a.path))
+    // A converted still is known by the file the user imported, not by its copy in the cache.
+    const known = new Set(project.assets.map((a) => a.source ?? a.path))
     const fresh = paths.filter((p) => !known.has(p))
     if (fresh.length === 0) return
 
@@ -1131,9 +1133,7 @@ export const useEditor = create<EditorState>((set, get) => ({
     // First track of the right kind with room, rather than a hardcoded id —
     // track ids are generated now, and v1/a1 may not exist.
     const kind = asset.kind === 'audio' ? 'audio' : 'video'
-    const track =
-      project.tracks.find((t) => t.kind === kind && !t.locked) ??
-      project.tracks.find((t) => t.kind === kind)
+    const track = buildTrack(project, kind) ?? project.tracks.find((t) => t.kind === kind)
     if (!track) return
     const trackId = track.id
 
@@ -1713,7 +1713,7 @@ export const useEditor = create<EditorState>((set, get) => ({
     const startProject = get().project
     const fps = startProject.settings.fps
     // Never the lane the last ad's backdrops sat on: that goes with the ad (clearDirector).
-    const videoTrack = startProject.tracks.find((t) => t.kind === 'video' && !t.locked && !t.director)
+    const videoTrack = buildTrack(startProject, 'video')
     if (!videoTrack) {
       notify('There is no video track to build onto', 'info')
       return
@@ -1929,7 +1929,7 @@ export const useEditor = create<EditorState>((set, get) => ({
       return
     }
 
-    const videoTrack = project.tracks.find((t) => t.kind === 'video' && !t.locked)
+    const videoTrack = buildTrack(project, 'video')
     if (!videoTrack) {
       notify('There is no video track to build onto', 'info')
       return
@@ -2138,7 +2138,7 @@ export const useEditor = create<EditorState>((set, get) => ({
       return
     }
 
-    const videoTrack = project.tracks.find((t) => t.kind === 'video' && !t.locked)
+    const videoTrack = buildTrack(project, 'video')
     if (!videoTrack) {
       notify('There is no video track to build onto', 'info')
       return
@@ -3482,7 +3482,7 @@ export const useEditor = create<EditorState>((set, get) => ({
       notify('Import some photos first', 'info')
       return
     }
-    const track = project.tracks.find((t) => t.kind === 'video' && !t.locked)
+    const track = buildTrack(project, 'video')
     if (!track) {
       notify('There is no video track to build onto', 'info')
       return
@@ -3566,7 +3566,7 @@ export const useEditor = create<EditorState>((set, get) => ({
      * the same lane and nothing changes.
      */
     const track =
-      overlayTrackFor(project) ?? project.tracks.find((t) => t.kind === 'video' && !t.locked)
+      overlayTrackFor(project) ?? buildTrack(project, 'video')
     if (!track) {
       notify('There is no video track to build onto', 'info')
       return
@@ -4153,7 +4153,7 @@ export const useEditor = create<EditorState>((set, get) => ({
      * steps, matching what dragging them in one at a time would have been.
      */
     const lane =
-      trackId ?? get().project.tracks.find((t) => t.kind === 'video' && !t.locked)?.id
+      trackId ?? buildTrack(get().project, 'video')?.id
     if (!lane) return
 
     let at = Math.max(0, Math.round(frame))
@@ -4179,7 +4179,7 @@ export const useEditor = create<EditorState>((set, get) => ({
     }
     try {
       const found = await window.forge.relinkAssets(
-        missing.map((a) => ({ id: a.id, path: a.path, size: a.size })),
+        missing.map((a) => ({ id: a.id, path: a.path, size: a.size, ...(a.source ? { source: a.source } : {}) })),
         assetId
       )
       const count = Object.keys(found).length

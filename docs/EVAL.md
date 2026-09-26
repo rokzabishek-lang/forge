@@ -166,6 +166,41 @@ Molecules Serum" sits over the photo's own baked "HOW TO LAYER" text — the
 look's words say "label text", so the Director could learn to place a card
 lower, or choose a cleaner hook. Not yet rated blind by the user.
 
+### The review of the day's work (2026-09-26, evening)
+
+Four Opus reviewers on the day's commits (the Director's backdrops, the AVIF
+import, the type fix, the eval harness), each finding attacked by two
+skeptics: 23 findings, 21 stood. Fixed the same evening, each with a test the
+bug fails and a mutant that dies:
+
+- **A blend between a whole picture and a filled one flashed black in the
+  bars** (the shot ran on past the cut; its backdrop did not). Such a boundary
+  is now a cut, with a note — the honest answer, and what most shots get.
+- **A double-clicked photo landed on the Director's lane, under the ad**:
+  every "first free video track" picker in the store now goes through
+  `buildTrack`, which skips it. With no lane to be had the picture keeps the
+  frame's crop; clearing never removes the last video track.
+- **A converted AVIF pointed at the app's cache**, so a moved project could
+  never find it: the asset now stands for the file (`source`) and reads the
+  copy (`path`); relinking, relative paths, "already imported" and opening
+  follow the file, and the copy is remade wherever the project lands. A
+  half-written copy is never trusted, a long name is cut to fit, and a HEIC
+  says it needs a decoder this build lacks.
+- **The gate's backdrop rule exempted a blown dress running off the frame**:
+  backdrop is now a clipped region that SPANS the frame (three edges, or two
+  facing ones), and the real run's harness had dropped `backdropClip` on the
+  floor — so the fix had never reached it. It does now.
+- **Vacuous tests**: the "same speed" check compared undefined to undefined,
+  "darker" held with no darkening, two colour checks held on the frame without
+  the card. Each now fails when the thing it names is taken away.
+- **CI #98 timed out on Windows**: four backdrops meant four `geq` shape
+  chains, ten times the cost of the blur (EFFECTS.md §32). A blur over the
+  whole picture is taken without its shape now.
+
+Left as known: the cache under `userData/converted` is never pruned, and the
+eval renders draw headline cards as stills — the app animates them in
+(`rise`), the eval does not, equally for the model's ad and the standard cut.
+
 ## Runs
 
 | run | model | think | transport | landed | used · repaired · rejected · error | median s | median tokens in/out | headlines that fit | copy (model / standard) | preferred to standard | C0 bar |

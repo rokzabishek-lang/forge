@@ -24,10 +24,15 @@ export interface AssetVision {
   look?: StoredLook
 }
 
-/** Does this photo need measuring? Not when its measurement is for this very file. A file that cannot be read cannot be. */
+/**
+ * Does this photo need measuring? Not when its measurement is for this very
+ * file — unless it was measured before `backdropClip` existed (2026-09-26), in
+ * which case a white-backdrop photo would stay flagged blown for as long as
+ * the file is unchanged. A file that cannot be read cannot be measured.
+ */
 export function needsMeasure(vision: AssetVision | undefined, key: string | null): boolean {
   if (key === null) return false
-  return !vision || vision.key !== key || !vision.measure
+  return !vision || vision.key !== key || !vision.measure || vision.measure.backdropClip === undefined
 }
 
 /** Does this photo need looking at? Same rule; a look by an earlier model is still a look. */

@@ -109,9 +109,9 @@ const api = {
    * a project arrives with a hundred clips missing.
    */
   relinkAssets: (
-    assets: { id: string; path: string; size: number }[],
+    assets: { id: string; path: string; size: number; source?: string }[],
     assetId?: string
-  ): Promise<Record<string, string>> =>
+  ): Promise<Record<string, string | { path: string; source: string }>> =>
     ipcRenderer.invoke('project:relink', { assets, assetId }),
 
   /* ------------------------------------------------------ voice-over */

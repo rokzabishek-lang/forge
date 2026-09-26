@@ -74,6 +74,10 @@ maybe('vision.measure', () => {
     await lavfi('backdrop', 'color=c=white:s=640x480', 'drawbox=x=220:y=140:w=200:h=200:c=0x808080:t=fill')
     // A blown photo: two white patches burnt INTO a mid-grey picture, touching no edge.
     await lavfi('highlights', 'color=c=0x808080:s=640x480', 'drawbox=x=100:y=100:w=80:h=80:c=white:t=fill,drawbox=x=400:y=300:w=80:h=80:c=white:t=fill')
+    // A blown dress running off the bottom of a portrait: one edge touched, and it is still the subject.
+    await lavfi('dress', 'color=c=0x808080:s=640x480', 'drawbox=x=200:y=300:w=240:h=180:c=white:t=fill')
+    // A white sky: a band across the top, reaching both sides — backdrop.
+    await lavfi('sky', 'color=c=0x808080:s=640x480', 'drawbox=x=0:y=0:w=640:h=150:c=white:t=fill')
 
     client = new SidecarClient({ cwd: SIDECAR_DIR, python: VENV_PYTHON, maxRestarts: 0 })
     await client.start()
@@ -118,6 +122,12 @@ maybe('vision.measure', () => {
     expect(highlights.brightClip).toBeGreaterThan(0.03)
     expect(highlights.brightClip).toBeLessThan(0.05)
     expect(highlights.backdropClip).toBe(0)
+    // The dress runs off one edge: touching is not spanning, so it stays blown.
+    expect(measures.dress.brightClip).toBeGreaterThan(0.1)
+    expect(measures.dress.backdropClip).toBe(0)
+    // The sky spans the top from side to side: backdrop, every bit of it.
+    expect(measures.sky.brightClip).toBeGreaterThan(0.25)
+    expect(Math.abs(measures.sky.backdropClip - measures.sky.brightClip)).toBeLessThan(0.005)
   })
 
   it('matches one picture at two sizes, and not the same picture turned', () => {
