@@ -111,7 +111,7 @@ export interface Layout {
 
 /** The hero is longest by at least this factor, against every other shot. */
 export const HERO_LEAD = 1.3
-/** How far past the recipe's own pacing a shot may be stretched to fill a long song. */
+/** How far past the recipe's own pacing a shot may be stretched to fill a long song, unless the recipe says otherwise. */
 export const MAX_STRETCH = 1.5
 /** Headline reading speed, and the shortest a card may be (as automation/caption.ts). */
 export const CARD_CPS = 16
@@ -192,13 +192,37 @@ export function layout(recipe: Recipe, grid: Grid, intents: ShotIntent[], option
    * so the shortest shot there is TWO beats, which a frame-based fit missed.
    */
   const last = grid.beats.length - 1
-  const minBeats = Math.max(1, Math.ceil(MIN_SHOT_SECONDS / beatSeconds - 1e-9))
+  /*
+   * The shortest each shot may be, in beats. A still: the recipe's floor — the
+   * fast recipes leave a picture out rather than squeeze shots onto every beat.
+   * A clip: the same, but never longer than its footage (a floor longer than
+   * the clip would show black after it); never under the global minimum.
+   */
+  const globalMin = Math.max(1, Math.ceil(MIN_SHOT_SECONDS / beatSeconds - 1e-9))
+  const minBeats = Math.max(globalMin, Math.ceil(recipe.shortestSeconds / beatSeconds - 1e-9))
+  const minsFor = (list: ShotIntent[]): number[] =>
+    list.map((s) =>
+      s.footageFrames === null ? minBeats : Math.max(globalMin, Math.min(minBeats, Math.floor(s.footageFrames / fps / beatSeconds + 1e-9)))
+    )
   const beatsFor = (seconds: number): number => Math.ceil(seconds / beatSeconds - 1e-9)
+
+  /*
+   * 0. A clip too short to fill even the shortest shot at this tempo is not a
+   * shot: kept, it ended before its shot and left black on the track until the
+   * next one (found by review). It is left out, as a picture the music cannot
+   * hold is, and says why.
+   */
+  const shortest = globalMin * beatFrames
+  const dropped: Layout['dropped'] = intents
+    .filter((s) => s.footageFrames !== null && s.footageFrames < shortest - 1e-9)
+    .map((s) => ({ slotId: s.slotId, why: `${((s.footageFrames ?? 0) / fps).toFixed(1)}s of footage is shorter than the shortest shot at this tempo (${(shortest / fps).toFixed(1)}s)` }))
+  const playable = intents.filter((s) => !dropped.some((d) => d.slotId === s.slotId))
+  if (playable.length === 0) return { ...empty, dropped }
 
   /* 1. The ending, counted back from the last beat: the end card, then the black. */
   let cardBeats = beatsFor(Math.max(MIN_CARD_SECONDS, recipe.ending.endCardSeconds))
   let blackBeats = Math.max(0, Math.round(recipe.ending.blackBeats))
-  const minBody = Math.max(minBeats * Math.min(intents.length, 2), beatsFor(intents.length >= 2 ? 3 : 1.5))
+  const minBody = Math.max(minBeats * Math.min(playable.length, 2), beatsFor(playable.length >= 2 ? 3 : 1.5))
   if (last - cardBeats - blackBeats < minBody && blackBeats > 0) {
     blackBeats = 0
     notes.push('the song is too short for the recipe\u2019s black before the end card — cut straight to it')
@@ -212,16 +236,15 @@ export function layout(recipe: Recipe, grid: Grid, intents: ShotIntent[], option
   let endIdx = last
 
   /* 2–3. Targets fitted to the window; drop what the music cannot hold; end early when it has too few. */
-  let shots = intents.slice()
-  const dropped: Layout['dropped'] = []
+  let shots = playable.slice()
   let lengths: number[] = []
   for (;;) {
-    const fitted = fit(recipe, shots, bodyIdx, beatSeconds, minBeats, fps)
+    const fitted = fit(recipe, shots, bodyIdx, beatSeconds, minsFor(shots), fps)
     if (!fitted) {
       const victim = dropCandidate(shots)
       if (victim === null) {
         // Only the hook and the hero are left and they still do not fit: the hero's floor yields.
-        lengths = heroYields(shots, bodyIdx, minBeats)
+        lengths = heroYields(shots, bodyIdx, minsFor(shots))
         notes.push('the song is too short for the recipe\u2019s hold on the hero — it holds as long as the music allows')
         break
       }
@@ -231,7 +254,7 @@ export function layout(recipe: Recipe, grid: Grid, intents: ShotIntent[], option
     }
     lengths = fitted.lengths
     if (fitted.short) {
-      const body = Math.max(minBeats * shots.length, Math.round(lengths.reduce((a, b) => a + b, 0)))
+      const body = Math.max(sum(minsFor(shots)), Math.round(lengths.reduce((a, b) => a + b, 0)))
       bodyIdx = Math.min(bodyIdx, body)
       endIdx = bodyIdx + blackBeats + cardBeats
       lengths = scaleTo(lengths, bodyIdx)
@@ -240,7 +263,7 @@ export function layout(recipe: Recipe, grid: Grid, intents: ShotIntent[], option
     break
   }
 
-  return finish(recipe, grid, shots, lengths, { body: bodyIdx, card: bodyIdx + blackBeats, end: endIdx }, minBeats, dropped, notes, options)
+  return finish(recipe, grid, shots, lengths, { body: bodyIdx, card: bodyIdx + blackBeats, end: endIdx }, minsFor(shots), dropped, notes, options)
 }
 
 /** The next beat at or after a frame. */
@@ -266,7 +289,8 @@ function scaleTo(lengths: number[], total: number): number[] {
  * A clip is never longer than its footage — measured in C0, a clip given the
  * long last shot left up to 3 s of black. So a clip that would overrun is
  * FIXED at its footage and the rest re-solved around it, until nothing
- * overruns. `short` when filling would stretch the design past MAX_STRETCH —
+ * overruns. `short` when filling would stretch the design past the recipe's
+ * stretch limit (MAX_STRETCH unless it sets one) —
  * the ad then ends early; null when the shots cannot fit at their shortest,
  * and one must go.
  */
@@ -275,19 +299,22 @@ export function fit(
   shots: ShotIntent[],
   W: number,
   beatSeconds: number,
-  minBeats: number,
+  minBeats: number | readonly number[],
   fps: number
 ): { lengths: number[]; short: boolean } | null {
   const n = shots.length
+  const mins = perShot(minBeats, n)
   const heroAt = Math.max(0, shots.findIndex((s) => s.hero))
   const p = (i: number): number => (n > 1 ? i / (n - 1) : 0)
+  // The recipe paces in seconds; the fit works in this song's beats.
+  const beatsAt = (x: number): number => recipe.pacing(x) / beatSeconds
   // The design, unclamped: the shortest-shot minimum is applied AFTER scaling, below.
-  const raw = shots.map((s, i) => recipe.pacing(p(i)) * WEIGHT[s.weight] * (s.face ? recipe.hold.faces : 1))
+  const raw = shots.map((s, i) => beatsAt(p(i)) * WEIGHT[s.weight] * (s.face ? recipe.hold.faces : 1))
   // The floor in WHOLE beats, rounded up: a floor of 6 s is 11 beats at 107 BPM, never 10.3 —
   // lengths are whole beats, and a fractional floor rounded the hero to 5.9 s.
-  const floor = Math.max(minBeats, Math.ceil(recipe.hold.heroMinSeconds / beatSeconds - 1e-9))
-  const heroTarget = Math.max(floor, recipe.pacing(p(heroAt)) * recipe.hold.hero)
-  const maxOf = footageBeats(shots, beatSeconds, minBeats, fps)
+  const floor = Math.max(mins[Math.max(0, shots.findIndex((s) => s.hero))], Math.ceil(recipe.hold.heroMinSeconds / beatSeconds - 1e-9))
+  const heroTarget = Math.max(floor, beatsAt(p(heroAt)) * recipe.hold.hero)
+  const maxOf = footageBeats(shots, beatSeconds, mins, fps)
 
   /*
    * Solve, then hold any shot that broke a bound AT the bound and solve the
@@ -299,16 +326,16 @@ export function fit(
    */
   const fixed = new Map<number, number>()
   for (let pass = 0; pass <= 2 * n; pass++) {
-    const solved = solveFree(raw, heroAt, fixed, W, floor, Math.min(heroTarget, maxOf[heroAt]), minBeats)
+    const solved = solveFree(raw, heroAt, fixed, W, floor, Math.min(heroTarget, maxOf[heroAt]), mins, recipe.maxStretch ?? MAX_STRETCH)
     if (!solved) return null
     const over = solved.lengths.findIndex((l, i) => !fixed.has(i) && l > maxOf[i] + 1e-9)
     if (over !== -1) {
       fixed.set(over, maxOf[over])
       continue
     }
-    const under = solved.lengths.findIndex((l, i) => !fixed.has(i) && i !== heroAt && l < minBeats - 1e-9)
+    const under = solved.lengths.findIndex((l, i) => !fixed.has(i) && i !== heroAt && l < mins[i] - 1e-9)
     if (under !== -1) {
-      fixed.set(under, minBeats)
+      fixed.set(under, mins[under])
       continue
     }
     return solved
@@ -317,9 +344,9 @@ export function fit(
 }
 
 /** Each shot's longest length in whole beats: its footage for a clip, unlimited for a still. */
-function footageBeats(shots: ShotIntent[], beatSeconds: number, minBeats: number, fps: number): number[] {
-  return shots.map((s) =>
-    s.footageFrames === null ? Infinity : Math.max(minBeats, Math.floor(s.footageFrames / fps / beatSeconds + 1e-9))
+function footageBeats(shots: ShotIntent[], beatSeconds: number, mins: readonly number[], fps: number): number[] {
+  return shots.map((s, i) =>
+    s.footageFrames === null ? Infinity : Math.max(mins[i], Math.floor(s.footageFrames / fps / beatSeconds + 1e-9))
   )
 }
 
@@ -331,7 +358,8 @@ function solveFree(
   W: number,
   floor: number,
   heroTarget: number,
-  minBeats: number
+  mins: readonly number[],
+  stretch: number
 ): { lengths: number[]; short: boolean } | null {
   const free = raw.map((_, i) => i).filter((i) => i !== heroAt && !fixed.has(i))
   const fixedSum = [...fixed.values()].reduce((a, b) => a + b, 0)
@@ -345,19 +373,23 @@ function solveFree(
 
   if (raw.length === 1) {
     if (fixed.has(0)) return { lengths: [fixed.get(0)!], short: fixed.get(0)! < W }
-    if (W < minBeats) return null
-    return W > heroTarget * MAX_STRETCH ? { lengths: [heroTarget * MAX_STRETCH], short: true } : { lengths: [W], short: false }
+    if (W < mins[0]) return null
+    return W > heroTarget * stretch ? { lengths: [heroTarget * stretch], short: true } : { lengths: [W], short: false }
   }
 
   if (fixed.has(heroAt)) {
     // The hero is a clip held to its footage: the others fill around it, never past its lead.
     const H = fixed.get(heroAt)!
+    // What is held already takes more than the window — the hero's footage and every other
+    // shot at its shortest: a shot must go. Without this the plan came back longer than the
+    // window and snapping squeezed the last shot under its minimum.
+    if (Wr < -1e-9) return null
     if (R === 0) return { lengths: assemble(0, null), short: Wr > 1e-9 }
     const sLead = M > 0 ? H / (HERO_LEAD * M) : Infinity
     let s = Wr / R
     let short = false
-    if (s > Math.min(MAX_STRETCH, sLead)) {
-      s = Math.min(MAX_STRETCH, sLead)
+    if (s > Math.min(stretch, sLead)) {
+      s = Math.min(stretch, sLead)
       short = true
     }
       if (s <= 0) return null
@@ -367,11 +399,11 @@ function solveFree(
   const hero0 = Math.max(heroTarget, HERO_LEAD * M, HERO_LEAD * Mfixed)
   if (R === 0) {
     // Every other shot is held at a bound: the hero takes what is left — never less than its floor.
-    if (Wr < Math.max(minBeats, floor, HERO_LEAD * Mfixed)) return null
-    return Wr > hero0 * MAX_STRETCH ? { lengths: assemble(0, hero0 * MAX_STRETCH), short: true } : { lengths: assemble(0, Wr), short: false }
+    if (Wr < Math.max(mins[heroAt], floor, HERO_LEAD * Mfixed)) return null
+    return Wr > hero0 * stretch ? { lengths: assemble(0, hero0 * stretch), short: true } : { lengths: assemble(0, Wr), short: false }
   }
   const f = Wr / (R + hero0)
-  if (f > MAX_STRETCH) return { lengths: assemble(MAX_STRETCH, hero0 * MAX_STRETCH), short: true }
+  if (f > stretch) return { lengths: assemble(stretch, hero0 * stretch), short: true }
   let s = f
   let hero = hero0 * f
   // The floor is hard here: when the window cannot give the hero its floor, a shot goes (the
@@ -382,14 +414,15 @@ function solveFree(
     hero = heroMin
     s = (Wr - hero) / R
   }
-  if (s <= 0 || hero < minBeats) return null
+  if (s <= 0 || hero < mins[heroAt]) return null
   return { lengths: assemble(s, hero), short: false }
 }
 
 /** When only the hook and the hero are left and still do not fit: the hook takes its minimum, the hero the rest. */
-function heroYields(shots: ShotIntent[], W: number, minBeats: number): number[] {
+function heroYields(shots: ShotIntent[], W: number, mins: readonly number[]): number[] {
   const heroAt = Math.max(0, shots.findIndex((s) => s.hero))
-  return shots.map((_, i) => (i === heroAt ? Math.max(minBeats, W - minBeats * (shots.length - 1)) : minBeats))
+  const others = sum(mins.filter((_, i) => i !== heroAt))
+  return shots.map((_, i) => (i === heroAt ? Math.max(mins[i], W - others) : mins[i]))
 }
 
 /**
@@ -416,16 +449,26 @@ function dropCandidate(shots: ShotIntent[]): number | null {
   return candidates[0].i
 }
 
+/** A shot minimum given as one number for every shot, or one each. */
+function perShot(minBeats: number | readonly number[], n: number): number[] {
+  return typeof minBeats === 'number' ? Array.from({ length: n }, () => minBeats) : [...minBeats]
+}
+
+function sum(xs: readonly number[]): number {
+  return xs.reduce((a, b) => a + b, 0)
+}
+
 /* ------------------------------------------------------------------ snap */
 
 /**
  * The boundaries, as beat indices. Each: the nearest beat to its target at
- * least `minBeats` after the previous one and leaving room for the rest; a
+ * least its shot's minimum after the previous one and leaving room for the rest; a
  * structural beat (drop, section, end of a build) within ONE beat of that
  * wins — on a grid of every beat, "within half a beat" is only the beat
  * itself; ties go to the earlier. The last boundary is the body's end.
  */
-export function snapIndices(grid: Grid, lengths: number[], bodyIdx: number, minBeats: number, maxBeats: number[]): number[] {
+export function snapIndices(grid: Grid, lengths: number[], bodyIdx: number, minBeats: number | readonly number[], maxBeats: number[]): number[] {
+  const mins = perShot(minBeats, lengths.length)
   const out: number[] = []
   let previous = 0
   let target = 0
@@ -435,10 +478,10 @@ export function snapIndices(grid: Grid, lengths: number[], bodyIdx: number, minB
       out.push(bodyIdx)
       break
     }
-    const room = lengths.length - 1 - k
-    const lo = previous + minBeats
+    const room = sum(mins.slice(k + 1))
+    const lo = previous + mins[k]
     // Never past a clip's footage: rounding up to the next beat would leave black after it.
-    const hi = Math.max(lo, Math.min(bodyIdx - minBeats * room, previous + maxBeats[k]))
+    const hi = Math.max(lo, Math.min(bodyIdx - room, previous + maxBeats[k]))
     const clamp = (i: number): number => Math.max(lo, Math.min(hi, i))
     const nearest = clamp(Math.round(target))
     const near = [nearest - 1, nearest, nearest + 1].filter((i) => i >= lo && i <= hi)
@@ -458,7 +501,7 @@ function finish(
   shots: ShotIntent[],
   lengths: number[],
   idx: { body: number; card: number; end: number },
-  minBeats: number,
+  minBeats: readonly number[],
   dropped: Layout['dropped'],
   notes: string[],
   options: LayoutOptions
@@ -486,17 +529,19 @@ function finish(
     }
     // The longest shot that still has a beat to spare gives as many as it can; the loop
     // asks the next one for the rest. Asking only the single longest shot gave up whenever
-    // it was already at its minimum, a few frames short of the hero's floor.
+    // it was already at its minimum, a few frames short of the hero's floor. Between shots
+    // of the same length, the one nearest the hero gives: fewer cuts move, and the hook —
+    // the first shot, often the longest on a curve that accelerates — keeps its length.
     const giver = endIdx
       .map((_, i) => i)
-      .filter((i) => i !== heroAt && beatsOf(i) > minBeats)
-      .sort((a, b) => span(b) - span(a))[0]
+      .filter((i) => i !== heroAt && beatsOf(i) > minBeats[i])
+      .sort((a, b) => span(b) - span(a) || Math.abs(a - heroAt) - Math.abs(b - heroAt))[0]
     if (giver === undefined) {
       notes.push(`${shots[heroAt].slotId} holds ${(span(heroAt) / fps).toFixed(1)}s — the other shots cannot give it more`)
       break
     }
     const want = Math.ceil((need - span(heroAt)) / beatFrames - 1e-9)
-    const k = Math.max(1, Math.min(want, beatsOf(giver) - minBeats, maxBeats[heroAt] - beatsOf(heroAt)))
+    const k = Math.max(1, Math.min(want, beatsOf(giver) - minBeats[giver], maxBeats[heroAt] - beatsOf(heroAt)))
     // Move every boundary between the hero and the giver k beats towards the giver.
     if (giver < heroAt) for (let i = giver; i < heroAt; i++) endIdx[i] -= k
     else for (let i = heroAt; i < giver; i++) endIdx[i] += k

@@ -378,7 +378,9 @@ no multi-select; no markers; and no audio fades.
 and a line about the product. Only the product line is required. Under it,
 **Recipe** — Auto (the model chooses) or one of Wedding highlight, Product
 reveal, Energy, Trailer and Fashion / perfume, with the chosen one's one-line
-description beneath. Your pictures are listed in pool order with a field each
+description beneath. **Length** under More defaults to the recipe's — sixty
+seconds for a wedding teaser, thirty otherwise — or the music, if shorter.
+Your pictures are listed in pool order with a field each
 for what is in them; the gear opens the model settings (Auto / Ollama / an
 OpenAI-shaped server such as LM Studio, with a write-only key field). Direct
 asks the model for a plan, checks it, and the recipe times it to the beat:

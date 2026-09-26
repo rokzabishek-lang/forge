@@ -35,7 +35,7 @@ export interface BriefDraft {
   language: string
 }
 
-/** The ad's default length when the brief leaves it blank: this, or the music, whichever is shorter. */
+/** The ad's default length when the brief leaves it blank and no recipe says otherwise: this, or the music, whichever is shorter. */
 export const DEFAULT_AD_SECONDS = 30
 /** The call to action when the brief leaves it blank. */
 export const DEFAULT_CTA = 'Shop now'
@@ -70,9 +70,29 @@ export function musicFor(project: Project): MusicChoice | null {
   return { clip, asset, windowMs, startMs, endMs: startMs + windowMs }
 }
 
-/** How long the ad is: what the brief asked for, else thirty seconds or the music, whichever is shorter. */
-export function adSeconds(draft: Pick<BriefDraft, 'seconds'>, music: MusicChoice | null): number {
-  return draft.seconds ?? Math.min(DEFAULT_AD_SECONDS, music ? music.windowMs / 1000 : DEFAULT_AD_SECONDS)
+/**
+ * How long the ad is: what the brief asked for, else the expected recipe's
+ * default — sixty seconds for a wedding teaser, thirty otherwise — or the
+ * music, whichever is shorter.
+ */
+export function adSeconds(
+  draft: Pick<BriefDraft, 'seconds'>,
+  music: MusicChoice | null,
+  recipe?: Pick<Recipe, 'defaultSeconds'> | null
+): number {
+  const preferred = recipe?.defaultSeconds ?? DEFAULT_AD_SECONDS
+  return draft.seconds ?? Math.min(preferred, music ? music.windowMs / 1000 : preferred)
+}
+
+/**
+ * The recipe an ad is expected to be BEFORE anything is seen: the pinned one,
+ * or the tone's from the brief's own words. The length has to be known before
+ * the model is asked, so it cannot wait for the model's choice; and the eyes
+ * have not run yet, so a calm brief that only its pictures reveal as a wedding
+ * keeps the thirty-second default.
+ */
+export function expectedRecipe(draft: Pick<BriefDraft, 'product' | 'benefit' | 'audience' | 'cta' | 'tone'>, pinned: Recipe | null): Recipe {
+  return pinned ?? recipeForTone(draft.tone, { briefText: [draft.product, draft.benefit, draft.audience, draft.cta].join(' '), peopleInSet: false })
 }
 
 /** The brief as the model sees it: trimmed, with the blanks filled in. */

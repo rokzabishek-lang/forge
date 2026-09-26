@@ -94,6 +94,13 @@ describe('the prompt', () => {
     expect(user).toContain('roles: hook, story, cta')
     expect(user).toContain('HERO (choose one): slot_02, slot_01, slot_03, slot_05')
   })
+  it('asks for the product on the hook’s card, read in the first two seconds — and the standard cut puts it there', () => {
+    // TikTok's creative data: a title in the first 2–2.5 s, +48 % recall (docs/research/ad-references-2026-09-25.md).
+    expect(PLAYBOOK2).toMatch(/hook's headline names the product or the brand/)
+    expect(PLAYBOOK2).toMatch(/first two seconds/)
+    expect(baselineSpine2(brief, menu()).shots[0].headline).toBe(brief.product)
+  })
+
   it('has room for twelve shots at their longest', () => {
     const long = plan(Array.from({ length: 12 }, (_, i) => shot(`slot_${String(i + 1).padStart(2, '0')}`, { headline: 'x'.repeat(40), punch_word: 'x'.repeat(10), why: 'y'.repeat(100), move: 'outRight' })), { reasoning: 'z'.repeat(300) })
     // JSON runs about three characters a token on these fields; a generous estimate, not a tokenizer.

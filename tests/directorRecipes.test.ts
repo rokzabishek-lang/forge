@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { DRAWABLE_MOMENTS, FIRST_RECIPES, RECIPES, looksLikeWedding, recipeById, recipeForTone } from '@shared/director/recipes'
+import { DRAWABLE_MOMENTS, ENERGY, FASHION, FIRST_RECIPES, RECIPES, TRAILER, WEDDING_HIGHLIGHT, looksLikeWedding, recipeById, recipeForTone } from '@shared/director/recipes'
+import { MIN_SHOT_SECONDS } from '@shared/director/rhythm'
 import { TEXT_STYLES } from '@shared/render/textStyle'
 import { TEXT_ANIMATIONS } from '@shared/render/textAnimation'
 import { LOOKS } from '@shared/render/looks'
@@ -40,12 +41,13 @@ describe.each(RECIPES.map((r) => [r.id, r] as const))('recipe %s', (_id, recipe)
     expect(recipe.treatments.kinds.length).toBeGreaterThanOrEqual(recipe.treatments.budget)
   })
 
-  it('paces in whole-number-ish beats, always positive, over the whole body', () => {
+  it('paces in seconds, never under its own shortest shot, over the whole body', () => {
+    expect(recipe.shortestSeconds).toBeGreaterThanOrEqual(MIN_SHOT_SECONDS)
     for (let p = 0; p <= 1.0001; p += 0.05) {
-      const beats = recipe.pacing(p)
-      expect(Number.isFinite(beats)).toBe(true)
-      expect(beats).toBeGreaterThan(0.25)
-      expect(beats).toBeLessThanOrEqual(8)
+      const seconds = recipe.pacing(p)
+      expect(Number.isFinite(seconds)).toBe(true)
+      expect(seconds, `p = ${p.toFixed(2)}`).toBeGreaterThanOrEqual(recipe.shortestSeconds)
+      expect(seconds).toBeLessThanOrEqual(8)
     }
     // Out of range is clamped, never NaN or negative.
     expect(recipe.pacing(-1)).toBeGreaterThan(0)
@@ -65,6 +67,34 @@ describe.each(RECIPES.map((r) => [r.id, r] as const))('recipe %s', (_id, recipe)
     if (recipe.id === 'wedding-highlight') expect(recipe.hold.heroMinSeconds).toBe(6)
     expect(recipe.intensity).toBeGreaterThanOrEqual(0)
     expect(recipe.intensity).toBeLessThanOrEqual(1)
+  })
+})
+
+describe('the numbers the ad research set (docs/research/ad-references-2026-09-25.md)', () => {
+  it('Energy and Trailer never design a shot under 0.85 s, and at 124 BPM their floor is two beats — never a shot every beat', () => {
+    const beat = 60 / 124
+    for (const recipe of [ENERGY, TRAILER]) {
+      for (let p = 0; p <= 1.0001; p += 0.05) expect(recipe.pacing(p), `${recipe.id} at ${p.toFixed(2)}`).toBeGreaterThanOrEqual(0.85)
+      expect(Math.ceil(recipe.shortestSeconds / beat - 1e-9), recipe.id).toBeGreaterThanOrEqual(2)
+    }
+  })
+
+  it('Energy still accelerates: its first shot more than twice its last', () => {
+    expect(ENERGY.pacing(0) / ENERGY.pacing(1)).toBeGreaterThan(2)
+    for (let p = 0.05; p <= 1.0001; p += 0.05) expect(ENERGY.pacing(p)).toBeLessThan(ENERGY.pacing(p - 0.05))
+  })
+
+  it('Fashion holds 4.5 to 7 seconds, longest in the middle, and may stretch to twice its design', () => {
+    expect(FASHION.pacing(0)).toBeCloseTo(4.5, 6)
+    expect(FASHION.pacing(0.5)).toBeCloseTo(7, 6)
+    expect(FASHION.pacing(1)).toBeCloseTo(4.5, 6)
+    expect(FASHION.maxStretch).toBe(2)
+    expect(FASHION.shortestSeconds).toBeGreaterThanOrEqual(3)
+  })
+
+  it('a wedding is a sixty-second teaser; the other recipes default to thirty', () => {
+    expect(WEDDING_HIGHLIGHT.defaultSeconds).toBe(60)
+    for (const r of RECIPES.filter((x) => x.id !== 'wedding-highlight')) expect(r.defaultSeconds, r.id).toBe(30)
   })
 })
 

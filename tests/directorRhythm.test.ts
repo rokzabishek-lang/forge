@@ -48,6 +48,12 @@ function invariants(recipe: Recipe, grid: ReturnType<typeof rhythmGrid>, intents
   expect(l.shots[0].startFrame, ctx).toBe(grid.start)
   for (let i = 1; i < l.shots.length; i++) expect(l.shots[i].startFrame, ctx).toBe(l.shots[i - 1].endFrame)
   for (const s of spans(l)) expect(s, ctx).toBeGreaterThanOrEqual(minShot - 1)
+  // A still is never squeezed under the recipe's shortest shot — the fast recipes leave a picture out instead.
+  const beatSeconds = grid.beatFrames / fps
+  const floorBeats = Math.max(1, Math.ceil(MIN_SHOT_SECONDS / beatSeconds - 1e-9), Math.ceil(recipe.shortestSeconds / beatSeconds - 1e-9))
+  for (const s of l.shots) {
+    if (intents.find((x) => x.slotId === s.slotId)?.kind === 'image') expect(s.endFrame - s.startFrame, `${ctx}: ${s.slotId}`).toBeGreaterThanOrEqual(floorBeats * grid.beatFrames - 1)
+  }
   // A clip's shot is never longer than its footage: no black after it (C0 measured up to 3 s of it).
   for (const s of l.shots) expect(s.clipFrames, `${ctx}: ${s.slotId}`).toBe(s.endFrame - s.startFrame)
   expect(l.endFrame, ctx).toBeLessThanOrEqual(grid.end)
@@ -248,7 +254,8 @@ describe('what the fit is for — not only what the repairs catch', () => {
   it('an accelerating ad keeps its shape with the hero last: every earlier shot no longer than the one before', () => {
     // The fit scales the whole design; a post-snap repair alone would take the hero's time from ONE shot and break the curve.
     // Two songs: the step rule allows a beat of rounding, so a curve run BACKWARDS can climb a beat a shot and
-    // pass it — measured, with Energy's curve inverted: 15 30 30 30 45 45 60. The ends must also be in order.
+    // pass it (measured once: 15 30 30 30 45 45 60). The ends must also be in order — by at least a beat,
+    // since Energy's design goes from 2 s to 0.9 s.
     for (const [bpm, seconds, n] of [[120, 16, 8], [100, 24, 10]]) {
       const grid = rhythmGrid(song(bpm, seconds), { fps, seconds, tempo: 120 })
       const intents = Array.from({ length: n }, (_, i) => still(i + 1, { hero: i === n - 1 }))
@@ -256,40 +263,102 @@ describe('what the fit is for — not only what the repairs catch', () => {
       const body = spans(l).slice(0, -1)
       const ctx = `${bpm} BPM, ${n} shots`
       for (let i = 1; i < body.length; i++) expect(body[i], `${ctx}: shot ${i + 1}`).toBeLessThanOrEqual(body[i - 1] + grid.beatFrames)
-      expect(body[0], `${ctx}: the first shot is longer than the last before the hero`).toBeGreaterThanOrEqual(body.at(-1)! + 2 * grid.beatFrames)
+      expect(body[0], `${ctx}: the first shot is longer than the last before the hero`).toBeGreaterThanOrEqual(body.at(-1)! + grid.beatFrames)
     }
   })
 
   it('a song up to half again as long as the design is filled by stretching; past that, the ad ends early', () => {
-    // Six stills, the hero fourth, at 100 BPM: the wedding's design is 25.2 beats (measured: at the stretch limit
-    // it lays out 6, 5.4, 4.8, 15, 3.6, 3 beats = 37.8). A 33-beat window is 1.31× — stretched to fill it;
-    // a 45-beat window is 1.79× — the ad stops at the limit and ends early.
+    // Six stills, the hero fourth, at 100 BPM: the wedding's design is 26.89 beats (measured: at the stretch limit
+    // it lays out 6.67, 6, 5.33, 15, 4, 3.33 beats = 40.33). A 35-beat window is 1.30× — stretched to fill it;
+    // a 48-beat window is 1.79× — the ad stops at the limit and ends early.
     const intents = [1, 2, 3, 4, 5, 6].map((n) => still(n, { hero: n === 4 }))
     const sum = (xs: number[]): number => xs.reduce((a, b) => a + b, 0)
-    const filled = fit(WEDDING_HIGHLIGHT, intents, 33, 0.6, 1, fps)!
+    const filled = fit(WEDDING_HIGHLIGHT, intents, 35, 0.6, 1, fps)!
     expect(filled.short).toBe(false)
-    expect(sum(filled.lengths)).toBeCloseTo(33, 6)
-    const long = fit(WEDDING_HIGHLIGHT, intents, 45, 0.6, 1, fps)!
+    expect(sum(filled.lengths)).toBeCloseTo(35, 6)
+    const long = fit(WEDDING_HIGHLIGHT, intents, 48, 0.6, 1, fps)!
     expect(long.short).toBe(true)
-    expect(sum(long.lengths)).toBeCloseTo(1.5 * 25.2, 6)
+    expect(sum(long.lengths)).toBeCloseTo(1.5 * (121 / 4.5), 6)
   })
 
-  it('the hero’s lead after snapping is taken from the longest shot that can give, not from a short one', () => {
-    // Found by a mutation check (the giver order reversed changed 299 of 3,000 random ads): a Trailer at 120 BPM,
-    // the hero second. The long opening still gives the beat; the short clip after the hero keeps its two
-    // beats, so the last act still tightens — reversed, the clip was cut to one beat and the curve went flat.
-    const grid = rhythmGrid(song(120, 28, { sections: [5382] }), { fps, seconds: 28, tempo: 100 })
-    const intents = [
-      still(1, { weight: 'hold', face: true }),
-      still(2, { weight: 'quick', hero: true }),
-      { ...still(3, { weight: 'quick' }), kind: 'video' as const, footageFrames: 175 },
-      still(4, { weight: 'hold', face: true })
-    ]
+  it('pacing is in seconds: the same recipe designs the same shots at 90 BPM and at 160', () => {
+    // A twenty-second window at each tempo: 30 beats at 90 BPM, 53.3 at 160. In beats, the fast song cut 1.8× faster.
+    const intents = [1, 2, 3, 4, 5, 6].map((n) => still(n, { hero: n === 4 }))
+    for (const recipe of [WEDDING_HIGHLIGHT, ENERGY, FASHION]) {
+      const slow = fit(recipe, intents, 20 / (60 / 90), 60 / 90, 1, fps)!
+      const fast = fit(recipe, intents, 20 / (60 / 160), 60 / 160, 1, fps)!
+      slow.lengths.forEach((l, i) => expect(fast.lengths[i] * (60 / 160), `${recipe.id} shot ${i + 1}`).toBeCloseTo(l * (60 / 90), 6))
+    }
+  })
+
+  it('a crowded Energy ad leaves pictures out rather than cut a shot on every beat', () => {
+    for (const bpm of [124, 160]) {
+      const grid = rhythmGrid(song(bpm, 12), { fps, seconds: 12, tempo: 124 })
+      const intents = Array.from({ length: 16 }, (_, i) => still(i + 1, { hero: i === 8 }))
+      const l = layout(ENERGY, grid, intents)
+      invariants(ENERGY, grid, intents, l)
+      expect(l.dropped.length, `${bpm} BPM`).toBeGreaterThan(0)
+      for (const s of spans(l)) expect(s, `${bpm} BPM`).toBeGreaterThanOrEqual(2 * grid.beatFrames - 1)
+    }
+  })
+
+  it('a Trailer’s last act is its fastest, and still two beats a shot at 124 BPM', () => {
+    const grid = rhythmGrid(song(124, 30), { fps, seconds: 30, tempo: 100 })
+    const intents = Array.from({ length: 14 }, (_, i) => still(i + 1, { hero: i === 5 }))
     const l = layout(TRAILER, grid, intents)
     invariants(TRAILER, grid, intents, l)
     const s = spans(l)
-    expect(s[2], 'the clip after the hero keeps its two beats').toBe(2 * grid.beatFrames)
-    expect(s[2]).toBeGreaterThan(s[3])
+    for (const x of s) expect(x).toBeGreaterThanOrEqual(2 * grid.beatFrames - 1)
+    expect(Math.min(...s.slice(-3))).toBeLessThanOrEqual(Math.min(...s.slice(0, 3)))
+  })
+
+  it('a clip too short to fill the shortest shot is left out, and says so — it would have left black after it', () => {
+    // Found by review: a 0.3 s clip at 124 BPM got a one-beat shot (0.48 s), ended nine frames in, and the
+    // next shot's clip started five frames later — a black flash on the track.
+    const grid = rhythmGrid(song(124, 12), { fps, seconds: 12, tempo: 124 })
+    const intents = [still(1), still(2, { hero: true }), still(3), { ...still(4), kind: 'video' as const, footageFrames: 9 }, still(5)]
+    const l = layout(ENERGY, grid, intents)
+    invariants(ENERGY, grid, intents, l)
+    expect(l.shots.map((s) => s.slotId)).not.toContain('slot_04')
+    expect(l.dropped.find((d) => d.slotId === 'slot_04')!.why).toMatch(/shorter than the shortest shot/)
+    // A clip that fills a beat stays in.
+    const long = layout(ENERGY, grid, intents.map((x) => (x.slotId === 'slot_04' ? { ...x, footageFrames: 30 } : x)))
+    expect(long.shots.map((s) => s.slotId)).toContain('slot_04')
+  })
+
+  it('a hero clip held to its footage, and the rest already at their shortest, more than the window: a picture goes', () => {
+    // Found by the recipe floor (the 500-ad sweep): four shots of at least seven beats were accepted into a
+    // 26-beat body, and snapping squeezed the last one to five. A 3.4 s clip is the hero; Fashion's floor is 3 s.
+    const intents = [still(1), { ...still(2, { hero: true }), kind: 'video' as const, footageFrames: 102 }, still(3), still(4)]
+    expect(fit(FASHION, intents, 26, 0.48, 7, fps)).toBeNull()
+    expect(fit(FASHION, intents.slice(0, 3), 26, 0.48, 7, fps)).not.toBeNull()
+  })
+
+  it('a fashion ad with few pictures holds up to twice its design before it ends early', () => {
+    // Three stills at 90 BPM, the hero in the middle: the design is 34.5 beats — 6.75 either side (4.5 s)
+    // and a 21-beat hero (7 s × 2, over its 5 s floor). 62 beats is 1.8× — filled; 76 is 2.2× — the ad
+    // stops at twice the design and ends early.
+    const intents = [still(1), still(2, { hero: true }), still(3)]
+    const sum = (xs: number[]): number => xs.reduce((a, b) => a + b, 0)
+    const filled = fit(FASHION, intents, 62, 60 / 90, 1, fps)!
+    expect(filled.short).toBe(false)
+    expect(sum(filled.lengths)).toBeCloseTo(62, 6)
+    const long = fit(FASHION, intents, 76, 60 / 90, 1, fps)!
+    expect(long.short).toBe(true)
+    expect(sum(long.lengths)).toBeCloseTo(2 * 34.5, 6)
+  })
+
+  it('the hero’s lead after snapping is taken from the longest shot that can give, not from a short one', () => {
+    // Found by a mutation check (the giver order reversed changed 344 of 3,000 random ads): a Product reveal at
+    // 80 BPM, three stills, the hero last. The long first shot gives the hero its beats; the second keeps its
+    // three — reversed, it was cut to 0.8 s (23 frames) while the 4.5 s opening kept every frame.
+    const grid = rhythmGrid(song(80, 37, { sections: [20160], drops: [{ ms: 6162, score: 0.9 }, { ms: 25067, score: 0.9 }] }), { fps, seconds: 37, tempo: 100 })
+    const intents = [still(1, { weight: 'hold' }), still(2, { weight: 'hold' }), still(3, { weight: 'hold', hero: true })]
+    const l = layout(PRODUCT_REVEAL, grid, intents)
+    invariants(PRODUCT_REVEAL, grid, intents, l)
+    const s = spans(l)
+    expect(s[1], 'the second shot keeps at least two beats').toBeGreaterThanOrEqual(2 * grid.beatFrames)
+    expect(s[0]).toBeGreaterThan(s[1])
   })
 
   it('the design itself gives the hero its lead, before any repair', () => {
@@ -361,20 +430,25 @@ describe('500 generated ads', () => {
           face: rand() < 0.3,
           headline: rand() < 0.4 ? 'A short line' : '',
           sharpness: Math.round(rand() * 1000),
-          ...(rand() < 0.15 ? { kind: 'video' as const, footageFrames: Math.round((1 + rand() * 6) * fps) } : {})
+          // Clips from 0.2 s — shorter than the shortest shot at most tempos — to 7 s.
+          ...(rand() < 0.15 ? { kind: 'video' as const, footageFrames: Math.round((0.2 + rand() * 6.8) * fps) } : {})
         })
       )
       const l = layout(recipe, grid, intents)
       invariants(recipe, grid, intents, l)
       const heroIntent = intents.find((x) => x.hero)!
       const clipHeroTooShort = heroIntent.kind === 'video' && (heroIntent.footageFrames ?? 0) < recipe.hold.heroMinSeconds * fps
-      if (l.shots.length > 1 && !clipHeroTooShort && l.notes.some((n) => /hold|too short|footage/.test(n))) excused++
+      // The same honesty for a clip hero with footage past its floor but short of its lead over a long shot.
+      const clipHeroOutOfFootage = heroIntent.kind === 'video' && l.notes.some((n) => /all the footage there is/.test(n))
+      if (l.shots.length > 1 && !clipHeroTooShort && !clipHeroOutOfFootage && l.notes.some((n) => /hold|too short|footage/.test(n))) excused++
       heroSeconds.push((l.shots.find((s) => s.hero)!.endFrame - l.shots.find((s) => s.hero)!.startFrame) / fps)
     }
     // The hero rule's escape (a note that the music could not give it more) is for songs too short
     // for the recipe — rare. If it became the norm the sweep would prove nothing.
-    // A clip hero shorter than the recipe's hold is excused honestly and not counted; everything
-    // else excused is a song too short for its shots, which the generator makes only now and then.
+    // A clip hero shorter than the recipe's hold, or out of footage for its lead, is excused honestly
+    // and not counted; everything else excused is a song too short for its shots, which the generator
+    // makes only now and then. (Measured when clips as short as 0.2 s joined the sweep: the song-too-short
+    // counts were unchanged, 14 · 14 · 2; only clip heroes out of footage rose, 8 → 12.)
     expect(excused, `${excused} of 500 excused`).toBeLessThan(25)
     expect(heroSeconds.filter((s) => s >= 2).length).toBeGreaterThan(400)
   })

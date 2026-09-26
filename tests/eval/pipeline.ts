@@ -27,7 +27,7 @@ import {
   parseModelJson,
   type ModelAnswer
 } from '@shared/director/provider'
-import { adSeconds, briefFor, buildSlots, gridsFor, menu2For, musicFor, settle2, type Settled2 } from '@shared/director/run'
+import { adSeconds, briefFor, buildSlots, expectedRecipe, gridsFor, menu2For, musicFor, settle2, type Settled2 } from '@shared/director/run'
 import { buildRenderPlan } from '@shared/render/plan'
 import type { TransitionDef } from '@shared/transitions/registry'
 import { probeMany } from '../../src/main/ffmpeg/probe'
@@ -228,7 +228,8 @@ export async function prepareFixture(
   /* From here, exactly what `direct()` does before it asks. */
   const slots = buildSlots(withMedia, notes)
   const music = musicFor(withMedia)
-  const seconds = adSeconds({ seconds: fixture.brief.seconds }, music)
+  const pinnedRecipe = options.pinned ? recipeById(options.pinned) : null
+  const seconds = adSeconds({ seconds: fixture.brief.seconds }, music, expectedRecipe({ ...fixture.brief, benefit: fixture.brief.benefit ?? '', audience: fixture.brief.audience ?? '', cta: fixture.brief.cta ?? '' }, pinnedRecipe))
 
   let analysis: MusicAnalysis | null = null
   let beatsNote: string | null = null

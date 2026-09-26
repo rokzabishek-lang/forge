@@ -27,6 +27,7 @@ RULES
 - weight: hold for the hero and for faces that matter, quick for a passing detail, normal otherwise.
 - move: from the chosen recipe's moves; hold keeps the picture still. speed: normal for stills; slow or ramp only for a clip.
 - headline: six words or fewer, concrete, or an empty string — most shots need none. A wedding's lines are names, a place, a feeling, never a sales line. The last line is the call to action when the brief has one.
+- The hook's headline names the product or the brand — a wedding, the couple's names — so it is read in the first two seconds, before anyone scrolls away.
 - punch_word: copy ONE word of the headline exactly — the word that hits — or empty.
 - A slot's "shows" is what is really in the picture: write about that. A slot "measured soft", "dark" or "blown" is never the hook or the hero.
 - language: every headline and punch_word is in the brief's copy language, in that language's own script — never English when another language is asked, never transliterated into Latin letters. Brand and product names stay exactly as the brief writes them. reasoning and why may be in English.

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { emptyProject, type Clip, type MediaAsset, type Project } from '@shared/timeline'
-import { adSeconds, briefFor, menuFor, musicFor, type BriefDraft } from '@shared/director/run'
+import { adSeconds, briefFor, expectedRecipe, menuFor, musicFor, type BriefDraft } from '@shared/director/run'
+import { ENERGY, WEDDING_HIGHLIGHT } from '@shared/director/recipes'
 
 /**
  * What `direct()` decides before it asks (shared/director/run.ts) — the music,
@@ -63,6 +64,24 @@ describe('how long the ad is', () => {
     const long = project([asset({ id: 'song' })], [clip({ assetId: 'song', duration: 3000 })])
     expect(adSeconds({ seconds: null }, musicFor(long))).toBe(30)
     expect(adSeconds({ seconds: null }, null)).toBe(30)
+  })
+
+  it('is sixty seconds for a wedding — the teaser — or the music if that is shorter; thirty for the others', () => {
+    const long = project([asset({ id: 'song' })], [clip({ assetId: 'song', duration: 3000 })])
+    expect(adSeconds({ seconds: null }, musicFor(long), WEDDING_HIGHLIGHT)).toBe(60)
+    expect(adSeconds({ seconds: null }, musicFor(p), WEDDING_HIGHLIGHT)).toBe(20)
+    expect(adSeconds({ seconds: null }, null, WEDDING_HIGHLIGHT)).toBe(60)
+    expect(adSeconds({ seconds: null }, musicFor(long), ENERGY)).toBe(30)
+    // What the brief asked for still wins.
+    expect(adSeconds({ seconds: 15 }, musicFor(long), WEDDING_HIGHLIGHT)).toBe(15)
+  })
+
+  it('is decided by the recipe EXPECTED before anything is seen: the pinned one, or the tone’s from the brief’s words', () => {
+    expect(expectedRecipe(draft({ tone: 'premium', product: 'Priya & Arjun', benefit: 'our wedding day' }), null).id).toBe('wedding-highlight')
+    expect(expectedRecipe(draft({ tone: 'premium', product: 'Aura serum' }), null).id).toBe('product-reveal')
+    expect(expectedRecipe(draft({ tone: 'premium', product: 'Priya & Arjun', benefit: 'our wedding day' }), ENERGY).id).toBe('energy')
+    // A calm brief the pictures alone would reveal as a wedding: the eyes have not run yet.
+    expect(expectedRecipe(draft({ tone: 'calm', product: 'Priya & Arjun' }), null).id).toBe('fashion')
   })
 })
 

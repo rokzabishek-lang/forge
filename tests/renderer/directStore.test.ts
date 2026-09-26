@@ -138,6 +138,19 @@ describe('direct() runs spine@2', () => {
     expect(s.lastDirection!.reasoning).toBe('a fast one')
   })
 
+  it('a wedding brief with the length left blank is a sixty-second teaser', async () => {
+    useEditor.setState({
+      directBrief: { ...useEditor.getState().directBrief, product: 'Priya & Arjun', benefit: 'our wedding day', tone: 'premium', seconds: null }
+    })
+    await useEditor.getState().direct()
+    expect(spine[0].user).toMatch(/MUSIC: 60\.0 s/)
+    // The same brief pinned to Energy is a thirty-second spot.
+    spine.length = 0
+    useEditor.getState().setDirectRecipe('energy')
+    await useEditor.getState().direct()
+    expect(spine[0].user).toMatch(/MUSIC: 30\.0 s/)
+  })
+
   it('a pinned recipe is the only one offered, and the standard cut uses it too', async () => {
     useEditor.getState().setDirectRecipe('wedding-highlight')
     await useEditor.getState().direct()

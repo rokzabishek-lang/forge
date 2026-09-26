@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { ChevronDown, ChevronRight, Loader2, Settings2, Sparkles } from 'lucide-react'
 import { DIRECTOR_RULES } from '@shared/director/apply'
 import { RECIPES, type RecipeId } from '@shared/director/recipes'
+import { expectedRecipe } from '@shared/director/run'
 import { buildSlots } from '@shared/director/menu'
 import { isLoopback, type LlmProviderChoice, type LlmStatus } from '@shared/director/provider'
 import { TONES } from '@shared/director/schema'
@@ -80,7 +81,9 @@ export function Director(): ReactNode {
   const musicSeconds = musicClip
     ? framesToSeconds(musicClip.directorTrim?.duration ?? musicClip.duration, fps)
     : null
-  const defaultSeconds = Math.min(30, musicSeconds ?? 30)
+  // The recipe's own default — a wedding teaser is sixty seconds — or the music, whichever is shorter (run.ts adSeconds).
+  const recipeSeconds = expectedRecipe(brief, pinned).defaultSeconds
+  const defaultSeconds = Math.min(recipeSeconds, musicSeconds ?? recipeSeconds)
 
   /* Which provider would answer, and what it would say if asked now. */
   const chosen: LlmStatus | undefined = (() => {
@@ -258,7 +261,7 @@ export function Director(): ReactNode {
           max={90}
           step={1}
           value={brief.seconds ?? ''}
-          placeholder={`${defaultSeconds.toFixed(0)} s${musicSeconds !== null ? ' (from the music)' : ''}`}
+          placeholder={`${defaultSeconds.toFixed(0)} s${musicSeconds !== null && musicSeconds < recipeSeconds ? ' (from the music)' : ''}`}
           onChange={(e) =>
             setBrief({ seconds: e.target.value === '' ? null : Math.max(6, Math.min(90, Number(e.target.value))) })
           }

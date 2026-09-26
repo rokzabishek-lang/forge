@@ -515,6 +515,14 @@ the validator's restraint rules, and the look is one.
 
 ### 5.1 A recipe is data — `src/shared/director/recipes/`
 
+> **Retuned 2026-09-25 from the ad research** (docs/research/ad-references-2026-09-25.md):
+> pacing is in SECONDS, snapped to the song's beats, so a recipe cuts the same
+> at 90 and 160 BPM; each recipe has a `shortestSeconds` a crowded ad may
+> not squeeze under (Energy and Trailer never cut a shot on every beat), an
+> optional `maxStretch` (Fashion 2), and a `defaultSeconds` (a wedding is a
+> 60 s teaser). The table below is the original design; the numbers in
+> `recipes/index.ts` are the current ones.
+
 (A different `recipes.ts` — `src/shared/edit/recipes.ts` — already holds the
 editing gestures; the directing recipes are a folder under `director/`.)
 

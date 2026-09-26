@@ -170,7 +170,7 @@ import { applyRecipe, decisionFor2 } from '@shared/director/apply2'
 import { BASELINE_MODEL } from '@shared/director/baseline'
 import type { Problem } from '@shared/director/conforms'
 import { buildSlots } from '@shared/director/menu'
-import { adSeconds, briefFor, gridsFor, menu2For, musicFor, settle2 } from '@shared/director/run'
+import { adSeconds, briefFor, expectedRecipe, gridsFor, menu2For, musicFor, settle2 } from '@shared/director/run'
 import { maxTokensFor2, spine2Prompt } from '@shared/director/prompt2'
 import { spine2Schema } from '@shared/director/schema2'
 import { recipeById, type RecipeId } from '@shared/director/recipes'
@@ -1771,7 +1771,8 @@ export const useEditor = create<EditorState>((set, get) => ({
     // the Director eval builds exactly the same menu from exactly the same rules.
     const music = musicFor(cleared)
     const musicClip = music?.clip
-    const seconds = adSeconds(directBrief, music)
+    const pinned = directRecipe === 'auto' ? null : recipeById(directRecipe)
+    const seconds = adSeconds(directBrief, music, expectedRecipe(directBrief, pinned))
     const offsetFrames = musicClip?.start ?? 0
 
     // The ad is footage, so it wants the bottom layer — and the user's own
@@ -1815,7 +1816,6 @@ export const useEditor = create<EditorState>((set, get) => ({
        * the same code the Director eval runs).
        */
       const catalogue = useCatalog.getState().transitions
-      const pinned = directRecipe === 'auto' ? null : recipeById(directRecipe)
       const grids = gridsFor(cleared, music, analysis, seconds)
       const menu = menu2For(cleared, gated, grids, brief, { pinned })
 

@@ -63,14 +63,32 @@ export interface Recipe {
   /** The roles this kind of ad has, in the order they come. */
   roles: Role2[]
   /**
-   * Target shot length in BEATS at position p∈[0,1] of the body. The rhythm
-   * engine multiplies by the holds, fits the window and snaps to legal cuts.
+   * Target shot length in SECONDS at position p∈[0,1] of the body. The rhythm
+   * engine turns it into beats of the song, multiplies by the holds, fits the
+   * window and snaps to legal cuts — so the same recipe cuts the same shots
+   * on a 90 BPM song and a 160 BPM one. In beats it did not: cut density is
+   * meant to be tempo-invariant (automation/cutPlan.ts, AUTOMATION.md §5b),
+   * and a wedding ran 1.6× faster on a fast song (docs/research/ad-references-2026-09-25.md).
    */
   pacing: (p: number) => number
+  /**
+   * The shortest a shot may be squeezed to when the music is short for the
+   * pictures, in seconds; past it a picture is left out. Never under
+   * MIN_SHOT_SECONDS. For the fast recipes it is what keeps a crowded ad from
+   * cutting on every beat.
+   */
+  shortestSeconds: number
+  /**
+   * How far past its own pacing the design may be stretched to fill a long
+   * song before the ad ends early instead (rhythm.ts MAX_STRETCH when unset).
+   */
+  maxStretch?: number
+  /** The ad's length when the brief leaves it blank (and the music is long enough). */
+  defaultSeconds: number
   /** Beats per minute to pace by when there is no music. */
   tempo: number
   hold: {
-    /** The hero's target is `pacing × hero`, then raised to `heroMinSeconds`. */
+    /** The hero's target is `pacing × hero` (seconds), then raised to `heroMinSeconds`. */
     hero: number
     heroMinSeconds: number
     faces: number
