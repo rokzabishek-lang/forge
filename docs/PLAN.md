@@ -488,9 +488,9 @@ left out — near-duplicate of slot_03 (slot_03 is sharper)".
 >   seeking and playing along the curve; the Director ramps a clip 1× → 0.4×
 >   (`DIRECTOR_RAMP`) when its recipe ramps and the clip does not speak
 >   (tests/integration/ramp.int.test.ts: source frames 25/42/54 at 1/2/3 s).
-> - **Not yet**: the hold clip, J/L cuts and treatments are not drawn;
->   coherence.ts (§5.4) is not built; no ramp control in the UI (the Director
->   is the only thing that ramps).
+> - **Not yet**: the hold clip, J/L cuts and treatments are not drawn; no
+>   ramp control in the UI (the Director is the only thing that ramps).
+>   Coherence (§5.4) is built — see there.
 > - ~~stills are still letterboxed (C0)~~ — **fixed 2026-09-25**: every shot
 >   gets the reframe every dropped clip gets (`solveCrop`, now shared), and the
 >   export fills a picture within 1 % of its box's shape instead of padding it —
@@ -743,6 +743,20 @@ music). "Legal cut" means a `CutCandidate` on the menu.
    dropped from the quietest shots, named.
 
 ### 5.4 Coherence — `src/shared/director/coherence.ts`
+
+> **Built 2026-09-26.** `cohere()` runs inside `run.ts` `settle2`, so the app
+> and the eval both land a coherent ad. As built: the rhythm engine already
+> guarantees most of the table by construction (moments a bar apart and never
+> on a transition or the treatment's cut, hits a bar apart, whooshes a bar
+> apart) and the validator the rest (moves, styles and animations outside the
+> recipe; a ramp on a clip that speaks; now also a ramp in a recipe that does
+> not ramp). What coherence adds: a whip beside a slowed or ramped shot becomes
+> a cut and takes its whoosh; a hit and a whoosh within a bar lose the quieter
+> cut's (a tie loses the whoosh); the same move on two stills in a row takes
+> the recipe's next; glitch type or a glitch family over a warm look, and
+> chrome, flames or neon type in a wedding, take the recipe's calm first. The
+> intensity moves the camera amplitude, the look's strength, the type size
+> (±10 %) and is recorded in the decision for C3 and C4's levels.
 
 One `intensity` per ad (the recipe's default, nudged by the brief's tone:
 `urgent`/`energetic` +0.15, `calm`/`premium` −0.15, clamped) sets the type

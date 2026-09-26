@@ -60,7 +60,8 @@ function plan(): { reasoning: string; recipe: string; hero: string; style: strin
       slot: slot.id,
       role: ['hook', 'problem', 'product', 'cta'][i],
       weight: i === 1 ? 'hold' : 'normal',
-      move: 'in',
+      // Varied: the same move on two stills in a row is a repair (coherence.ts), not a good answer.
+      move: ['in', 'inLeft', 'inRight', 'in'][i],
       speed: 'normal',
       headline: ['Run faster', 'Less weight', 'Stride X2', 'Get yours'][i],
       punch_word: '',

@@ -9,7 +9,8 @@ import { layout, rhythmGrid, type Grid, type ShotIntent } from './rhythm'
 import type { Menu2 } from './schema2'
 import { validateSpine2 } from './validate2'
 import { baselineSpine2 } from './baseline2'
-import { composeAd, type Composed } from './compose'
+import { composeAd } from './compose'
+import { cohere, type Cohered } from './coherence'
 
 /**
  * The pure half of a Director run: what the music is, how long the ad is, the
@@ -210,7 +211,8 @@ export function menu2For(
 }
 
 export interface Settled2 {
-  composed: Composed
+  /** Validated, timed, and made coherent (coherence.ts). */
+  composed: Cohered
   /** The standard cut was built because the model's plan could not be used. */
   baseline: boolean
   /** Why the model's plan could not be used, when it could not. */
@@ -232,14 +234,18 @@ export function settle2(
   extras: Parameters<typeof composeAd>[4] = {}
 ): Settled2 {
   const verdict = 'error' in answer ? { rejected: answer.error, problems: [] } : validateSpine2(answer.value, menu, { truncated: answer.truncated })
+  const settle = (plan: Parameters<typeof composeAd>[0], recipe: Parameters<typeof composeAd>[1]): Cohered => {
+    const grid = grids(recipe)
+    return cohere(composeAd(plan, recipe, menu, grid, extras), grid, brief, menu)
+  }
   if (!('rejected' in verdict)) {
-    const composed = composeAd(verdict.plan, verdict.recipe, menu, grids(verdict.recipe), extras)
+    const composed = settle(verdict.plan, verdict.recipe)
     return { composed, baseline: false, rejected: null, problems: [...verdict.problems, ...composed.problems] }
   }
   // The pinned recipe, when there is one, is the menu's fallback — so the standard cut honours it too.
   const standard = validateSpine2(baselineSpine2(brief, menu), menu)
   if ('rejected' in standard) throw new Error(`Even the standard cut could not be laid out: ${standard.rejected}`)
-  const composed = composeAd(standard.plan, standard.recipe, menu, grids(standard.recipe), extras)
+  const composed = settle(standard.plan, standard.recipe)
   return { composed, baseline: true, rejected: verdict.rejected, problems: [...verdict.problems, ...standard.problems, ...composed.problems] }
 }
 

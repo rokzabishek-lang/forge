@@ -72,8 +72,16 @@ export function moveAmount(intensity: number): number {
   return 0.08 + 0.12 * Math.max(0, Math.min(1, intensity))
 }
 
-/** Type size from the role and the line's length: the same ladder `spine@1` uses. */
-export function sizeFor2(role: Role2 | 'end', content: string): number {
+/**
+ * Type size from the role and the line's length — the ladder `spine@1` uses —
+ * scaled by the ad's intensity (coherence.ts): ±10 % between the calmest ad
+ * and the loudest, 1.0 at the middle.
+ */
+export function sizeFor2(role: Role2 | 'end', content: string, intensity = 0.5): number {
+  return sizeLadder(role, content) * (0.9 + 0.2 * Math.max(0, Math.min(1, intensity)))
+}
+
+function sizeLadder(role: Role2 | 'end', content: string): number {
   const ceiling = role === 'hook' || role === 'cta' || role === 'end' ? 0.12 : 0.08
   const longest = Math.max(...content.split('\n').map((l) => Array.from(l).length))
   if (longest <= 10) return ceiling
@@ -104,7 +112,9 @@ export function applyRecipe(project: Project, composed: Composed, menu: Menu2, c
   const { width, height } = next.settings
   const slotById = new Map(menu.slots.map((s) => [s.id, s]))
   const assetById = new Map(next.assets.map((a) => [a.id, a]))
-  const amount = moveAmount(recipe.intensity)
+  // One dial for the moves, the look and the type (coherence.ts); the recipe's own until coherence has set it.
+  const intensity = composed.intensity ?? recipe.intensity
+  const amount = moveAmount(intensity)
 
   /* The shots. */
   const shots: { clip: Clip; slotId: string; video: boolean; index: number }[] = []
@@ -220,7 +230,7 @@ export function applyRecipe(project: Project, composed: Composed, menu: Menu2, c
           {
             id, assetId, trackId: lane.trackId, start: lane.start, duration: bodyEnd - start, inPoint: 0, volume: 1,
             transform: { ...TRANSFORM },
-            color: { ...NEUTRAL, lut: { file: ctx.lookFile.file, name: ctx.lookFile.name, intensity: 0.6 + 0.3 * recipe.intensity } },
+            color: { ...NEUTRAL, lut: { file: ctx.lookFile.file, name: ctx.lookFile.name, intensity: 0.6 + 0.3 * intensity } },
             adjustment: true,
             generatedBy: { rule: LOOK_RULE, reason: `${recipe.name}: one grade over the ad` }
           }
@@ -254,7 +264,7 @@ export function applyRecipe(project: Project, composed: Composed, menu: Menu2, c
       ...DEFAULT_TEXT,
       content,
       position: role === 'hook' || role === 'cta' || role === 'end' ? 'center' : 'lower',
-      size: sizeFor2(role, content),
+      size: sizeFor2(role, content, intensity),
       styleId: plan.style,
       animationId: plan.animation,
       ...(punch >= 0 ? { highlight: { word: punch, color: PUNCH_COLOR, scale: PUNCH_SCALE } } : {}),
@@ -307,6 +317,8 @@ export function decisionFor2(
       {
         plan: composed.plan,
         recipe: composed.recipe.id,
+        // For C3 and C4: the moments' amplitude and the sound levels read the same dial.
+        intensity: composed.intensity ?? composed.recipe.intensity,
         layout: { shots: layout.shots, black: layout.black, endCard: layout.endCard, endFrame: layout.endFrame },
         events: { moments: layout.moments, treatments: layout.treatments, sounds: layout.sounds }
       }

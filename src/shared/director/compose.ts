@@ -17,6 +17,8 @@ export interface Composed {
   recipe: Recipe
   layout: Layout
   problems: Problem[]
+  /** The ad's one intensity, once coherence has set it (coherence.ts); the recipe's own before. */
+  intensity?: number
 }
 
 /**
