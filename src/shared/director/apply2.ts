@@ -1,5 +1,6 @@
 import type { Clip, MediaAsset, Motion, MotionMove, Project, TextSpec } from '../timeline'
-import { DEFAULT_TEXT, addTrack, anchorTransition, clipEnd, stackedSlot, trackLimitReached } from '../timeline'
+import { DEFAULT_TEXT, addTrack, anchorTransition, clipEnd, overlapsOn, stackedSlot, trackLimitReached } from '../timeline'
+import { detachAudio } from '../edit/recipes'
 import type { DecisionRecord } from '../project'
 import type { Problem } from './conforms'
 import {
@@ -68,6 +69,9 @@ const TRANSFORM = { x: 0, y: 0, scale: 1, rotation: 0, opacity: 1 }
 const NEUTRAL = { brightness: 0, contrast: 1, saturation: 1 }
 
 /** A camera move's strength from the recipe's intensity — the reel's range, 0.08 to 0.2. */
+/** How far a J-cut's sound leads its picture: a fifth of a second, a breath before a line — in frames at the project's rate. */
+export const J_CUT_SECONDS = 0.2
+
 export function moveAmount(intensity: number): number {
   return 0.08 + 0.12 * Math.max(0, Math.min(1, intensity))
 }
@@ -117,7 +121,7 @@ export function applyRecipe(project: Project, composed: Composed, menu: Menu2, c
   const amount = moveAmount(intensity)
 
   /* The shots. */
-  const shots: { clip: Clip; slotId: string; video: boolean; index: number }[] = []
+  const shots: { clip: Clip; slotId: string; video: boolean; index: number; speaks: boolean }[] = []
   let anySpeech = false
   layout.shots.forEach((laid, i) => {
     const shot = plan.shots[i]
@@ -163,9 +167,55 @@ export function applyRecipe(project: Project, composed: Composed, menu: Menu2, c
       ...(crop ? { crop } : {})
     }
     if (laid.clipFrames < frames) problems.push({ path: `$.shots[${i}]`, message: `${slot.id} ends ${((frames - laid.clipFrames) / fps).toFixed(1)}s before its shot` })
-    shots.push({ clip, slotId: slot.id, video: slot.kind === 'video', index: i })
+    shots.push({ clip, slotId: slot.id, video: slot.kind === 'video', index: i, speaks })
   })
   next = { ...next, clips: [...next.clips, ...shots.map((s) => s.clip)] }
+
+  /*
+   * J-cuts (docs/PLAN.md §5.5): a clip that speaks is HEARD a moment before it
+   * is seen. Its sound is lifted onto a dialogue lane (`detachAudio`, which
+   * keeps the ducking right) and started J_CUT_SECONDS early; the picture skips
+   * as many frames so the two stay in sync. Only after a still or muted
+   * footage, so nothing is talked over; only when the clip has the footage to
+   * spare, plays at its own speed, and the earlier span is free on the lane.
+   * Otherwise the shot cuts normally, with a note. Before the transitions, so a
+   * transition out of the clip counts the frames the J-cut used.
+   */
+  const jCut = Math.max(1, Math.round(J_CUT_SECONDS * fps))
+  for (let k = 1; k < shots.length; k++) {
+    const s = shots[k]
+    const prev = shots[k - 1]
+    if (!s.video || !s.speaks) continue
+    const at = `$.shots[${s.index}]`
+    const quietBefore = !prev.video || prev.clip.volume === 0
+    const asset = assetById.get(s.clip.assetId)!
+    const plain = s.clip.speed === undefined && s.clip.ramp === undefined
+    if (!quietBefore || !plain || asset.durationFrames < jCut + sourceFramesFor(s.clip) || s.clip.start < jCut) {
+      problems.push({ path: at, message: `${s.slotId} cuts in with its sound — ${!quietBefore ? 'the shot before it has sound of its own' : !plain ? 'it is re-timed' : 'no footage to lead with'}` })
+      continue
+    }
+    const shifted: Clip = { ...s.clip, inPoint: s.clip.inPoint + jCut }
+    const withPicture: Project = { ...next, clips: next.clips.map((c) => (c.id === s.clip.id ? shifted : c)) }
+    const detached = detachAudio(withPicture, s.clip.id)
+    if (!detached.ok) {
+      problems.push({ path: at, message: `${s.slotId} cuts in with its sound — its sound could not be lifted (${detached.reason})` })
+      continue
+    }
+    const sound = detached.project.clips.find((c) => c.id === detached.audioClipId)!
+    const lead: Clip = {
+      ...sound,
+      start: sound.start - jCut,
+      inPoint: sound.inPoint - jCut,
+      duration: sound.duration + jCut,
+      generatedBy: { rule: SPINE_RULE, reason: `${recipe.name} · ${s.slotId}'s sound, heard before its picture` }
+    }
+    if (overlapsOn(detached.project, lead.trackId, lead.start, lead.duration, lead.id).length > 0) {
+      problems.push({ path: at, message: `${s.slotId} cuts in with its sound — no free lane for it to lead` })
+      continue
+    }
+    next = { ...detached.project, clips: detached.project.clips.map((c) => (c.id === lead.id ? lead : c)) }
+    shots[k] = { ...s, clip: { ...shifted, audioDetached: true } }
+  }
 
   /* Transitions, anchored on the boundary the engine chose; never across a gap, never from a clip with no footage left. */
   for (const t of layout.transitions) {

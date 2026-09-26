@@ -488,9 +488,17 @@ left out — near-duplicate of slot_03 (slot_03 is sharper)".
 >   seeking and playing along the curve; the Director ramps a clip 1× → 0.4×
 >   (`DIRECTOR_RAMP`) when its recipe ramps and the clip does not speak
 >   (tests/integration/ramp.int.test.ts: source frames 25/42/54 at 1/2/3 s).
-> - **Not yet**: the hold clip, J/L cuts and treatments are not drawn; no
->   ramp control in the UI (the Director is the only thing that ramps).
->   Coherence (§5.4) is built — see there.
+> - ~~J/L cuts~~ — **J-cuts built 2026-09-26**: a clip that speaks, after a
+>   still or muted footage, is heard 0.2 s (`J_CUT_SECONDS`) before it is seen —
+>   its sound lifted onto a dialogue lane by `detachAudio`, led, the picture's
+>   in-point moved as far so they stay in sync; refused with a note after a shot
+>   with sound of its own, without the footage to lead with, when re-timed, or
+>   when the earlier span is taken on the lane (tests/integration/jcut: the 0.2 s
+>   before the cut at the clip's own level, silence before it; the refusal a
+>   plain cut). L-cuts, the sound trailing, are not built.
+> - **Not yet**: the hold clip and treatments are not drawn; no ramp control in
+>   the UI (the Director is the only thing that ramps). Coherence (§5.4) is
+>   built — see there.
 > - ~~stills are still letterboxed (C0)~~ — **fixed 2026-09-25**: every shot
 >   gets the reframe every dropped clip gets (`solveCrop`, now shared), and the
 >   export fills a picture within 1 % of its box's shape instead of padding it —

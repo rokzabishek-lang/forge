@@ -251,6 +251,58 @@ describe('the standard cut, composed and applied', () => {
     expect(v.problems.map((x) => x.message).join(' ')).toMatch(/does not ramp/)
   })
 
+  it('a clip that speaks after a still is heard a fifth of a second before it is seen — a J-cut — and Clear takes it all', () => {
+    const words = [{ index: 0, text: 'We', startMs: 350, endMs: 500, confidence: 1 }, { index: 1, text: 'did.', startMs: 550, endMs: 900, confidence: 1 }]
+    const p = project()
+    p.transcripts = { clip: { assetId: 'clip', language: 'en', model: 'm', durationMs: 4000, words, segments: segmentIntoSentences(words) } }
+    const m = menu(p)
+    const v = ok(validateSpine2(plan([shot('slot_01', { role: 'hook' }), shot('slot_02', { weight: 'hold' }), shot('slot_03'), shot('slot_04', { weight: 'quick' })], { recipe: 'fashion', style: 'clean', animation: 'fade' }), m))
+    const c = composeAd(v.plan, v.recipe, m, grid)
+    const a = applyRecipe(p, c, m, { fps, videoTrackId: 'v1', brief, model: 'm', catalogue: [], newId: (x) => `${x}-${Math.random()}` })
+    const picture = a.project.clips.find((x) => x.assetId === 'clip' && x.trackId === 'v1')!
+    const sound = a.project.clips.find((x) => x.assetId === 'clip' && x.trackId !== 'v1')!
+    expect(picture.audioDetached).toBe(true)
+    expect(picture.inPoint).toBe(6)
+    expect(sound.start).toBe(picture.start - 6)
+    expect(sound.inPoint).toBe(0)
+    expect(sound.duration).toBe(picture.duration + 6)
+    // On a dialogue lane, so the music still ducks for it.
+    expect(a.project.tracks.find((t) => t.id === sound.trackId)!.dialogue).toBe(true)
+    const cleared = clearDirector(a.project)
+    expect(cleared.clips.filter((x) => x.assetId === 'clip')).toEqual([])
+  })
+
+  it('a J-cut is refused, and says why, after a shot with sound of its own or without the footage to lead with', () => {
+    const words = [{ index: 0, text: 'Yes.', startMs: 300, endMs: 700, confidence: 1 }]
+    const talking = (id: string) => ({ assetId: id, language: 'en', model: 'm', durationMs: 4000, words, segments: segmentIntoSentences(words) })
+    // Two speaking clips in a row: the second would talk over the first.
+    const base = project()
+    const p = { ...base, assets: [...base.assets.slice(0, 4), asset('clip2', 'video'), ...base.assets.slice(4)], transcripts: { clip: talking('clip'), clip2: talking('clip2') } }
+    const m = menu(p)
+    const v = ok(validateSpine2(plan([shot('slot_01', { role: 'hook' }), shot('slot_02', { weight: 'hold' }), shot('slot_04', { weight: 'quick' }), shot('slot_05', { weight: 'quick' })], { recipe: 'fashion', style: 'clean', animation: 'fade' }), { ...m, heroCandidates: ['slot_02'] }))
+    const c = composeAd(v.plan, v.recipe, m, grid)
+    const a = applyRecipe(p, c, m, { fps, videoTrackId: 'v1', brief, model: 'm', catalogue: [], newId: (x) => `${x}-${Math.random()}` })
+    expect(a.problems.map((x) => x.message).join(' | ')).toMatch(/cuts in with its sound — the shot before it has sound of its own/)
+    // A clip used to its last frame has nothing to lead with.
+    const short = { ...base, assets: base.assets.map((x) => (x.id === 'clip' ? { ...x, durationFrames: 40 } : x)), transcripts: { clip: talking('clip') } }
+    const ms = menu(short)
+    const vs = ok(validateSpine2(plan([shot('slot_01', { role: 'hook' }), shot('slot_02', { weight: 'hold' }), shot('slot_04', { weight: 'hold' })], { recipe: 'fashion', style: 'clean', animation: 'fade' }), ms))
+    const as = applyRecipe(short, composeAd(vs.plan, vs.recipe, ms, grid), ms, { fps, videoTrackId: 'v1', brief, model: 'm', catalogue: [], newId: (x) => `${x}-${Math.random()}` })
+    expect(as.problems.map((x) => x.message).join(' | ')).toMatch(/no footage to lead with/)
+    expect(as.project.clips.find((x) => x.assetId === 'clip')!.audioDetached).toBeUndefined()
+    // The sound's lane is free where the clip is, but not in the fifth of a second before it: a plain cut.
+    const q = { ...base, transcripts: { clip: talking('clip') } }
+    const mq = menu(q)
+    const vq = ok(validateSpine2(plan([shot('slot_01', { role: 'hook' }), shot('slot_02', { weight: 'hold' }), shot('slot_04', { weight: 'quick' })], { recipe: 'fashion', style: 'clean', animation: 'fade' }), mq))
+    const cq = composeAd(vq.plan, vq.recipe, mq, grid)
+    const cutAt = cq.layout.shots.find((x) => x.slotId === 'slot_04')!.startFrame
+    const blocker = { id: 'vo', assetId: 'song', trackId: 'a2', start: cutAt - 30, duration: 30, inPoint: 0, volume: 1, transform: { x: 0, y: 0, scale: 1, rotation: 0, opacity: 1 }, color: { brightness: 0, contrast: 1, saturation: 1 } }
+    const busy = { ...q, tracks: q.tracks.map((t) => (t.id === 'a2' ? { ...t, dialogue: true } : t)), clips: [...q.clips, blocker] }
+    const aq = applyRecipe(busy, cq, mq, { fps, videoTrackId: 'v1', brief, model: 'm', catalogue: [], newId: (x) => `${x}-${Math.random()}` })
+    expect(aq.problems.map((x) => x.message).join(' | ')).toMatch(/no free lane for it to lead/)
+    expect(aq.project.clips.find((x) => x.assetId === 'clip')!.audioDetached).toBeUndefined()
+  })
+
   it('a slow hero clip plays at half speed and still fits its footage', () => {
     const p = project()
     const m = { ...menu(p), heroCandidates: ['slot_04'] }
