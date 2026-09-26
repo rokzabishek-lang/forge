@@ -2,7 +2,7 @@ import { BrowserWindow, dialog, ipcMain, shell, app, systemPreferences } from 'e
 import { access, mkdir, readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import type { Job } from '@shared/types'
-import type { MediaAsset, ParallaxBake, Project } from '@shared/timeline'
+import type { ParallaxBake, Project } from '@shared/timeline'
 import { ALL_EXTENSIONS } from '@shared/media'
 import { deserializeProject, serializeProject, type DecisionRecord } from '@shared/project'
 import {
@@ -28,6 +28,7 @@ import { transitionsFromMasks, type TransitionDef } from '@shared/transitions/re
 import type { MaskTag } from '@shared/transitions/classify'
 import { entriesOfKind, isClipSticker, type ClipStickerMeta } from '@shared/assets/catalog'
 import { fileKey, toAsset } from './assets'
+import { probeImports } from './imports'
 import {
   prepareCaptions,
   writeCaptionFrame,
@@ -230,9 +231,8 @@ export function registerIpc(getWindow: () => BrowserWindow | null): JobQueue {
     }
     const projectFps = typeof fps === 'number' && fps > 0 ? fps : 30
 
-    const { ok, failed } = await probeMany(paths as string[])
-    const assets: MediaAsset[] = ok.map((info) => toAsset(info, projectFps))
-    return { assets, failed }
+    // A still ffmpeg cannot read (AVIF, HEIC) is converted first — imports.ts.
+    return probeImports(paths as string[], projectFps)
   })
 
   ipcMain.handle('dialog:pickMedia', async () => {

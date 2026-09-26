@@ -2461,3 +2461,27 @@ the next frame — and the placement is `floor(S/TB+0.5)`, the nearest tick
 Why no render check saw it in two years of them: they sample the MIDDLE of a
 shot, where a frame's shift is invisible, and most tests start clips at 0 or
 on whole seconds. A check of an edit has to read the frames AT its cuts.
+
+## 31. AVIF and HEIC — neither bundled ffmpeg opens them; sharp does
+
+Found on 2026-09-26, the first time real product photos went through the
+Director: four listing images saved from a shop page were AVIF, and every one
+failed to import. `IMAGE_EXT` had listed `avif` and `heic` from the start, so
+the open dialog offered them and `ffprobe` then refused — the macOS 4.4 build
+with `moov atom not found` (it reads the ISOBMFF box and has no AV1-in-HEIF
+demuxer), and the Windows build is from December 2018, before either format
+had a decoder anywhere. `tests/integration/importAvif.int.test.ts` probes an
+AVIF with ffmpeg alone each run and writes the refusal to its note, so the day
+a build reads them is the day the note says so.
+
+sharp 0.35.4's libvips (8.18.6, libheif 1.23.2) decodes AVIF on every platform
+sharp ships prebuilt. HEIC needs an HEVC decoder sharp does not ship, so a
+HEIC reports why instead of importing. So `src/main/imports.ts` converts a
+still of either kind to a PNG under `userData/converted/` on import — keyed
+by the file's `size:mtime` like the other caches, with the colon replaced
+because Windows forbids it in a name — and the asset points at the PNG under
+the file's own name. `rotate()` with no argument bakes the EXIF orientation
+in, which a phone's HEIC nearly always carries and ffmpeg would never see.
+The render check: a solid colour written as AVIF, imported, placed, rendered
+— the frame is that colour, and the same file imported again is not converted
+twice.
