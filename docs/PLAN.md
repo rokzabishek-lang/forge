@@ -496,9 +496,16 @@ left out — near-duplicate of slot_03 (slot_03 is sharper)".
 >   when the earlier span is taken on the lane (tests/integration/jcut: the 0.2 s
 >   before the cut at the clip's own level, silence before it; the refusal a
 >   plain cut). L-cuts, the sound trailing, are not built.
-> - **Not yet**: the hold clip and treatments are not drawn; no ramp control in
->   the UI (the Director is the only thing that ramps). Coherence (§5.4) is
->   built — see there.
+> - ~~the hold clip~~ — **freezes built 2026-09-26**: `Clip.hold` shows its
+>   in-point frame for its length (one frame decoded, trimmed to exactly one —
+>   a 60 fps clip decodes two per project frame, measured — held with the tpad a
+>   caption uses, no sound); `freezeFrame` makes the three clips and resumes on
+>   the NEXT frame; the preview holds it paused. A split ramp is now two ramps
+>   meeting at the rate under the cut. Building it found an export bug in every
+>   clip's placement (EFFECTS.md §30): starts not exact in six decimals landed a
+>   frame out — fixed. The Director places no freezes yet (C4's hits will).
+> - **Not yet**: treatments are not drawn; no ramp control in the UI (the
+>   Director is the only thing that ramps). Coherence (§5.4) is built — see there.
 > - ~~stills are still letterboxed (C0)~~ — **fixed 2026-09-25**: every shot
 >   gets the reframe every dropped clip gets (`solveCrop`, now shared), and the
 >   export fills a picture within 1 % of its box's shape instead of padding it —

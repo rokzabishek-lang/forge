@@ -2420,3 +2420,44 @@ with the plan's own `-ss/-t` input (`videoInputArgs`), and vidstabtransform goes
 first in the chain, before `setpts`. `deshake` drops the alpha plane like `eq`
 does (0 in, 255 out) — harmless where it sits, on decoded footage before any
 padding exists.
+
+---
+
+## 30. Every clip on its own frames — `setpts` truncates, and six decimals is not a frame
+
+Found on 2026-09-26 while building the freeze, and older than anything in this
+file that places a clip: **a clip whose start was not an exact decimal landed
+a frame out in every export.** Measured on a numbered source (each frame a
+flat grey of N×4, lossless), one clip at a time, at 30 fps:
+
+| start | seconds | written | what the export showed on the start frame |
+|---|---|---|---|
+| 5 | 0.1666667 | 0.166667 | **black** — the start rounded UP past the frame's own time |
+| 10 | 0.3333333 | 0.333333 | **source frame 1**, the whole clip a frame early |
+| 20 | 0.6666667 | 0.666667 | **black** |
+| 25 | 0.8333333 | 0.833333 | **source frame 1** |
+| 30 | 1.0 | 1.000000 | frame 0 — right, and only because it is exact |
+
+Two faults, one on each side of the rounding:
+
+- **The drawing window.** Each clip is overlaid with `enable='between(t,S,E)'`,
+  S and E written to six places. 20 frames is 0.6666667 s; written 0.666667
+  it is a hair LATER than frame 20's own time, so frame 20 is outside its
+  clip's window and nothing is drawn there.
+- **The placement.** `setpts=PTS-STARTPTS+S/TB` puts the clip in time, and
+  setpts converts the result to a timestamp by TRUNCATION (`D2TS`). 10 frames is
+  0.333333 s, which is 9.99999 ticks — truncated to 9: the clip starts a frame
+  early, and the window then hides that frame, so its first visible frame is
+  the clip's second.
+
+The fix, in `render/plan.ts`: the window opens and closes **half a frame**
+before the clip's first frame and its end — far past any rounding, short of
+the next frame — and the placement is `floor(S/TB+0.5)`, the nearest tick
+(`floor` is as old as ffmpeg's expression evaluator). Checked by
+`tests/integration/placement.int.test.ts` — back-to-back clips at 0, 5, 11,
+20 and 25, every output frame against the source frame it must show, and a
+60 fps clip at frame 20 of a 30 fps edit — and both faults, put back, fail it.
+
+Why no render check saw it in two years of them: they sample the MIDDLE of a
+shot, where a frame's shift is invisible, and most tests start clips at 0 or
+on whole seconds. A check of an edit has to read the frames AT its cuts.

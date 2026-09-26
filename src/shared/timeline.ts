@@ -16,7 +16,7 @@ import type { AssetVision } from './director/eyes'
  * worth the asymmetry — the alternative is a second copy of "how much source
  * does a timeline frame eat", and the first copy of that already drifted.
  */
-import { clipSpeed, maxDurationAtSpeed, sourceFrameAt } from './render/speed'
+import { clipRamp, clipRateAt, clipSpeed, maxDurationAtSpeed, sourceFrameAt } from './render/speed'
 
 /**
  * Everything on the timeline is measured in whole frames at the project frame
@@ -290,6 +290,14 @@ export interface Clip {
    * follow a curve, and the music carries the moment.
    */
   ramp?: { from: number; to: number }
+  /**
+   * A held frame — a freeze. The clip shows its in-point frame for its whole
+   * length: one frame decoded, held with `tpad` (render/plan.ts), no sound.
+   * A freeze in a shot is three clips, the shot up to the frame, the hold, and
+   * the shot resuming (`freezeFrame`), because `tpad` can only pad a stream's
+   * start or end, never hold its middle and go on.
+   */
+  hold?: true
   /**
    * A voice effect on this clip's sound — chipmunk, monster, phone call.
    *
@@ -1116,7 +1124,58 @@ export function splitClip(clip: Clip, frame: Frames): [Clip, Clip] | null {
      */
     inPoint: sourceFrameFor(clip, frame)
   }
+  /*
+   * A ramp is linear in the footage it plays, so each half is the part of it
+   * on its side: from the start's rate to the rate under the cut, and on from
+   * there. Both halves keeping the whole ramp replayed its curve twice.
+   */
+  const ramp = clipRamp(clip)
+  if (ramp) {
+    const under = clipRateAt(clip, frame)
+    left.ramp = { from: ramp.from, to: under }
+    right.ramp = { from: under, to: ramp.to }
+  }
   return [left, right]
+}
+
+/**
+ * Freeze a clip on the frame the playhead shows, for `holdFrames`.
+ *
+ * Three clips where there was one: the shot up to the frame; a hold clip on
+ * that frame (`hold`, its in-point the frame); and the shot resuming with the
+ * NEXT frame, so the held one is not shown twice. What follows on the track
+ * moves by the time added. A still has nothing to freeze, and a ramp is not
+ * frozen mid-curve (split it first). Null when there is nothing to do.
+ */
+export function freezeFrame(project: Project, clipId: string, frame: Frames, holdFrames: Frames): Project | null {
+  const clip = project.clips.find((c) => c.id === clipId)
+  const asset = clip ? project.assets.find((a) => a.id === clip.assetId) : undefined
+  if (!clip || !asset || asset.kind !== 'video' || clip.hold || clipRamp(clip) || holdFrames < 1) return null
+  if (frame < clip.start || frame >= clipEnd(clip)) return null
+  const held = sourceFrameFor(clip, frame)
+  const pieces: Clip[] = []
+  if (frame > clip.start) {
+    const split = splitClip(clip, frame)
+    if (!split) return null
+    pieces.push(split[0])
+  }
+  const { fadeIn: _i, fadeOut: _o, transitionIn: _t, speed: _s, smoothSlow: _m, motion: _mo, keyframes: _k, ...plain } = clip
+  pieces.push({ ...plain, id: `${clip.id}-hold`, start: frame, duration: holdFrames, inPoint: held, hold: true, volume: 0 })
+  const rest = clipEnd(clip) - (frame + 1)
+  if (rest > 0) {
+    const split = splitClip(clip, frame + 1)
+    if (split) pieces.push({ ...split[1], id: `${clip.id}-resume`, start: frame + holdFrames })
+  }
+  const added = pieces.reduce((end, c) => Math.max(end, clipEnd(c)), 0) - clipEnd(clip)
+  const end = clipEnd(clip)
+  return {
+    ...project,
+    clips: project.clips.flatMap((c) => {
+      if (c.id === clipId) return pieces
+      if (c.trackId !== clip.trackId || c.start < end) return [c]
+      return [{ ...c, start: Math.max(0, c.start + added) }]
+    })
+  }
 }
 
 /**

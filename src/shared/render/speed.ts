@@ -67,7 +67,9 @@ export function isNormalSpeed(clip: Pick<Clip, 'speed'>): boolean {
  * and each of them inherits it. Without it a ramped clip decoded its OUTPUT
  * length as source and ran past the footage it was meant to play.
  */
-export function sourceFramesFor(clip: Pick<Clip, 'speed' | 'duration' | 'ramp'>): Frames {
+export function sourceFramesFor(clip: Pick<Clip, 'speed' | 'duration' | 'ramp' | 'hold'>): Frames {
+  // A held frame is one frame of footage, however long it is held.
+  if (clip.hold) return 1
   const ramp = clipRamp(clip)
   // Up, not round: the ramp's last output frame needs the source frame under it.
   if (ramp) return Math.max(1, Math.ceil(clip.duration * rampRate(ramp.from, ramp.to) - 1e-9))
@@ -80,7 +82,8 @@ export function sourceFramesFor(clip: Pick<Clip, 'speed' | 'duration' | 'ramp'>)
  * The preview seeks with this, so a scrub lands on the frame the export would
  * show rather than somewhere nearby that happens to look similar.
  */
-export function sourceFrameAt(clip: Pick<Clip, 'speed' | 'start' | 'inPoint' | 'ramp' | 'duration'>, frame: Frames): Frames {
+export function sourceFrameAt(clip: Pick<Clip, 'speed' | 'start' | 'inPoint' | 'ramp' | 'duration' | 'hold'>, frame: Frames): Frames {
+  if (clip.hold) return clip.inPoint
   const ramp = clipRamp(clip)
   if (ramp) {
     const span = clip.duration * rampRate(ramp.from, ramp.to)
@@ -94,7 +97,8 @@ export function sourceFrameAt(clip: Pick<Clip, 'speed' | 'start' | 'inPoint' | '
  * a ramp the rate at the footage under that frame. The preview plays at this,
  * so between seeks a ramp decelerates rather than running at one speed.
  */
-export function clipRateAt(clip: Pick<Clip, 'speed' | 'start' | 'ramp' | 'duration'>, frame: Frames): number {
+export function clipRateAt(clip: Pick<Clip, 'speed' | 'start' | 'ramp' | 'duration' | 'hold'>, frame: Frames): number {
+  if (clip.hold) return 0
   const ramp = clipRamp(clip)
   if (!ramp) return clipSpeed(clip)
   const span = clip.duration * rampRate(ramp.from, ramp.to)

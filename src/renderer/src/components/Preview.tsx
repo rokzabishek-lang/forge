@@ -853,9 +853,9 @@ export function Preview(): ReactNode {
             matte.currentTime = target
           }
           const rate = clipRateAt(clip, frame)
-          if (Math.abs(matte.playbackRate - rate) > 0.001) matte.playbackRate = rate
-          if (isPlaying && matte.paused) void matte.play().catch(() => undefined)
-          if (!isPlaying && !matte.paused) matte.pause()
+          if (rate > 0 && Math.abs(matte.playbackRate - rate) > 0.001) matte.playbackRate = rate
+          if (isPlaying && !clip.hold && matte.paused) void matte.play().catch(() => undefined)
+          if ((!isPlaying || clip.hold) && !matte.paused) matte.pause()
         }
         /*
          * Play at the clip's own rate.
@@ -866,8 +866,9 @@ export function Preview(): ReactNode {
          * which reads as stuttering, not as slow motion. A ramp plays at the
          * rate under this frame, so between seeks it decelerates as the export does.
          */
+        // A held frame (a freeze) plays at no rate at all: it is paused on its in-point below.
         const rate = clipRateAt(clip, frame)
-        if (Math.abs(video.playbackRate - rate) > 0.001) video.playbackRate = rate
+        if (rate > 0 && Math.abs(video.playbackRate - rate) > 0.001) video.playbackRate = rate
         /*
          * A video clip's own sound, at the level the clip says.
          *
@@ -885,8 +886,8 @@ export function Preview(): ReactNode {
               ? 0
               : Math.min(1, clampGain(clip.volume ?? 1))
         }
-        if (isPlaying && video.paused) void video.play().catch(() => undefined)
-        if (!isPlaying && !video.paused && !scrubbing) video.pause()
+        if (isPlaying && !clip.hold && video.paused) void video.play().catch(() => undefined)
+        if ((!isPlaying || clip.hold) && !video.paused && !scrubbing) video.pause()
         if (!isPlaying && scrubbing && asset.hasAudio) burst(video)
       }
 

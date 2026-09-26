@@ -196,8 +196,9 @@ describe('buildRenderPlan', () => {
         outputPath: '/o.mp4'
       }).args
     )
-    // 90 frames at 30fps = 3s. Without this every clip starts at zero.
-    expect(filters).toContain('setpts=PTS-STARTPTS+3.000000/TB')
+    // 90 frames at 30fps = 3s. Without this every clip starts at zero. Rounded to the nearest tick:
+    // setpts truncates, and a start that is not an exact decimal landed a frame early (placement.int).
+    expect(filters).toContain('setpts=PTS-STARTPTS+floor(3.000000/TB+0.5)')
   })
 
   it('enables each overlay only for the clip\'s own window', () => {
@@ -207,7 +208,9 @@ describe('buildRenderPlan', () => {
         outputPath: '/o.mp4'
       }).args
     )
-    expect(filters).toContain("enable='between(t,1.000000,3.000000)'")
+    // Frames 30 to 89: half a frame of room at each edge, so no rounding of the times
+    // can drop the first frame or show one past the last (placement.int).
+    expect(filters).toContain("enable='between(t,0.983333,2.983333)'")
     // The clip's last frame must not be held for the rest of the timeline.
     expect(filters).toContain('repeatlast=0')
   })

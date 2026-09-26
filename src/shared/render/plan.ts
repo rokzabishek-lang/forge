@@ -1119,7 +1119,12 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
       clip.steady && canSteady(clip, asset) ? steadyFilter(request.steady?.[clip.id] ?? { kind: 'deshake' }) : null,
       // Before anything else: a drawn animation is only as long as its movement,
       // and every step below assumes a stream of exactly `duration` frames.
-      asset.frames ? holdFilter(clip, fps) : null,
+      /*
+       * A held frame: exactly the first frame decoded, held for the clip's length.
+       * `-t` of one frame can still yield two, so the trim is what makes it one —
+       * then the same tpad hold a drawn caption uses (Clip.hold, a freeze).
+       */
+      asset.frames ? holdFilter(clip, fps) : clip.hold ? `trim=end_frame=1,setpts=PTS-STARTPTS,${holdFilter(clip, fps)}` : null,
       /*
        * Speed first, and self-contained.
        *
@@ -1130,7 +1135,7 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
        * time, and any of them seeing a half-rate stream would have drifted.
        * Stills are untouched — a photograph has no rate to change.
        */
-      asset.kind === 'image' ? null : retimeFilter(clip, fps),
+      asset.kind === 'image' || clip.hold ? null : retimeFilter(clip, fps),
       /*
        * The stream this crop actually applies to.
        *
@@ -1293,8 +1298,17 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
       body = ''
     }
 
+    // The clip's start, exactly as a transition's position expressions read it (S).
     const start = framesToSeconds(clip.start, fps).toFixed(6)
-    const end = framesToSeconds(clipEnd(clip), fps).toFixed(6)
+    /*
+     * The frames the clip is drawn on: its first to its last, with half a frame
+     * of room at each edge. The window was the clip's start and end in seconds
+     * to six places — and 20 frames at 30 fps is 0.6666667 s, written
+     * 0.666667, so frame 20 fell a hair before its own clip's window and was
+     * not drawn: black, on every cut whose time rounded up. Half a frame is
+     * far past any rounding and short of the next frame.
+     */
+    const shown = `between(t,${((clip.start - 0.5) / fps).toFixed(6)},${((clipEnd(clip) - 0.5) / fps).toFixed(6)})`
 
     /*
      * An adjustment layer grades what is underneath it instead of drawing.
@@ -1306,7 +1320,7 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
      */
     if (clip.adjustment) {
       const target = i === lastComposited ? '[vmix]' : `[o${i}]`
-      const gate = `enable='between(t,${start},${end})'`
+      const gate = `enable='${shown}'`
       let stream = current
       let stage = 0
       const nextLabel = (): string => `[aj${i}_${stage++}]`
@@ -1524,7 +1538,9 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
 
     // setpts moves the clip to its timeline position; without it every clip
     // would start at zero regardless of where it sits.
-    filters.push(`${head}${body ? `${body},` : ''}setpts=PTS-STARTPTS+${offset}/TB[v${i}]`)
+    // Rounded to the nearest tick, not truncated: setpts truncates, and 10 frames at 30 fps is
+    // 0.333333 s, 9.99999 ticks — the whole clip landed a frame early.
+    filters.push(`${head}${body ? `${body},` : ''}setpts=PTS-STARTPTS+floor(${offset}/TB+0.5)[v${i}]`)
 
     const next = i === lastComposited ? '[vmix]' : `[o${i}]`
 
@@ -1575,7 +1591,7 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
     // timeline; eof_action=pass keeps the base flowing once the clip ends.
     filters.push(
       `${current}[v${i}]overlay=x='${place.x}':y='${place.y}':format=yuv420:` +
-        `eof_action=pass:repeatlast=0:enable='between(t,${start},${end})'${next}`
+        `eof_action=pass:repeatlast=0:enable='${shown}'${next}`
     )
     current = next
   })
@@ -1772,8 +1788,8 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
     role === 'dialogue' ? dialogueLabels : role === 'music' ? musicLabels : otherLabels
 
   videoInputs.forEach(({ clip, index, hasAudio }, i) => {
-    // A ramped clip's own sound is not played: atempo cannot follow a curve (Clip.ramp).
-    if (!hasAudio || clip.audioDetached || clipRamp(clip)) return
+    // A ramped clip's own sound is not played: atempo cannot follow a curve (Clip.ramp); a held frame has none.
+    if (!hasAudio || clip.audioDetached || clipRamp(clip) || clip.hold) return
     const track = project.tracks.find((t) => t.id === clip.trackId)
     if (!track || !isAudible(track, project.tracks)) return
     addAudio(index, clip, `[va${i}]`, busFor(audioRole(track)))
