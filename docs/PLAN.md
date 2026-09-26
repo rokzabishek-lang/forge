@@ -483,8 +483,14 @@ left out — near-duplicate of slot_03 (slot_03 is sharper)".
 >   instead, and a headlined shot is the last to go.
 > - ~~`direct()`, the eval and the Director panel still run `spine@1`; no
 >   Recipe picker~~ — **wired 2026-09-25** (below).
-> - **Not yet**: ramps are noted and played at normal speed; the hold clip,
->   J/L cuts and treatments are not drawn; coherence.ts (§5.4) is not built.
+> - ~~ramps are noted and played at normal speed~~ — **built 2026-09-26**:
+>   `Clip.ramp`, the §18 filter, `sourceFramesFor`'s ramp branch, the preview
+>   seeking and playing along the curve; the Director ramps a clip 1× → 0.4×
+>   (`DIRECTOR_RAMP`) when its recipe ramps and the clip does not speak
+>   (tests/integration/ramp.int.test.ts: source frames 25/42/54 at 1/2/3 s).
+> - **Not yet**: the hold clip, J/L cuts and treatments are not drawn;
+>   coherence.ts (§5.4) is not built; no ramp control in the UI (the Director
+>   is the only thing that ramps).
 > - ~~stills are still letterboxed (C0)~~ — **fixed 2026-09-25**: every shot
 >   gets the reframe every dropped clip gets (`solveCrop`, now shared), and the
 >   export fills a picture within 1 % of its box's shape instead of padding it —

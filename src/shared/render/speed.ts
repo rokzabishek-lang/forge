@@ -59,8 +59,18 @@ export function isNormalSpeed(clip: Pick<Clip, 'speed'>): boolean {
   return Math.abs(clipSpeed(clip) - 1) < 0.001
 }
 
-/** How much of the source this clip eats — always in source frames. */
-export function sourceFramesFor(clip: Pick<Clip, 'speed' | 'duration'>): Frames {
+/**
+ * How much of the source this clip eats — always in source frames.
+ *
+ * Every decode window is sized by this — the video input's `-t`, the clip
+ * matte's, the audio input's, Steady's analysis — so a ramp is a branch HERE
+ * and each of them inherits it. Without it a ramped clip decoded its OUTPUT
+ * length as source and ran past the footage it was meant to play.
+ */
+export function sourceFramesFor(clip: Pick<Clip, 'speed' | 'duration' | 'ramp'>): Frames {
+  const ramp = clipRamp(clip)
+  // Up, not round: the ramp's last output frame needs the source frame under it.
+  if (ramp) return Math.max(1, Math.ceil(clip.duration * rampRate(ramp.from, ramp.to) - 1e-9))
   return Math.max(1, Math.round(clip.duration * clipSpeed(clip)))
 }
 
@@ -70,8 +80,115 @@ export function sourceFramesFor(clip: Pick<Clip, 'speed' | 'duration'>): Frames 
  * The preview seeks with this, so a scrub lands on the frame the export would
  * show rather than somewhere nearby that happens to look similar.
  */
-export function sourceFrameAt(clip: Pick<Clip, 'speed' | 'start' | 'inPoint'>, frame: Frames): Frames {
+export function sourceFrameAt(clip: Pick<Clip, 'speed' | 'start' | 'inPoint' | 'ramp' | 'duration'>, frame: Frames): Frames {
+  const ramp = clipRamp(clip)
+  if (ramp) {
+    const span = clip.duration * rampRate(ramp.from, ramp.to)
+    return Math.round(clip.inPoint + rampSourceAt(ramp.from, ramp.to, span, frame - clip.start))
+  }
   return Math.round(clip.inPoint + (frame - clip.start) * clipSpeed(clip))
+}
+
+/**
+ * The rate the clip is playing at, `frame` on the timeline: its speed, or for
+ * a ramp the rate at the footage under that frame. The preview plays at this,
+ * so between seeks a ramp decelerates rather than running at one speed.
+ */
+export function clipRateAt(clip: Pick<Clip, 'speed' | 'start' | 'ramp' | 'duration'>, frame: Frames): number {
+  const ramp = clipRamp(clip)
+  if (!ramp) return clipSpeed(clip)
+  const span = clip.duration * rampRate(ramp.from, ramp.to)
+  const at = Math.max(0, Math.min(span, rampSourceAt(ramp.from, ramp.to, span, frame - clip.start)))
+  return ramp.from + ((ramp.to - ramp.from) * at) / Math.max(1e-9, span)
+}
+
+/* ------------------------------------------------------------------ ramps */
+
+/** A ramp's rates, measured sensible: below a quarter is a slideshow, above four a smear. */
+export const RAMP_MIN = 0.25
+export const RAMP_MAX = 4
+
+/** A clip's ramp, clamped to the range; null for none. */
+export function clipRamp(clip: Pick<Clip, 'ramp'>): { from: number; to: number } | null {
+  const r = clip.ramp
+  if (!r || !Number.isFinite(r.from) || !Number.isFinite(r.to) || r.from <= 0 || r.to <= 0) return null
+  const clamp = (v: number): number => Math.min(RAMP_MAX, Math.max(RAMP_MIN, v))
+  return { from: clamp(r.from), to: clamp(r.to) }
+}
+
+/**
+ * A ramp's average rate: source per output, over the whole ramp.
+ *
+ * The output time of a ramp is ∫ dT / speed(T); for a speed linear in source
+ * time from `from` to `to` over D, that is D / (to − from) · ln(to / from)
+ * (docs/EFFECTS.md §18: predicted 3.697 s for 2 s of 1× → 0.25×, ffmpeg 3.70 s).
+ * So D of source plays over D / rate, with rate the log-mean of the two ends.
+ */
+export function rampRate(from: number, to: number): number {
+  const k = to - from
+  return Math.abs(k) < 1e-9 ? from : k / Math.log(to / from)
+}
+
+/** How long a ramp plays `source` of footage for — seconds or frames, it is linear. */
+export function rampDuration(from: number, to: number, source: number): number {
+  return source / rampRate(from, to)
+}
+
+/** How much footage a ramp consumes to fill `output` — rampDuration's inverse. */
+export function rampSourceSeconds(from: number, to: number, output: number): number {
+  return output * rampRate(from, to)
+}
+
+/**
+ * How far into its footage a ramp of `span` is, `t` into its output — the
+ * time remap inverted: T = span · from / (to − from) · (e^(t (to − from) / span) − 1).
+ * Any unit, as long as `t` and `span` share it. At 1, 2 and 3 s into 2 s of
+ * 1× → 0.25× this is source frames 25, 42.2 and 54 — §18 read 25, 42 and 54.
+ */
+export function rampSourceAt(from: number, to: number, span: number, t: number): number {
+  const k = to - from
+  if (Math.abs(k) < 1e-9) return t * from
+  return ((span * from) / k) * (Math.exp((t * k) / span) - 1)
+}
+
+/**
+ * The picture, ramped: one `setpts` whose output time is the integral of
+ * 1 / speed over the input time (§18), then `fps` to restore a constant rate,
+ * as `speedVideoFilter` does. `sourceSeconds` is the footage the ramp plays —
+ * `duration × rampRate`, the same span the preview seeks with.
+ */
+export function rampVideoFilter(from: number, to: number, sourceSeconds: number, fps: number): string {
+  const k = to - from
+  if (Math.abs(k) < 1e-9) return speedVideoFilter(from, fps) ?? `fps=${fps}`
+  const D = sourceSeconds
+  return `setpts='(${n(D / k)})*log((${n(from)}+(${n(k)})*(T-STARTT)/${n(D)})/${n(from)})/TB',fps=${fps}`
+}
+
+/**
+ * A clip ramped, keeping the same footage — the clip's length changes, as a
+ * speed change's does, and what follows on its track moves with it. `null`
+ * takes the ramp off. A ramp replaces a speed; a still has neither.
+ */
+export function withClipRamp(project: Project, clipId: string, ramp: { from: number; to: number } | null): Project {
+  const clip = project.clips.find((c) => c.id === clipId)
+  if (!clip) return project
+  const asset = project.assets.find((a) => a.id === clip.assetId)
+  if (!asset || asset.kind === 'image') return project
+  const source = sourceFramesFor(clip)
+  const { speed: _s, smoothSlow: _m, ramp: _r, ...plain } = clip
+  const next = ramp ? clipRamp({ ramp }) : null
+  const duration = Math.max(1, Math.floor(next ? source / rampRate(next.from, next.to) + 1e-9 : source))
+  const retimed: Clip = next ? { ...plain, duration, ramp: next } : { ...plain, duration }
+  const delta = duration - clip.duration
+  const end = clip.start + clip.duration
+  return {
+    ...project,
+    clips: project.clips.map((c) => {
+      if (c.id === clipId) return retimed
+      if (c.trackId !== clip.trackId || c.start < end) return c
+      return { ...c, start: Math.max(0, c.start + delta) }
+    })
+  }
 }
 
 /**

@@ -48,7 +48,7 @@ import { forgetMask, maskedSource } from '../maskPreview'
 import { forgetTextPreview, textPreviewCanvas } from '../textCanvas'
 import { paperPreviewCanvas } from '../paperCanvas'
 import { carouselPreviewCanvas } from '../carouselCanvas'
-import { clipSpeed } from '@shared/render/speed'
+import { clipRateAt, clipSpeed } from '@shared/render/speed'
 import { activeCaptionStyle, captionAt, drawCaptions } from '../captionPreview'
 import { captionSourceClip } from '@shared/captions/timeline'
 import { useCatalog } from '../catalog'
@@ -852,7 +852,7 @@ export function Preview(): ReactNode {
           if (Math.abs(matte.currentTime - target) > (isPlaying ? DRIFT_TOLERANCE : 0.02)) {
             matte.currentTime = target
           }
-          const rate = clipSpeed(clip)
+          const rate = clipRateAt(clip, frame)
           if (Math.abs(matte.playbackRate - rate) > 0.001) matte.playbackRate = rate
           if (isPlaying && matte.paused) void matte.play().catch(() => undefined)
           if (!isPlaying && !matte.paused) matte.pause()
@@ -863,9 +863,10 @@ export function Preview(): ReactNode {
          * Without this a slowed clip would seek correctly and then run away at
          * full speed between seeks, so the picture and the playhead would
          * disagree until the drift grew large enough to force a correction —
-         * which reads as stuttering, not as slow motion.
+         * which reads as stuttering, not as slow motion. A ramp plays at the
+         * rate under this frame, so between seeks it decelerates as the export does.
          */
-        const rate = clipSpeed(clip)
+        const rate = clipRateAt(clip, frame)
         if (Math.abs(video.playbackRate - rate) > 0.001) video.playbackRate = rate
         /*
          * A video clip's own sound, at the level the clip says.

@@ -4,6 +4,7 @@ import { headlineCapacity } from './validate'
 import { layout, type Grid, type Layout, type ShotIntent } from './rhythm'
 import type { Recipe } from './recipes'
 import type { Menu2, SpinePlan2 } from './schema2'
+import { rampRate } from '../render/speed'
 
 /**
  * A validated `spine@2` plan, timed: the plan's intentions handed to the
@@ -33,13 +34,21 @@ export function graphemes(text: string): number {
   return n
 }
 
-/** A clip's footage on the timeline at a speed: slow motion stretches it, a ramp is still its own length. */
+export const SLOW_SPEED = 0.5
+/**
+ * The Director's ramp: normal speed easing to 0.4× across the shot — the
+ * action slows as it lands. One `setpts` (render/speed.ts); the clip plays
+ * its footage over 1.53 times its length.
+ */
+export const DIRECTOR_RAMP = { from: 1, to: 0.4 } as const
+
+/** A clip's footage on the timeline at a speed: slow motion and a ramp stretch it; whole frames. */
 function footageAt(frames: number | null, speed: SpinePlan2['shots'][number]['speed']): number | null {
   if (frames === null) return null
-  return speed === 'slow' ? frames * 2 : frames
+  if (speed === 'slow') return Math.floor(frames / SLOW_SPEED)
+  if (speed === 'ramp') return Math.floor(frames / rampRate(DIRECTOR_RAMP.from, DIRECTOR_RAMP.to) + 1e-9)
+  return frames
 }
-
-export const SLOW_SPEED = 0.5
 
 export function composeAd(
   plan: SpinePlan2,

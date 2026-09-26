@@ -19,7 +19,7 @@ import { whiteBalanceFilter } from './whiteBalance'
 import { chromakeyFilter, despillFilter, saneKey } from './chromaKey'
 import { isFullFrameMask, maskExpression } from './mask'
 import { effectiveCrop, safeCrop, type Size } from './crop'
-import { atempoChain, clipSpeed, sourceFramesFor, speedVideoFilter } from './speed'
+import { atempoChain, clipRamp, clipSpeed, rampRate, rampVideoFilter, sourceFramesFor, speedVideoFilter } from './speed'
 import { audioFadeFilters, fadesWithNeighbours } from './audioFade'
 import { duckFilter } from './duck'
 import { voiceFilters } from './voice'
@@ -159,6 +159,16 @@ export function fitFor(box: { width: number; height: number; fit: 'contain' | 'c
   if (box.fit === 'cover' || !stream || stream.width <= 0 || stream.height <= 0) return box.fit
   const off = Math.abs(stream.width / stream.height / (box.width / box.height) - 1)
   return off > 0 && off < NEAR_SHAPE ? 'cover' : 'contain'
+}
+
+/**
+ * A clip's picture, re-timed: its ramp when it has one (one `setpts` over the
+ * footage it plays, render/speed.ts), otherwise its constant speed.
+ */
+function retimeFilter(clip: Clip, fps: number): string | null {
+  const ramp = clipRamp(clip)
+  if (ramp) return rampVideoFilter(ramp.from, ramp.to, (clip.duration * rampRate(ramp.from, ramp.to)) / fps, fps)
+  return speedVideoFilter(clipSpeed(clip), fps, clip.smoothSlow)
 }
 
 function fitFilter(width: number, height: number, mode: 'contain' | 'cover' = 'contain'): string {
@@ -1120,7 +1130,7 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
        * time, and any of them seeing a half-rate stream would have drifted.
        * Stills are untouched — a photograph has no rate to change.
        */
-      asset.kind === 'image' ? null : speedVideoFilter(clipSpeed(clip), fps, clip.smoothSlow),
+      asset.kind === 'image' ? null : retimeFilter(clip, fps),
       /*
        * The stream this crop actually applies to.
        *
@@ -1762,7 +1772,8 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
     role === 'dialogue' ? dialogueLabels : role === 'music' ? musicLabels : otherLabels
 
   videoInputs.forEach(({ clip, index, hasAudio }, i) => {
-    if (!hasAudio || clip.audioDetached) return
+    // A ramped clip's own sound is not played: atempo cannot follow a curve (Clip.ramp).
+    if (!hasAudio || clip.audioDetached || clipRamp(clip)) return
     const track = project.tracks.find((t) => t.id === clip.trackId)
     if (!track || !isAudible(track, project.tracks)) return
     addAudio(index, clip, `[va${i}]`, busFor(audioRole(track)))

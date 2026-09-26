@@ -14,6 +14,7 @@ import { applyRecipe, decisionFor2, endCardText } from '@shared/director/apply2'
 import { clearDirector, COPY_RULE, ENDING_RULE, LOOK_RULE, SPINE_RULE } from '@shared/director/apply'
 import type { Brief } from '@shared/director/schema'
 import { segmentIntoSentences } from '@shared/transcript'
+import { sourceFramesFor } from '@shared/render/speed'
 
 /**
  * `spine@2` end to end without a model (docs/PLAN.md §5.2–5.6): the schema,
@@ -223,6 +224,31 @@ describe('the standard cut, composed and applied', () => {
       const musicTrack = a.project.tracks.find((t) => t.id === 'a1')!
       expect(Boolean(musicTrack.duck), speaks ? 'ducked under speech' : 'not ducked').toBe(speaks)
     }
+  })
+
+  it('a ramped clip is ramped — 1× easing to 0.4× — held longer than its footage, never past it', () => {
+    // The ramped clip is the held hero, with two seconds of footage, so the engine wants more of it than
+    // there is: it is capped where the ramped footage runs out — 60 frames played over 1.53× that, 91 —
+    // and not a frame later.
+    const base = project()
+    const p = { ...base, assets: base.assets.map((x) => (x.id === 'clip' ? { ...x, durationFrames: 60 } : x)) }
+    const m = { ...menu(p), heroCandidates: ['slot_04'] }
+    const v = ok(validateSpine2(plan([shot('slot_01'), shot('slot_02'), shot('slot_04', { speed: 'ramp', move: 'in', weight: 'hold' })], { hero: 'slot_04', recipe: 'energy', style: 'poster-3d', animation: 'pop' }), m))
+    expect(v.plan.shots[2].speed).toBe('ramp')
+    const c = composeAd(v.plan, v.recipe, m, grid)
+    const a = applyRecipe(p, c, m, { fps, videoTrackId: 'v1', brief, model: 'm', catalogue: [], newId: (x) => `${x}-${Math.random()}` })
+    const clip = a.project.clips.find((x) => x.assetId === 'clip')!
+    expect(clip.ramp).toEqual({ from: 1, to: 0.4 })
+    expect(clip.speed).toBeUndefined()
+    expect(clip.duration, 'the ramp stretches the footage').toBeGreaterThan(60)
+    expect(sourceFramesFor(clip), 'never past the footage').toBeLessThanOrEqual(60)
+    expect(a.problems.map((x) => x.message).join(' ')).not.toMatch(/not drawn yet/)
+  })
+
+  it('a recipe that does not ramp does not get one because the decode allowed it', () => {
+    const v = ok(validateSpine2(plan([shot('slot_02'), shot('slot_04', { speed: 'ramp' })], { recipe: 'wedding-highlight', style: 'soft-fade', animation: 'fade', hero: 'slot_02' }), menu()))
+    expect(v.plan.shots[1].speed).toBe('normal')
+    expect(v.problems.map((x) => x.message).join(' ')).toMatch(/does not ramp/)
   })
 
   it('a slow hero clip plays at half speed and still fits its footage', () => {

@@ -1222,6 +1222,18 @@ source, the output time is the integral of `1/speed`, which comes out as
 
 So the ramp is genuinely accelerating, one filter, one pass, no extra clips.
 
+**Built 2026-09-26** as `Clip.ramp: { from, to }` (render/speed.ts). The
+filter is `setpts='(D/(to−from))*log((from+(to−from)*(T−STARTT)/D)/from)/TB',fps=30`,
+with D the footage the ramp plays (`duration × rampRate`, the log-mean of the
+two ends). The render check (tests/integration/ramp.int.test.ts) reproduces
+these numbers from the app's own plan: a 1× → 0.25× clip of 110 frames read
+source frames **25, 42 and 54** at 1, 2 and 3 s, and the preview's
+`sourceFrameAt` seeks to the same three. Two things the build had to add:
+every decode window is sized by `sourceFramesFor`, so the ramp is a branch
+there (a ramp decoding its OUTPUT length as source runs past T = D, where the
+log goes negative); and a ramped clip's own sound is left out — `atempo`
+cannot follow a curve.
+
 ---
 
 ## 19. What the adversarial pass found in §17

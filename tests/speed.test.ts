@@ -13,7 +13,15 @@ import {
   sourceFrameAt,
   sourceFramesFor,
   speedVideoFilter,
-  withClipSpeed
+  withClipSpeed,
+  clipRamp,
+  clipRateAt,
+  rampDuration,
+  rampRate,
+  rampSourceAt,
+  rampSourceSeconds,
+  rampVideoFilter,
+  withClipRamp
 } from '@shared/render/speed'
 import { emptyProject, type Project } from '@shared/timeline'
 
@@ -239,5 +247,69 @@ describe('withClipSpeed', () => {
   it('ignores a clip that is not there', () => {
     const project = build()
     expect(withClipSpeed(project, 'nope', 0.5)).toBe(project)
+  })
+})
+
+describe('speed ramps (docs/EFFECTS.md §18)', () => {
+  it('last as long as the integral of 1/speed says: 2 s of 1× → 0.25× plays for 3.697 s', () => {
+    // §18: predicted 3.697 s, ffmpeg returned 3.70 s.
+    expect(rampDuration(1, 0.25, 2)).toBeCloseTo((2 / -0.75) * Math.log(0.25), 9)
+    expect(rampDuration(1, 0.25, 2)).toBeCloseTo(3.697, 3)
+    expect(rampSourceSeconds(1, 0.25, rampDuration(1, 0.25, 2))).toBeCloseTo(2, 9)
+    // A flat "ramp" is a constant speed.
+    expect(rampRate(0.5, 0.5)).toBe(0.5)
+  })
+
+  it('walk the footage the way ffmpeg did: 1, 2 and 3 s into that ramp are source frames 25, 42 and 54', () => {
+    const at = (t: number): number => rampSourceAt(1, 0.25, 60, t * 30)
+    expect(at(1)).toBeCloseTo(25, 0)
+    expect(Math.abs(at(2) - 42)).toBeLessThan(1)
+    expect(at(3)).toBeCloseTo(54, 0)
+    // A constant stretch over the same length would have been at 16, 32 and 49 (§18).
+    expect(at(1)).toBeGreaterThan(20)
+  })
+
+  it('size every decode window by the footage, not the output — and the preview seeks along the curve', () => {
+    const ramped = clip({ duration: 111, ramp: { from: 1, to: 0.25 } })
+    // 111 frames of output at a mean rate of 0.541: 60 frames of footage, not 111.
+    expect(sourceFramesFor(ramped)).toBe(Math.ceil(111 * rampRate(1, 0.25) - 1e-9))
+    expect(sourceFramesFor(ramped)).toBe(61)
+    expect(sourceFrameAt(ramped, 30)).toBe(Math.round(rampSourceAt(1, 0.25, 111 * rampRate(1, 0.25), 30)))
+    // It decelerates: the first second covers more footage than the last.
+    expect(sourceFrameAt(ramped, 30) - sourceFrameAt(ramped, 0)).toBeGreaterThan(sourceFrameAt(ramped, 110) - sourceFrameAt(ramped, 80))
+    expect(clipRateAt(ramped, 0)).toBeCloseTo(1, 6)
+    expect(clipRateAt(ramped, 111)).toBeCloseTo(0.25, 2)
+  })
+
+  it('are one setpts with a log, then fps — and a flat one is a plain speed', () => {
+    const f = rampVideoFilter(1, 0.25, 2, 30)
+    expect(f).toMatch(/^setpts='.*log\(.*\)\/TB',fps=30$/)
+    expect(f).toContain('T-STARTT')
+    expect(rampVideoFilter(0.5, 0.5, 2, 30)).toBe('setpts=PTS/0.5,fps=30')
+  })
+
+  it('are clamped to a quarter and four, and refuse nonsense', () => {
+    expect(clipRamp({ ramp: { from: 0.1, to: 9 } })).toEqual({ from: 0.25, to: 4 })
+    expect(clipRamp({ ramp: { from: 0, to: 1 } })).toBeNull()
+    expect(clipRamp({})).toBeNull()
+  })
+
+  it('keep the same footage when applied, move what follows, replace a speed, and never ramp a still', () => {
+    const p: Project = {
+      ...emptyProject(),
+      assets: [video, { ...still, id: 'img' }],
+      clips: [clip({ id: 'a', duration: 60, speed: 2 }), clip({ id: 'b', start: 60, duration: 30 })]
+    }
+    // At 2× the clip eats 120 frames; ramped 1× → 0.25× those 120 play over 221.
+    const next = withClipRamp(p, 'a', { from: 1, to: 0.25 })
+    const a = next.clips.find((c) => c.id === 'a')!
+    expect(a.speed).toBeUndefined()
+    expect(a.duration).toBe(Math.floor(120 / rampRate(1, 0.25)))
+    expect(sourceFramesFor(a)).toBeLessThanOrEqual(120)
+    expect(next.clips.find((c) => c.id === 'b')!.start).toBe(60 + (a.duration - 60))
+    const off = withClipRamp(next, 'a', null)
+    expect(off.clips.find((c) => c.id === 'a')!.ramp).toBeUndefined()
+    const photo = { ...p, clips: [clip({ id: 'a', assetId: 'img' })] }
+    expect(withClipRamp(photo, 'a', { from: 1, to: 0.5 })).toBe(photo)
   })
 })

@@ -128,6 +128,11 @@ export function validateSpine2(raw: unknown, menu: Menu2, options: { truncated?:
       if (slot.kind === 'image' && out.speed !== 'normal') problems.push({ path: `${at}.speed`, message: 'a still has no speed — normal' })
       out.speed = 'normal'
     }
+    // A recipe without ramps (a wedding, fashion) does not get one because the decode allowed it.
+    if (out.speed === 'ramp' && !recipe!.speed.ramp) {
+      problems.push({ path: `${at}.speed`, message: `${recipe!.name} does not ramp — normal speed` })
+      out.speed = 'normal'
+    }
     // A ramp on a clip that speaks: atempo cannot follow a curve, and the words would smear.
     if (out.speed === 'ramp' && slot.speech) {
       problems.push({ path: `${at}.speed`, message: `${slot.id} has someone speaking — no ramp` })

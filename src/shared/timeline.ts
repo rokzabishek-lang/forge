@@ -282,6 +282,15 @@ export interface Clip {
    */
   speed?: number
   /**
+   * A speed ramp across the whole clip: the rate goes from `from` to `to`,
+   * linearly over the footage it plays (0.25–4). Footage only, and exclusive
+   * with `speed`. One `setpts` with a `log` in it, not a stack of clips
+   * (docs/EFFECTS.md §18); the frames consumed are `duration × rampRate` —
+   * render/speed.ts. A ramped clip's own sound is not played: atempo cannot
+   * follow a curve, and the music carries the moment.
+   */
+  ramp?: { from: number; to: number }
+  /**
    * A voice effect on this clip's sound — chipmunk, monster, phone call.
    *
    * Pitch WITHOUT tempo, so the clip is exactly as long as it was and nothing

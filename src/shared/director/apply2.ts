@@ -17,7 +17,8 @@ import {
 import { punchIndex } from './validate'
 import type { Brief } from './schema'
 import type { Role2 } from './recipes'
-import { SLOW_SPEED, type Composed } from './compose'
+import { DIRECTOR_RAMP, SLOW_SPEED, type Composed } from './compose'
+import { sourceFramesFor } from '../render/speed'
 import { SPINE2_PASS, type Menu2 } from './schema2'
 import { solveCrop } from '../render/crop'
 
@@ -134,9 +135,7 @@ export function applyRecipe(project: Project, composed: Composed, menu: Menu2, c
     const slow = slot.kind === 'video' && shot.speed === 'slow'
     const speaks = slot.kind === 'video' && hasSpeech(next, asset, laid.clipFrames, fps)
     if (speaks) anySpeech = true
-    if (slot.kind === 'video' && shot.speed === 'ramp') {
-      problems.push({ path: `$.shots[${i}].speed`, message: `${slot.id}: speed ramps are not drawn yet — played at normal speed` })
-    }
+    const ramped = slot.kind === 'video' && shot.speed === 'ramp'
     const clip: Clip = {
       id: newId('dir'),
       assetId: asset.id,
@@ -150,6 +149,7 @@ export function applyRecipe(project: Project, composed: Composed, menu: Menu2, c
       generatedBy: { rule: SPINE_RULE, reason: `${recipe.name} · ${shot.role}${laid.hero ? ' · hero' : ''} · ${shot.why || slot.label}` },
       ...(motion ? { motion } : {}),
       ...(slow ? { speed: SLOW_SPEED } : {}),
+      ...(ramped ? { ramp: { ...DIRECTOR_RAMP } } : {}),
       ...(crop ? { crop } : {})
     }
     if (laid.clipFrames < frames) problems.push({ path: `$.shots[${i}]`, message: `${slot.id} ends ${((frames - laid.clipFrames) / fps).toFixed(1)}s before its shot` })
@@ -170,7 +170,8 @@ export function applyRecipe(project: Project, composed: Composed, menu: Menu2, c
     let frames = Math.round(fps * 0.3)
     if (prev.video) {
       const asset = assetById.get(prev.clip.assetId)!
-      const headroom = asset.durationFrames - prev.clip.inPoint - Math.round(prev.clip.duration * (prev.clip.speed ?? 1))
+      // What the clip really consumes — its speed or its ramp (render/speed.ts), not its length on the timeline.
+      const headroom = asset.durationFrames - prev.clip.inPoint - sourceFramesFor(prev.clip)
       if (headroom < 1) {
         problems.push({ path: at, message: `${shot.slotId} enters with a cut — ${prev.slotId} has no footage left to blend from` })
         continue
