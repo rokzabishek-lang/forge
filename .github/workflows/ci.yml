@@ -68,9 +68,9 @@ jobs:
         os: ${{ (github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')) && fromJSON('["macos-latest","windows-latest"]') || fromJSON('["windows-latest"]') }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
           cache: npm
@@ -78,7 +78,7 @@ jobs:
       # The sidecar degrades every optional capability, so a bare interpreter
       # is enough for the handshake tests. Installing torch and friends on
       # every push would cost minutes for capabilities the suite already skips.
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
@@ -121,9 +121,9 @@ jobs:
             script: pack:mac
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
           cache: npm
@@ -199,7 +199,7 @@ jobs:
 
       # Uploaded rather than released. A release is a deliberate act; this is
       # just "something to install on the Surface this afternoon".
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: forge-${{ matrix.os }}
           if-no-files-found: error
