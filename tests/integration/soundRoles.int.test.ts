@@ -31,7 +31,8 @@ maybe('the sound table', () => {
       }
       seen++
       const m = await measureSound(file)
-      const off = Math.abs(m.peakSeconds - entry.peakSeconds) > 0.06 || Math.abs(m.seconds - entry.seconds) > 0.06 || Math.abs(m.peakDb - entry.peakDb) > 1.5
+      // The measurement is deterministic and steps in 5 ms; a peak a frame off at 30 fps is a hit landing late.
+      const off = Math.abs(m.peakSeconds - entry.peakSeconds) > 0.011 || Math.abs(m.seconds - entry.seconds) > 0.02 || Math.abs(m.peakDb - entry.peakDb) > 0.6
       lines.push(`- ${name} (${entry.role}): ${m.seconds.toFixed(3)} s, peak ${m.peakSeconds.toFixed(3)} s at ${m.peakDb.toFixed(1)} dB — table ${entry.seconds} s, ${entry.peakSeconds} s, ${entry.peakDb} dB${off ? ' **DRIFT**' : ''}`)
       if (off) drift.push(name)
     }

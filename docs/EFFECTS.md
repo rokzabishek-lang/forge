@@ -2543,5 +2543,19 @@ And the measurement the sounds are placed by: every library file's loudest
 10 ms window, found by decoding to floats with the bundled ffmpeg
 (`scripts/measure-sfx.mjs`). The peaks agree with the librosa measurement of
 2026-09-23 to within 10 ms; the levels, which that measurement did not
-record, span 17 dB across the library (−0.2 to −16.9 dB), which is why the
+record, span 17 dB across the library (−2.5 to −19.9 dB), which is why the
 table carries `peakDb` and the placement normalises by it.
+
+Two more from the C3 review, both measured:
+
+- **The stereo bus plays a mono file 3 dB down.** `aformat=…:channel_layouts=
+  stereo` — the front of every audio chain in `plan.ts` — upmixes at 0.707:
+  a −20 dBFS mono tone reads −23.0 in each channel. So a level measured on a
+  mono downmix (`-ac 1`) is 3 dB hotter than the render will ever play a mono
+  file, and every .wav in the library is mono. The measurement now goes
+  through the render's own front of chain and reads both channels, so the
+  table is the bus, not the file.
+- **`volumedetect` cannot see clipping.** It takes only s16, so ffmpeg clamps
+  a float decode first: a mix at +6 dBFS read `max_volume: 0.0 dB`. `astats`
+  reads floats — `Peak level dB: 6.02` on the same file — and is what a check
+  of "nothing clips" has to use (`tests/integration/output.ts` `peakLevelDb`).

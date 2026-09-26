@@ -43,8 +43,14 @@ export interface PlaceSoundsOptions {
   musicVolume: number
   /** The ad's one dial (coherence.ts). */
   intensity: number
-  /** How long a transition runs, so a whoosh can be centred on it. */
-  transitionFrames: number
+  /**
+   * The transitions that actually landed — where each starts and how long it
+   * runs — so a whoosh is centred on a real blend. A whip the apply step
+   * turned into a cut has no entry, and its whoosh goes with it.
+   */
+  transitions: { frame: number; frames: number }[]
+  /** Where the ad ends: no sound runs past it, or the export would. */
+  endFrame: number
   newId: (prefix: string) => string
   /** The project's assets, so a sound already in the pool is reused rather than added again. */
   assets: MediaAsset[]
@@ -105,8 +111,17 @@ export function placeSounds(events: SoundEventOut[], pack: SoundPack, options: P
 
     const fileFrames = Math.max(1, Math.round(file.seconds * fps))
     const peakFrames = Math.min(fileFrames - 1, Math.round(file.peakSeconds * fps))
-    // A whoosh is centred on the transition, whose blend runs over the incoming shot's first frames.
-    const target = event === 'whoosh' ? e.frame + Math.round(options.transitionFrames / 2) : e.frame
+    // A whoosh is centred on its transition, whose blend runs over the incoming shot's first frames —
+    // and only on one that landed: a whip that became a cut takes its whoosh with it (coherence.ts).
+    let target = e.frame
+    if (event === 'whoosh') {
+      const landed = options.transitions.find((t) => t.frame === e.frame)
+      if (!landed) {
+        problems.push({ path: '$.sounds', message: `the whip at ${(e.frame / fps).toFixed(2)} s became a cut — its whoosh goes with it` })
+        continue
+      }
+      target = e.frame + Math.round(landed.frames / 2)
+    }
     // The file starts so that its peak lands on the target; before the timeline's start, it starts part-way in.
     let start = target - peakFrames
     let inPoint = 0
@@ -125,18 +140,27 @@ export function placeSounds(events: SoundEventOut[], pack: SoundPack, options: P
     let fadeOut: number | undefined
     if (event === 'riser' || event === 'swell') {
       // Up to the peak and a few frames past it; in over its first fifth.
-      duration = Math.min(fileFrames - inPoint, toPeak + PEAK_TAIL_FRAMES)
+      duration = Math.min(fileFrames - inPoint, toPeak + 1 + PEAK_TAIL_FRAMES)
       fadeIn = Math.round(RISE_FADE_IN_SHARE * toPeak)
-      fadeOut = Math.min(PEAK_TAIL_FRAMES, Math.max(0, duration - 1))
     } else if (event === 'whoosh') {
       duration = fileFrames - inPoint
     } else {
       // A hit keeps its tail, but not a ten-second one under the end card.
-      const most = toPeak + Math.round(HIT_TAIL_MAX_SECONDS * fps)
-      duration = Math.min(fileFrames - inPoint, most)
-      if (duration < fileFrames - inPoint) fadeOut = Math.min(Math.round(HIT_TAIL_FADE_SECONDS * fps), Math.max(0, duration - 1))
+      duration = Math.min(fileFrames - inPoint, toPeak + 1 + Math.round(HIT_TAIL_MAX_SECONDS * fps))
     }
-    duration = Math.max(1, duration)
+    // Never past the ad's end: the export is as long as its longest clip, and a braam's tail would lengthen it.
+    duration = Math.max(1, Math.min(duration, options.endFrame - start))
+    if (options.endFrame - start < 1 || duration <= toPeak) {
+      problems.push({ path: '$.sounds', message: `the ${event} at ${(e.frame / fps).toFixed(2)} s falls after the ad ends — not placed` })
+      continue
+    }
+    // A fade-out only over the frames AFTER the peak — never over the peak itself. A riser cut off at its
+    // climax (the long ones stop dead) has no tail to fade; a hit cut short by the cap, or the ad's end, fades.
+    const tail = duration - (toPeak + 1)
+    if (tail > 0) {
+      if (event === 'riser' || event === 'swell') fadeOut = Math.min(PEAK_TAIL_FRAMES, tail)
+      else if (event !== 'whoosh' && duration < fileFrames - inPoint) fadeOut = Math.min(Math.round(HIT_TAIL_FADE_SECONDS * fps), tail)
+    }
 
     const lane = options.laneFor(start, duration, clips)
     if (!lane) {
@@ -160,7 +184,9 @@ export function placeSounds(events: SoundEventOut[], pack: SoundPack, options: P
         hasVideo: false,
         hasAudio: true,
         // A library file, not a drawn card: any positive size says so (the pool never shows a sound's bytes).
-        size: 1
+        size: 1,
+        // Brought by the sound design, so Clear takes it back; a sound the user imported is reused above and stays.
+        broughtBy: SOUND_RULE
       })
     }
 

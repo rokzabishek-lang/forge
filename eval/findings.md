@@ -194,3 +194,31 @@ bug fails and a mutant that dies:
 Left as known: the cache under `userData/converted` is never pruned, and the
 eval renders draw headline cards as stills — the app animates them in
 (`rise`), the eval does not, equally for the model's ad and the standard cut.
+
+### The review of C3 (2026-09-26, night)
+
+Three Opus reviewers on the sound design, two skeptics on each finding: 15
+stood, none refuted. All fixed the same night, each with a test that fails
+without it and a mutant that dies:
+
+- **A Trailer's braam ran past the end card** and lengthened the export by
+  its tail — no sound runs past the ad's end now.
+- **A whoosh played over a whip the apply step had turned into a cut**
+  (a backdropped shot beside a filled one, no footage headroom) — the whoosh
+  is centred on the transition that landed, and goes with a whip that did not.
+- **A riser's fade-out covered its peak** when the file stops dead at it —
+  the fade is only ever over the frames after the peak.
+- **The level cap was applied before the music's fader**, so a quiet swell
+  landed short on a low fader and over the render's clamp on a high one.
+- **Music at fader zero silenced every sound for good** — they stand at their
+  own level, with a note.
+- **Clear deleted a sound the user had imported** because the Director had
+  reused it — what the Director brought is marked, and only that goes.
+- **The peaks were measured on a mono downmix** the render never plays:
+  every mono library file read 3 dB hot (EFFECTS.md §33). The table is now
+  the render's own bus.
+- **The render check's oracles**: the hit window also held the riser's peak,
+  so a missing sub passed; `volumedetect` clamps to s16, so "nothing clips"
+  could never fail. The sub is now read in its own band, peaks with `astats`.
+- Tests that never moved the song off frame 0, a fader assertion looser than
+  any bug, and a stale-peak tolerance twelve times the measurement's step.

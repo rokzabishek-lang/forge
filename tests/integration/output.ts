@@ -182,15 +182,34 @@ export async function meanVolumeDb(
   return Number(found[1])
 }
 
-/** The loudest sample over a span, dBFS — `max_volume` from the same `volumedetect` run `meanVolumeDb` reads. */
-export async function maxVolumeDb(file: string, fromSeconds: number, seconds: number): Promise<number> {
+/**
+ * The loudest sample over a span, dBFS, from `astats` — which reads floats.
+ * `volumedetect` takes only s16, so ffmpeg clamps the decode first and its
+ * `max_volume` never reads above 0.0 dB: a mix clipping at +6 dBFS reported
+ * 0.0 (measured), so "nothing clips" could never fail through it.
+ */
+export async function peakLevelDb(file: string, fromSeconds: number, seconds: number): Promise<number> {
   const { stderr } = await run(FFMPEG, [
     '-hide_banner', '-nostats',
     '-ss', String(fromSeconds), '-t', String(seconds), '-i', file,
-    '-af', 'volumedetect', '-f', 'null', '-'
+    '-af', 'astats', '-f', 'null', '-'
   ])
-  const found = /max_volume:\s*(-?\d+(?:\.\d+)?) dB/.exec(stderr)
-  if (!found) throw new Error(`no max_volume in ffmpeg output for ${file}`)
+  // The last "Peak level dB" line is the overall one, after the per-channel ones.
+  const all = [...stderr.matchAll(/Peak level dB:\s*(-?\d+(?:\.\d+)?|-inf)/g)]
+  if (all.length === 0) throw new Error(`no Peak level in ffmpeg output for ${file}`)
+  const last = all[all.length - 1][1]
+  return last === '-inf' ? -Infinity : Number(last)
+}
+
+/** `meanVolumeDb` of one band: the mean level after an ffmpeg audio filter — `lowpass=f=120` for a sub, say. */
+export async function bandVolumeDb(file: string, fromSeconds: number, seconds: number, filter: string): Promise<number> {
+  const { stderr } = await run(FFMPEG, [
+    '-hide_banner', '-nostats',
+    '-ss', String(fromSeconds), '-t', String(seconds), '-i', file,
+    '-af', `${filter},volumedetect`, '-f', 'null', '-'
+  ])
+  const found = /mean_volume:\s*(-?\d+(?:\.\d+)?) dB/.exec(stderr)
+  if (!found) throw new Error(`no mean_volume in ffmpeg output for ${file}`)
   return Number(found[1])
 }
 

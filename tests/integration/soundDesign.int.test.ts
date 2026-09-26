@@ -18,7 +18,7 @@ import { DEFAULT_LOUDNESS } from '@shared/render/loudness'
 import { measureSound } from '../../scripts/measure-sfx.mjs'
 import { evalRenderPlan, renderEval } from '../eval/pipeline'
 import { writeFile } from 'node:fs/promises'
-import { FFMPEG, maxVolumeDb, meanVolumeDb, outputDir, run, writeNote } from './output'
+import { FFMPEG, bandVolumeDb, meanVolumeDb, outputDir, peakLevelDb, run, writeNote } from './output'
 
 /*
  * Sound design, rendered and listened to (docs/PLAN.md §6.4).
@@ -128,24 +128,31 @@ describe('the sound design, rendered', () => {
     const quiet = await meanVolumeDb(out, quietFrom, Math.min(1, black.startFrame / fps - quietFrom - 0.2))
     const building = await meanVolumeDb(out, at - 0.5, 0.4)
     const onHit = await meanVolumeDb(out, at, 0.1)
+    // The sub alone: under 120 Hz, where the 220 Hz music and the riser's pink noise barely reach — the riser peaks
+    // on the same frame, so the plain level at the hero would read high with the sub missing altogether.
+    const lowHit = await bandVolumeDb(out, at, 0.1, 'lowpass=f=120')
+    const lowQuiet = await bandVolumeDb(out, quietFrom, Math.min(1, black.startFrame / fps - quietFrom - 0.2), 'lowpass=f=120')
     const inBlack = await meanVolumeDb(out, black.startFrame / fps + 0.2, (black.endFrame - black.startFrame) / fps - 0.3)
     const onCard = await meanVolumeDb(out, endCard.startFrame / fps + 0.3, 0.5)
-    const peakPlain = await maxVolumeDb(out, 0, endCard.endFrame / fps)
-    const peakLoud = await maxVolumeDb(loud, 0, endCard.endFrame / fps)
+    const peakPlain = await peakLevelDb(out, 0, endCard.endFrame / fps)
+    const peakLoud = await peakLevelDb(loud, 0, endCard.endFrame / fps)
     lines.push(
       '# soundDesign', '',
       `A product reveal over a −20 dBFS tone, 12 s: hero at ${at.toFixed(2)} s, black ${(black.startFrame / fps).toFixed(2)}–${(black.endFrame / fps).toFixed(2)} s, end card to ${(endCard.endFrame / fps).toFixed(2)} s.`, '',
       `- pack: ${pack.map((f) => `${f.id} ${f.seconds.toFixed(2)} s, peak ${f.peakSeconds.toFixed(3)} s at ${f.peakDb.toFixed(1)} dB`).join('; ')}`,
       `- placed: ${sounds.map((c) => `${c.generatedBy!.reason} → frames ${c.start}–${c.start + c.duration}, volume ${c.volume.toFixed(2)}`).join('; ')}`,
       `- ad.mp4 (no loudness pass): the music alone from ${quietFrom.toFixed(2)} s: ${quiet.toFixed(1)} dB; the riser building, the 0.4 s before the hero: ${building.toFixed(1)} dB; the hero's first 0.1 s: ${onHit.toFixed(1)} dB`,
-      `- inside the black: ${inBlack.toFixed(1)} dB; on the end card: ${onCard.toFixed(1)} dB; loudest sample ${peakPlain.toFixed(1)} dBFS`,
-      `- ad-loud.mp4 (through loudnorm at ${DEFAULT_LOUDNESS} LUFS): loudest sample ${peakLoud.toFixed(1)} dBFS`
+      `- under 120 Hz (the sub's band): the hero's first 0.1 s ${lowHit.toFixed(1)} dB against the music alone ${lowQuiet.toFixed(1)} dB`,
+      `- inside the black: ${inBlack.toFixed(1)} dB; on the end card: ${onCard.toFixed(1)} dB; true peak ${peakPlain.toFixed(1)} dBFS (astats, floats)`,
+      `- ad-loud.mp4 (through loudnorm at ${DEFAULT_LOUDNESS} LUFS): true peak ${peakLoud.toFixed(1)} dBFS`
     )
     await writeNote(dir, lines)
 
-    // The riser is heard building into the hero; the hit lands on the hero's frame, well over the music alone.
+    // The riser is heard building into the hero; the hit lands on the hero's frame, well over the music alone —
+    // and the SUB is there, not just the riser's peak: its band is far above the music's in that tenth of a second.
     expect(building - quiet).toBeGreaterThanOrEqual(3)
     expect(onHit - quiet).toBeGreaterThanOrEqual(6)
+    expect(lowHit - lowQuiet).toBeGreaterThanOrEqual(12)
     // The silence reaches nothing before the black is a fifth of a second old, and holds.
     expect(inBlack).toBeLessThan(-60)
     // The end card has the music back, at the music's own level.

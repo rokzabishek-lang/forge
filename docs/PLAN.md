@@ -1011,6 +1011,14 @@ step realises them. No per-cut model choice.
 > silent black, the music back on the end card and the true peak under −1 dBFS
 > through loudnorm; `soundRoles.int.test.ts` measures every library file again
 > where it is installed. `scripts/measure-sfx.mjs` is the measurement.
+> After review the same night: no sound runs past `layout.endFrame` (a
+> Trailer's braam lengthened the export); a whoosh is centred on the
+> transition that actually landed and goes when the whip became a cut; a
+> fade-out never covers the peak; the level cap is on what is written, fader
+> included; a music fader at zero leaves the sounds at their own level with a
+> note; a sound the user imported is reused and kept on Clear
+> (`MediaAsset.broughtBy` marks what the Director brought); and the table is
+> measured on the render's stereo bus, where a mono file is 3 dB down.
 
 ### 6.1 Events → clips — `src/shared/director/sound.ts`
 

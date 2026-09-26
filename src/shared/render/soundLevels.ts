@@ -9,9 +9,9 @@ import { MAX_GAIN } from './audibility'
  * A level is the sound's PEAK, in dBFS, when the music's fader is at unity —
  * the music is mastered to sit near full scale, so "−8 dB" is eight below the
  * music's loudest moments. Each file is normalised by its own measured peak
- * (`soundRoles.ts` `peakDb`, measured 2026-09-26: the library's peaks span
- * −0.2 to −16.9 dB), so a quiet swell and a hot boom both land where the
- * table says. The music is NOT ducked under a sound — a hit is meant to sit
+ * (`soundRoles.ts` `peakDb`, measured 2026-09-26 on the render's own stereo
+ * bus: the library's peaks span −2.5 to −19.9 dB), so a quiet swell and a
+ * hot boom both land where the table says. The music is NOT ducked under a sound — a hit is meant to sit
  * on top of it; the silence is the music's own envelope.
  */
 export const SOUND_LEVEL_DB: Record<Exclude<SoundEvent, 'silence'>, number> = {
@@ -53,6 +53,6 @@ export const SILENCE_RAMP_FRAMES = 4
  */
 export function soundGain(event: Exclude<SoundEvent, 'silence'>, peakDb: number, musicVolume: number, intensity = 0.5): number {
   const target = SOUND_LEVEL_DB[event] + (Math.max(0, Math.min(1, intensity)) - 0.5) * SOUND_INTENSITY_DB
-  const gain = Math.pow(10, (target - peakDb) / 20)
-  return Math.min(MAX_SOUND_GAIN, gain) * Math.max(0, musicVolume)
+  // The cap is on what is WRITTEN — the file's lift on the music's fader together — since that is what the render clamps.
+  return Math.min(MAX_SOUND_GAIN, Math.pow(10, (target - peakDb) / 20) * Math.max(0, musicVolume))
 }

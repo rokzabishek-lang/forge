@@ -75,6 +75,13 @@ export interface MediaAsset {
    */
   source?: string
   /**
+   * The rule that brought this asset into the pool — the Director's sound
+   * design, for a library sound it placed (director/sound.ts). Removed with
+   * that rule's clips when nothing else uses it; an asset the user imported,
+   * even of the same file, carries no rule and stays.
+   */
+  broughtBy?: string
+  /**
    * The file is not where the project says it is. RUNTIME ONLY.
    *
    * Never written to a project file: it describes this machine at this moment,

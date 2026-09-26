@@ -287,6 +287,7 @@ export function applyRecipe(project: Project, composed: Composed, menu: Menu2, c
   }
 
   /* Transitions, anchored on the boundary the engine chose; never across a gap, never from a clip with no footage left. */
+  const landedTransitions: { frame: number; frames: number }[] = []
   for (const t of layout.transitions) {
     const shot = shots.find((s) => s.index === t.shot)
     const prev = shots.find((s) => s.index === t.shot - 1)
@@ -327,6 +328,7 @@ export function applyRecipe(project: Project, composed: Composed, menu: Menu2, c
       continue
     }
     next = anchorTransition(next, shot.clip.id, member, frames)
+    landedTransitions.push({ frame: shot.clip.start, frames })
     if (under && underPrev && under.trackId === underPrev.trackId && clipEnd(underPrev) === under.start) {
       next = anchorTransition(next, under.id, member, frames)
     }
@@ -476,11 +478,17 @@ export function applyRecipe(project: Project, composed: Composed, menu: Menu2, c
   }
   if (layout.shots.length > 0 && layout.sounds.length > 0) {
     const music = ctx.musicClipId ? next.clips.find((c) => c.id === ctx.musicClipId) : undefined
+    // Levels ride the music's fader — unless it is down at nothing, when they stand at their own.
+    const musicSilent = music !== undefined && music.volume <= 0
+    if (musicSilent && layout.sounds.some((s) => s.event !== 'silence')) {
+      problems.push({ path: '$.sounds', message: 'the music is turned all the way down — the sounds are placed at their own level' })
+    }
     const placed = placeSounds(layout.sounds, ctx.sounds ?? [], {
       fps,
-      musicVolume: music?.volume ?? 1,
+      musicVolume: music && !musicSilent ? music.volume : 1,
       intensity,
-      transitionFrames: Math.round(fps * 0.3),
+      transitions: landedTransitions,
+      endFrame: layout.endFrame,
       newId,
       assets: next.assets,
       laneFor: soundLaneFor
