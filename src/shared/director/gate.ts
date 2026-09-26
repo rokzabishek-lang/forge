@@ -23,6 +23,13 @@ export interface Measure {
   lumaStd: number
   darkClip: number
   brightClip: number
+  /**
+   * The part of `brightClip` that is a clipped-white region reaching the
+   * frame's edge — a studio backdrop or a white sky, not a blown highlight
+   * (vision.py `backdrop_share`). Absent from a measurement made before it was
+   * measured; nothing is then set apart, and the picture is judged as it was.
+   */
+  backdropClip?: number
   /** 64-bit dHash as hex; null for a flat picture, whose hash would mean nothing. */
   dhash: string | null
   width: number
@@ -33,7 +40,12 @@ export interface Measure {
 export const SOFT_RATIO = 0.35
 /** Mean luma below this is too dark to lead an ad. */
 export const DARK_LUMA = 0.18
-/** More than this share of pixels clipped to white is blown. */
+/**
+ * More than this share of pixels clipped to white INSIDE the picture is blown.
+ * Inside: the backdrop is set apart first. A product on white clips 60–70 % of
+ * its pixels by design (measured on real listing photos, 2026-09-26), and was
+ * never the hero under the rule that read the whole share.
+ */
 export const BLOWN_CLIP = 0.06
 /** dHashes this close are the same picture. */
 export const DUPLICATE_BITS = 6
@@ -83,7 +95,7 @@ export function flagsFor(measure: Measure | undefined, setMedianSharpness: numbe
   const flags: Flag[] = []
   if (setMedianSharpness > 0 && measure.sharpness < SOFT_RATIO * setMedianSharpness) flags.push('soft')
   if (measure.luma < DARK_LUMA) flags.push('dark')
-  if (measure.brightClip > BLOWN_CLIP) flags.push('blown')
+  if (measure.brightClip - (measure.backdropClip ?? 0) > BLOWN_CLIP) flags.push('blown')
   return flags
 }
 

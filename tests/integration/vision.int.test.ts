@@ -29,6 +29,7 @@ interface Measure {
   luma: number
   darkClip: number
   brightClip: number
+  backdropClip: number
   dhash: string | null
   width: number
   height: number
@@ -69,6 +70,10 @@ maybe('vision.measure', () => {
     await lavfi('pattern-turned', 'testsrc=s=640x480:d=1', 'transpose=1')
     await lavfi('flat-red', 'color=c=red:s=640x480')
     await lavfi('flat-blue', 'color=c=blue:s=640x480')
+    // A product-listing photo: a grey box on a white studio backdrop — 87 % of it clipped white, by design.
+    await lavfi('backdrop', 'color=c=white:s=640x480', 'drawbox=x=220:y=140:w=200:h=200:c=0x808080:t=fill')
+    // A blown photo: two white patches burnt INTO a mid-grey picture, touching no edge.
+    await lavfi('highlights', 'color=c=0x808080:s=640x480', 'drawbox=x=100:y=100:w=80:h=80:c=white:t=fill,drawbox=x=400:y=300:w=80:h=80:c=white:t=fill')
 
     client = new SidecarClient({ cwd: SIDECAR_DIR, python: VENV_PYTHON, maxRestarts: 0 })
     await client.start()
@@ -82,7 +87,7 @@ maybe('vision.measure', () => {
       '# vision.measure',
       '',
       ...Object.entries(measures).map(
-        ([k, m]) => `- ${k}: ${m.error ?? `sharpness ${m.sharpness.toFixed(1)}, luma ${m.luma.toFixed(3)}, dark ${m.darkClip.toFixed(2)}, bright ${m.brightClip.toFixed(2)}, dhash ${m.dhash}`}`
+        ([k, m]) => `- ${k}: ${m.error ?? `sharpness ${m.sharpness.toFixed(1)}, luma ${m.luma.toFixed(3)}, dark ${m.darkClip.toFixed(2)}, bright ${m.brightClip.toFixed(3)} of which backdrop ${m.backdropClip.toFixed(3)}, dhash ${m.dhash}`}`
       )
     ])
   }, 120_000)
@@ -99,6 +104,20 @@ maybe('vision.measure', () => {
     expect(measures.dark.darkClip).toBe(0)
     expect(measures.blown.luma).toBeGreaterThan(0.95)
     expect(measures.blown.brightClip).toBe(1)
+    // All of it reaches the edge: a blank white card is all backdrop, and no highlight.
+    expect(measures.blown.backdropClip).toBe(1)
+  })
+
+  it('sets a white backdrop apart from blown highlights: clipped white that reaches the frame’s edge is backdrop', () => {
+    // The box on white: nearly nine tenths clipped, every clipped pixel in the one region around the box.
+    const backdrop = measures.backdrop
+    expect(backdrop.brightClip).toBeGreaterThan(0.8)
+    expect(Math.abs(backdrop.backdropClip - backdrop.brightClip)).toBeLessThan(0.005)
+    // The burnt patches: four per cent clipped, none of it touching an edge — so all of it counts.
+    const highlights = measures.highlights
+    expect(highlights.brightClip).toBeGreaterThan(0.03)
+    expect(highlights.brightClip).toBeLessThan(0.05)
+    expect(highlights.backdropClip).toBe(0)
   })
 
   it('matches one picture at two sizes, and not the same picture turned', () => {

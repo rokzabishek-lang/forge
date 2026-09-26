@@ -53,6 +53,33 @@ def _block_means(grey: "Any", rows: int, cols: int) -> "Any":
     return out
 
 
+def backdrop_share(clipped: "Any") -> float:
+    """The share of the picture that is clipped white AND in a region reaching the frame's edge.
+
+    A product on a white studio backdrop clips most of its pixels to white by
+    design — measured 2026-09-26 on four real product-listing photos: 71 % and
+    61 % for the box and the bottle on white, 1 % for the same bottle on teal —
+    and a rule that reads ``brightClip`` alone calls both blown, so neither may
+    ever be the hero. What is blown is a highlight INSIDE the picture, on the
+    face or the product. So the clipped regions that touch the border are
+    counted apart here, and the gate judges what is left. A white sky counts as
+    backdrop too, which is right: a portrait against it is not a reject.
+    """
+    import numpy as np
+    from scipy import ndimage
+
+    if not clipped.any():
+        return 0.0
+    labels, count = ndimage.label(clipped)
+    if count == 0:
+        return 0.0
+    edge = np.unique(np.concatenate([labels[0, :], labels[-1, :], labels[:, 0], labels[:, -1]]))
+    edge = edge[edge != 0]
+    if edge.size == 0:
+        return 0.0
+    return float(np.isin(labels, edge).mean())
+
+
 def measure_rgb(rgb: "Any") -> dict[str, Any]:
     """The numbers for one decoded picture (H×W×3 uint8)."""
     import numpy as np
@@ -61,6 +88,7 @@ def measure_rgb(rgb: "Any") -> dict[str, Any]:
     grey = rgb.astype(np.float64) @ np.array(LUMA)
     sharpness = float(ndimage.laplace(grey).var())
     std = float(grey.std())
+    clipped = grey > 247
 
     dhash: str | None = None
     if std >= FLAT_STD:
@@ -76,7 +104,8 @@ def measure_rgb(rgb: "Any") -> dict[str, Any]:
         "luma": float(grey.mean() / 255.0),
         "lumaStd": std / 255.0,
         "darkClip": float((grey < 8).mean()),
-        "brightClip": float((grey > 247).mean()),
+        "brightClip": float(clipped.mean()),
+        "backdropClip": backdrop_share(clipped),
         "dhash": dhash,
     }
 

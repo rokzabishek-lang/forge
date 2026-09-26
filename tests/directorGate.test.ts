@@ -31,6 +31,17 @@ describe('the flags', () => {
     expect(flagsFor(undefined, 1000)).toEqual([])
   })
 
+  it('a white studio backdrop is not blown: only what clips INSIDE the picture counts', () => {
+    // A box on white, as a product-listing photo is: 70 % clipped, all of it the backdrop.
+    expect(flagsFor(m({ brightClip: 0.7, backdropClip: 0.7 }), 1000)).toEqual([])
+    // The same backdrop with a tenth of the picture blown on the product itself.
+    expect(flagsFor(m({ brightClip: 0.7, backdropClip: 0.6 }), 1000)).toEqual(['blown'])
+    // Five per cent inside — under the threshold — is not blown, however much backdrop is around it.
+    expect(flagsFor(m({ brightClip: 0.7, backdropClip: 0.65 }), 1000)).toEqual([])
+    // A measurement from before the backdrop was measured is judged as it always was.
+    expect(flagsFor(m({ brightClip: 0.7 }), 1000)).toEqual(['blown'])
+  })
+
   it('a set that is soft all over keeps every photo: it is a look, not ten rejects', () => {
     const slots = [1, 2, 3, 4].map((n) => slot(n))
     const soft = Object.fromEntries(slots.map((s, i) => [s.assetId, m({ sharpness: 20 + i })]))
