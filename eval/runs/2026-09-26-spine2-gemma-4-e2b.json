@@ -1,0 +1,2366 @@
+{
+  "run": "2026-09-26-spine2-gemma-4-e2b",
+  "stamp": "2026-09-26T15:03:36.920Z",
+  "provider": "openai",
+  "model": "google/gemma-4-e2b",
+  "think": false,
+  "server": "http://127.0.0.1:1234",
+  "transport": "relay",
+  "catalogue": {
+    "builtIn": 8,
+    "library": 412
+  },
+  "media": "synthetic",
+  "results": [
+    {
+      "fixtureId": "event-diwali-sale",
+      "kind": "event",
+      "language": "Hindi",
+      "tone": "urgent",
+      "seconds": 20,
+      "slots": 5,
+      "cuts": 38,
+      "beats": "analysed",
+      "pass": "spine@2",
+      "recipe": "product-reveal",
+      "hero": "slot_02",
+      "status": 200,
+      "ms": 13175,
+      "promptTokens": 1208,
+      "outputTokens": 392,
+      "truncated": false,
+      "parsed": true,
+      "verdict": "used",
+      "why": null,
+      "problems": [],
+      "reasoning": "The 'product-reveal' recipe is the most suitable as it focuses on building up to a hero shot, which fits showcasing fashion items like Diwali wear for a sale. The urgent tone and the need to highlight a discount make this recipe effective.",
+      "headlines": [
+        {
+          "segment": 0,
+          "role": "hook",
+          "text": "रंगरेज़ फैशन सेल",
+          "chars": 11,
+          "seconds": 2.933333333333333,
+          "capacity": 40,
+          "fits": true
+        },
+        {
+          "segment": 3,
+          "role": "offer",
+          "text": "30% की छूट",
+          "chars": 8,
+          "seconds": 1.6,
+          "capacity": 26,
+          "fits": true
+        },
+        {
+          "segment": 4,
+          "role": "cta",
+          "text": "इस रविवार तक स्टोर पर आएं",
+          "chars": 19,
+          "seconds": 1.1,
+          "capacity": 19,
+          "fits": true
+        }
+      ],
+      "applied": {
+        "reasoning": "The 'product-reveal' recipe is the most suitable as it focuses on building up to a hero shot, which fits showcasing fashion items like Diwali wear for a sale. The urgent tone and the need to highlight a discount make this recipe effective.",
+        "recipe": "product-reveal",
+        "hero": "slot_02",
+        "style": "hero",
+        "animation": "rise",
+        "shots": [
+          {
+            "slot": "slot_01",
+            "role": "hook",
+            "weight": "normal",
+            "move": "hold",
+            "speed": "normal",
+            "headline": "रंगरेज़ फैशन सेल",
+            "punch_word": "सेल",
+            "why": "Shows a diya rangoli, setting the festive mood."
+          },
+          {
+            "slot": "slot_02",
+            "role": "story",
+            "weight": "hold",
+            "move": "in",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "Displays the new kurta range, showing the featured product."
+          },
+          {
+            "slot": "slot_03",
+            "role": "product",
+            "weight": "hold",
+            "move": "in",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "Features a saree model, showcasing festive wear."
+          },
+          {
+            "slot": "slot_04",
+            "role": "offer",
+            "weight": "normal",
+            "move": "in",
+            "speed": "normal",
+            "headline": "30% की छूट",
+            "punch_word": "छूट",
+            "why": "Highlights the discount."
+          },
+          {
+            "slot": "slot_05",
+            "role": "cta",
+            "weight": "normal",
+            "move": "in",
+            "speed": "normal",
+            "headline": "इस रविवार तक स्टोर पर आएं",
+            "punch_word": "",
+            "why": "Call to action for visiting the store."
+          }
+        ]
+      },
+      "baseline": {
+        "reasoning": "Standard cut: Energy, 5 shots, slot_01 as the hero.",
+        "recipe": "energy",
+        "hero": "slot_01",
+        "style": "poster-3d",
+        "animation": "pop",
+        "shots": [
+          {
+            "slot": "slot_01",
+            "role": "product",
+            "weight": "hold",
+            "move": "in",
+            "speed": "normal",
+            "headline": "Rangrez Fashion Diwali sale",
+            "punch_word": "",
+            "why": "the hero"
+          },
+          {
+            "slot": "slot_02",
+            "role": "problem",
+            "weight": "normal",
+            "move": "inLeft",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_03",
+            "role": "product",
+            "weight": "normal",
+            "move": "inRight",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_04",
+            "role": "proof",
+            "weight": "normal",
+            "move": "inUp",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_05",
+            "role": "cta",
+            "weight": "normal",
+            "move": "inDown",
+            "speed": "normal",
+            "headline": "Visit the store by Sunday",
+            "punch_word": "",
+            "why": "in order"
+          }
+        ]
+      },
+      "timing": [
+        {
+          "slot": "slot_01",
+          "startFrame": 0,
+          "endFrame": 88,
+          "hero": false
+        },
+        {
+          "slot": "slot_02",
+          "startFrame": 88,
+          "endFrame": 314,
+          "hero": true
+        },
+        {
+          "slot": "slot_03",
+          "startFrame": 314,
+          "endFrame": 362,
+          "hero": false
+        },
+        {
+          "slot": "slot_04",
+          "startFrame": 362,
+          "endFrame": 410,
+          "hero": false
+        },
+        {
+          "slot": "slot_05",
+          "startFrame": 410,
+          "endFrame": 443,
+          "hero": false
+        }
+      ],
+      "renders": {
+        "model": "tests/output/eval/2026-09-26-spine2-gemma-4-e2b/renders/event-diwali-sale.model.mp4",
+        "baseline": "tests/output/eval/2026-09-26-spine2-gemma-4-e2b/renders/event-diwali-sale.baseline.mp4"
+      },
+      "raw": "{\"reasoning\": \"The 'product-reveal' recipe is the most suitable as it focuses on building up to a hero shot, which fits showcasing fashion items like Diwali wear for a sale. The urgent tone and the need to highlight a discount make this recipe effective.\", \"recipe\": \"product-reveal\", \"hero\": \"slot_02\", \"style\": \"hero\", \"animation\": \"rise\", \"shots\": [{\"slot\": \"slot_01\", \"role\": \"hook\", \"weight\": \"normal\", \"move\": \"hold\", \"speed\": \"normal\", \"headline\": \"रंगरेज़ फैशन सेल\", \"punch_word\": \"सेल\", \"why\": \"Shows a diya rangoli, setting the festive mood.\"}, {\"slot\": \"slot_02\", \"role\": \"story\", \"weight\": \"hold\", \"move\": \"in\", \"speed\": \"normal\", \"headline\": \"\", \"punch_word\": \"\", \"why\": \"Displays the new kurta range, showing the featured product.\"}, {\"slot\": \"slot_03\", \"role\": \"product\", \"weight\": \"hold\", \"move\": \"in\", \"speed\": \"normal\", \"headline\": \"\", \"punch_word\": \"\", \"why\": \"Features a saree model, showcasing festive wear.\"}, {\"slot\": \"slot_04\", \"role\": \"offer\", \"weight\": \"normal\", \"move\": \"in\", \"speed\": \"normal\", \"headline\": \"30% की छूट\", \"punch_word\": \"छूट\", \"why\": \"Highlights the discount.\"}, {\"slot\": \"slot_05\", \"role\": \"cta\", \"weight\": \"normal\", \"move\": \"in\", \"speed\": \"normal\", \"headline\": \"इस रविवार तक स्टोर पर आएं\", \"punch_word\": \"\", \"why\": \"Call to action for visiting the store.\"}]}"
+    },
+    {
+      "fixtureId": "event-fest",
+      "kind": "event",
+      "language": "English",
+      "tone": "urgent",
+      "seconds": 20,
+      "slots": 6,
+      "cuts": 42,
+      "beats": "analysed",
+      "pass": "spine@2",
+      "recipe": "energy",
+      "hero": "slot_01",
+      "status": 200,
+      "ms": 10919,
+      "promptTokens": 1221,
+      "outputTokens": 455,
+      "truncated": false,
+      "parsed": true,
+      "verdict": "used",
+      "why": null,
+      "problems": [
+        "layout: the song is longer than these shots need — the ad ends at 18.1s"
+      ],
+      "reasoning": "The 'energy' recipe is best suited for an urgent, hype-driven event like a music festival. The accelerating cuts and hits on the drop align perfectly with the urgent tone required for promoting Rhythm Fest 2026.",
+      "headlines": [
+        {
+          "segment": 0,
+          "role": "hook",
+          "text": "Rhythm Fest 2026",
+          "chars": 16,
+          "seconds": 5.566666666666666,
+          "capacity": 40,
+          "fits": true
+        },
+        {
+          "segment": 5,
+          "role": "cta",
+          "text": "Tickets close Friday",
+          "chars": 20,
+          "seconds": 1.4666666666666666,
+          "capacity": 23,
+          "fits": true
+        }
+      ],
+      "applied": {
+        "reasoning": "The 'energy' recipe is best suited for an urgent, hype-driven event like a music festival. The accelerating cuts and hits on the drop align perfectly with the urgent tone required for promoting Rhythm Fest 2026.",
+        "recipe": "energy",
+        "hero": "slot_01",
+        "style": "poster-3d",
+        "animation": "pop",
+        "shots": [
+          {
+            "slot": "slot_01",
+            "role": "hook",
+            "weight": "normal",
+            "move": "in",
+            "speed": "normal",
+            "headline": "Rhythm Fest 2026",
+            "punch_word": "Rhythm",
+            "why": "This shot introduces the festival name and sets the high-en…"
+          },
+          {
+            "slot": "slot_02",
+            "role": "problem",
+            "weight": "normal",
+            "move": "inLeft",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "This shot builds the tension by showing a relatable moment …"
+          },
+          {
+            "slot": "slot_03",
+            "role": "product",
+            "weight": "normal",
+            "move": "inRight",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "This shot showcases the excitement of the event."
+          },
+          {
+            "slot": "slot_04",
+            "role": "proof",
+            "weight": "normal",
+            "move": "inUp",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "This shot provides visual proof of the festival's vibe."
+          },
+          {
+            "slot": "slot_05",
+            "role": "offer",
+            "weight": "normal",
+            "move": "inDown",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "This shot introduces the limited-time offer."
+          },
+          {
+            "slot": "slot_06",
+            "role": "cta",
+            "weight": "normal",
+            "move": "hold",
+            "speed": "normal",
+            "headline": "Tickets close Friday",
+            "punch_word": "",
+            "why": "This final shot delivers the urgent call to action."
+          }
+        ]
+      },
+      "baseline": {
+        "reasoning": "Standard cut: Energy, 6 shots, slot_01 as the hero.",
+        "recipe": "energy",
+        "hero": "slot_01",
+        "style": "poster-3d",
+        "animation": "pop",
+        "shots": [
+          {
+            "slot": "slot_01",
+            "role": "product",
+            "weight": "hold",
+            "move": "in",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "the hero"
+          },
+          {
+            "slot": "slot_02",
+            "role": "problem",
+            "weight": "normal",
+            "move": "inLeft",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_03",
+            "role": "product",
+            "weight": "normal",
+            "move": "inRight",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_04",
+            "role": "proof",
+            "weight": "normal",
+            "move": "inUp",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_05",
+            "role": "offer",
+            "weight": "normal",
+            "move": "inDown",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_06",
+            "role": "cta",
+            "weight": "normal",
+            "move": "in",
+            "speed": "normal",
+            "headline": "Tickets close Friday",
+            "punch_word": "",
+            "why": "in order"
+          }
+        ]
+      },
+      "timing": [
+        {
+          "slot": "slot_01",
+          "startFrame": 0,
+          "endFrame": 167,
+          "hero": true
+        },
+        {
+          "slot": "slot_02",
+          "startFrame": 167,
+          "endFrame": 254,
+          "hero": false
+        },
+        {
+          "slot": "slot_03",
+          "startFrame": 254,
+          "endFrame": 311,
+          "hero": false
+        },
+        {
+          "slot": "slot_04",
+          "startFrame": 311,
+          "endFrame": 371,
+          "hero": false
+        },
+        {
+          "slot": "slot_05",
+          "startFrame": 371,
+          "endFrame": 413,
+          "hero": false
+        },
+        {
+          "slot": "slot_06",
+          "startFrame": 413,
+          "endFrame": 457,
+          "hero": false
+        }
+      ],
+      "renders": {
+        "model": "tests/output/eval/2026-09-26-spine2-gemma-4-e2b/renders/event-fest.model.mp4",
+        "baseline": "tests/output/eval/2026-09-26-spine2-gemma-4-e2b/renders/event-fest.baseline.mp4"
+      },
+      "raw": "{\"reasoning\": \"The 'energy' recipe is best suited for an urgent, hype-driven event like a music festival. The accelerating cuts and hits on the drop align perfectly with the urgent tone required for promoting Rhythm Fest 2026.\", \"recipe\": \"energy\", \"hero\": \"slot_01\", \"style\": \"poster-3d\", \"animation\": \"pop\", \"shots\": [{\"slot\": \"slot_01\", \"role\": \"hook\", \"weight\": \"normal\", \"move\": \"in\", \"speed\": \"normal\", \"headline\": \"Rhythm Fest 2026\", \"punch_word\": \"Rhythm\", \"why\": \"This shot introduces the festival name and sets the high-energy tone.\"}, {\"slot\": \"slot_02\", \"role\": \"problem\", \"weight\": \"normal\", \"move\": \"inLeft\", \"speed\": \"normal\", \"headline\": \"\", \"punch_word\": \"\", \"why\": \"This shot builds the tension by showing a relatable moment or feeling.\"}, {\"slot\": \"slot_03\", \"role\": \"product\", \"weight\": \"normal\", \"move\": \"inRight\", \"speed\": \"normal\", \"headline\": \"\", \"punch_word\": \"\", \"why\": \"This shot showcases the excitement of the event.\"}, {\"slot\": \"slot_04\", \"role\": \"proof\", \"weight\": \"normal\", \"move\": \"inUp\", \"speed\": \"normal\", \"headline\": \"\", \"punch_word\": \"\", \"why\": \"This shot provides visual proof of the festival's vibe.\"}, {\"slot\": \"slot_05\", \"role\": \"offer\", \"weight\": \"normal\", \"move\": \"inDown\", \"speed\": \"normal\", \"headline\": \"\", \"punch_word\": \"\", \"why\": \"This shot introduces the limited-time offer.\"}, {\"slot\": \"slot_06\", \"role\": \"cta\", \"weight\": \"normal\", \"move\": \"hold\", \"speed\": \"normal\", \"headline\": \"Tickets close Friday\", \"punch_word\": \"\", \"why\": \"This final shot delivers the urgent call to action.\"}]}"
+    },
+    {
+      "fixtureId": "fashion-perfume",
+      "kind": "fashion",
+      "language": "English",
+      "tone": "premium",
+      "seconds": 20,
+      "slots": 6,
+      "cuts": 31,
+      "beats": "analysed",
+      "pass": "spine@2",
+      "recipe": "fashion",
+      "hero": "slot_01",
+      "status": 200,
+      "ms": 10259,
+      "promptTokens": 1190,
+      "outputTokens": 427,
+      "truncated": false,
+      "parsed": true,
+      "verdict": "used",
+      "why": null,
+      "problems": [
+        "shots: slot_05 left out — the music is too short to hold every shot",
+        "shots: slot_03 left out — the music is too short to hold every shot",
+        "layout: slot_06's headline dropped — the recipe keeps 2 cards"
+      ],
+      "reasoning": "The 'fashion' recipe is best suited for highlighting a luxury perfume like Noir 9, focusing on the aesthetic and premium feel.",
+      "headlines": [
+        {
+          "segment": 0,
+          "role": "hook",
+          "text": "Noir 9 for after dark",
+          "chars": 21,
+          "seconds": 5,
+          "capacity": 40,
+          "fits": true
+        },
+        {
+          "segment": 3,
+          "role": "cta",
+          "text": "Discover Noir 9",
+          "chars": 15,
+          "seconds": 3.3333333333333335,
+          "capacity": 40,
+          "fits": true
+        },
+        {
+          "segment": 5,
+          "role": "cta",
+          "text": "Discover Noir 9",
+          "chars": 15,
+          "seconds": 3.3,
+          "capacity": 40,
+          "fits": true
+        }
+      ],
+      "applied": {
+        "reasoning": "The 'fashion' recipe is best suited for highlighting a luxury perfume like Noir 9, focusing on the aesthetic and premium feel.",
+        "recipe": "fashion",
+        "hero": "slot_01",
+        "style": "hollow-accent",
+        "animation": "fade",
+        "shots": [
+          {
+            "slot": "slot_01",
+            "role": "hook",
+            "weight": "hold",
+            "move": "hold",
+            "speed": "normal",
+            "headline": "Noir 9 for after dark",
+            "punch_word": "after",
+            "why": "This shot introduces the product immediately with the bottl…"
+          },
+          {
+            "slot": "slot_02",
+            "role": "story",
+            "weight": "normal",
+            "move": "panLeft",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "The silhouette adds mystery and sets the mood."
+          },
+          {
+            "slot": "slot_04",
+            "role": "cta",
+            "weight": "normal",
+            "move": "hold",
+            "speed": "normal",
+            "headline": "Discover Noir 9",
+            "punch_word": "",
+            "why": "The wrist spray shows the application."
+          },
+          {
+            "slot": "slot_06",
+            "role": "cta",
+            "weight": "normal",
+            "move": "hold",
+            "speed": "normal",
+            "headline": "Discover Noir 9",
+            "punch_word": "",
+            "why": "The bottle turn serves as a final visual flourish."
+          }
+        ]
+      },
+      "baseline": {
+        "reasoning": "Standard cut: Product reveal, 6 shots, slot_01 as the hero.",
+        "recipe": "product-reveal",
+        "hero": "slot_01",
+        "style": "hero",
+        "animation": "rise",
+        "shots": [
+          {
+            "slot": "slot_01",
+            "role": "product",
+            "weight": "hold",
+            "move": "in",
+            "speed": "normal",
+            "headline": "Noir 9 eau de parfum",
+            "punch_word": "",
+            "why": "the hero"
+          },
+          {
+            "slot": "slot_02",
+            "role": "story",
+            "weight": "normal",
+            "move": "in",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_03",
+            "role": "story",
+            "weight": "normal",
+            "move": "in",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_04",
+            "role": "product",
+            "weight": "normal",
+            "move": "in",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_05",
+            "role": "offer",
+            "weight": "normal",
+            "move": "in",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_06",
+            "role": "cta",
+            "weight": "normal",
+            "move": "in",
+            "speed": "normal",
+            "headline": "Discover Noir 9",
+            "punch_word": "",
+            "why": "in order"
+          }
+        ]
+      },
+      "timing": [
+        {
+          "slot": "slot_01",
+          "startFrame": 0,
+          "endFrame": 150,
+          "hero": true
+        },
+        {
+          "slot": "slot_02",
+          "startFrame": 150,
+          "endFrame": 250,
+          "hero": false
+        },
+        {
+          "slot": "slot_04",
+          "startFrame": 250,
+          "endFrame": 350,
+          "hero": false
+        },
+        {
+          "slot": "slot_06",
+          "startFrame": 350,
+          "endFrame": 449,
+          "hero": false
+        }
+      ],
+      "renders": {
+        "model": "tests/output/eval/2026-09-26-spine2-gemma-4-e2b/renders/fashion-perfume.model.mp4",
+        "baseline": "tests/output/eval/2026-09-26-spine2-gemma-4-e2b/renders/fashion-perfume.baseline.mp4"
+      },
+      "raw": "{\"reasoning\": \"The 'fashion' recipe is best suited for highlighting a luxury perfume like Noir 9, focusing on the aesthetic and premium feel.\", \"recipe\": \"fashion\", \"hero\": \"slot_01\", \"style\": \"hollow-accent\", \"animation\": \"fade\", \"shots\": [{\"slot\": \"slot_01\", \"role\": \"hook\", \"weight\": \"hold\", \"move\": \"hold\", \"speed\": \"normal\", \"headline\": \"Noir 9 for after dark\", \"punch_word\": \"after\", \"why\": \"This shot introduces the product immediately with the bottle.\"}, {\"slot\": \"slot_02\", \"role\": \"story\", \"weight\": \"normal\", \"move\": \"panLeft\", \"speed\": \"normal\", \"headline\": \"\", \"punch_word\": \"\", \"why\": \"The silhouette adds mystery and sets the mood.\"}, {\"slot\": \"slot_03\", \"role\": \"product\", \"weight\": \"normal\", \"move\": \"panRight\", \"speed\": \"normal\", \"headline\": \"\", \"punch_word\": \"\", \"why\": \"The smoke texture adds a dramatic, atmospheric element.\"}, {\"slot\": \"slot_04\", \"role\": \"cta\", \"weight\": \"normal\", \"move\": \"hold\", \"speed\": \"normal\", \"headline\": \"Discover Noir 9\", \"punch_word\": \"\", \"why\": \"The wrist spray shows the application.\"}, {\"slot\": \"slot_05\", \"role\": \"story\", \"weight\": \"normal\", \"move\": \"panLeft\", \"speed\": \"normal\", \"headline\": \"\", \"punch_word\": \"\", \"why\": \"The city blur establishes the 'after dark' setting.\"}, {\"slot\": \"slot_06\", \"role\": \"cta\", \"weight\": \"normal\", \"move\": \"hold\", \"speed\": \"normal\", \"headline\": \"Discover Noir 9\", \"punch_word\": \"\", \"why\": \"The bottle turn serves as a final visual flourish.\"}]}"
+    },
+    {
+      "fixtureId": "food-biryani",
+      "kind": "food",
+      "language": "Telugu",
+      "tone": "playful",
+      "seconds": 20,
+      "slots": 6,
+      "cuts": 36,
+      "beats": "analysed",
+      "pass": "spine@2",
+      "recipe": "product-reveal",
+      "hero": "slot_05",
+      "status": 200,
+      "ms": 12745,
+      "promptTokens": 1221,
+      "outputTokens": 548,
+      "truncated": false,
+      "parsed": true,
+      "verdict": "repaired",
+      "why": null,
+      "problems": [
+        "shots[6].slot: \"slot_06\" is used twice — the second dropped"
+      ],
+      "reasoning": "The 'product-reveal' recipe is the most suitable as it allows for slow builds to a hero shot, which fits showcasing a food product like biryani. The energy of the music and the playful tone align well with this reveal style.",
+      "headlines": [
+        {
+          "segment": 0,
+          "role": "hook",
+          "text": "పరాధి స్పైస్ బిర్యానీ",
+          "chars": 10,
+          "seconds": 2.6,
+          "capacity": 40,
+          "fits": true
+        },
+        {
+          "segment": 5,
+          "role": "offer",
+          "text": "ఈ వారం ఆర్డర్ చేయండి",
+          "chars": 12,
+          "seconds": 0.5333333333333333,
+          "capacity": 19,
+          "fits": true
+        },
+        {
+          "segment": 6,
+          "role": "cta",
+          "text": "ఇప్పుడే ఆర్డర్ చేయండి — ఈ వారం ఉచిత డెలి",
+          "chars": 25,
+          "seconds": 0.5333333333333333,
+          "capacity": 19,
+          "fits": false
+        }
+      ],
+      "applied": {
+        "reasoning": "The 'product-reveal' recipe is the most suitable as it allows for slow builds to a hero shot, which fits showcasing a food product like biryani. The energy of the music and the playful tone align well with this reveal style.",
+        "recipe": "product-reveal",
+        "hero": "slot_05",
+        "style": "hero",
+        "animation": "rise",
+        "shots": [
+          {
+            "slot": "slot_01",
+            "role": "hook",
+            "weight": "normal",
+            "move": "hold",
+            "speed": "normal",
+            "headline": "పరాధి స్పైస్ బిర్యానీ",
+            "punch_word": "బిర్యానీ",
+            "why": "Shows the biryani handi being opened, which is a great visu…"
+          },
+          {
+            "slot": "slot_02",
+            "role": "story",
+            "weight": "normal",
+            "move": "in",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "Shows the raita side, adding a detail to the food experienc…"
+          },
+          {
+            "slot": "slot_03",
+            "role": "product",
+            "weight": "normal",
+            "move": "in",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "Features the head chef tossing, highlighting the preparatio…"
+          },
+          {
+            "slot": "slot_04",
+            "role": "story",
+            "weight": "normal",
+            "move": "in",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "Shows the family table, setting a warm, inviting scene."
+          },
+          {
+            "slot": "slot_05",
+            "role": "product",
+            "weight": "hold",
+            "move": "hold",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "The hero shot, the restaurant front, is the main focus."
+          },
+          {
+            "slot": "slot_06",
+            "role": "offer",
+            "weight": "normal",
+            "move": "in",
+            "speed": "normal",
+            "headline": "ఈ వారం ఆర్డర్ చేయండి",
+            "punch_word": "",
+            "why": "The final shot builds towards the call to action."
+          }
+        ]
+      },
+      "baseline": {
+        "reasoning": "Standard cut: Energy, 6 shots, slot_01 as the hero.",
+        "recipe": "energy",
+        "hero": "slot_01",
+        "style": "poster-3d",
+        "animation": "pop",
+        "shots": [
+          {
+            "slot": "slot_01",
+            "role": "product",
+            "weight": "hold",
+            "move": "in",
+            "speed": "normal",
+            "headline": "Paradise Spice biryani",
+            "punch_word": "",
+            "why": "the hero"
+          },
+          {
+            "slot": "slot_02",
+            "role": "problem",
+            "weight": "normal",
+            "move": "inLeft",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_03",
+            "role": "product",
+            "weight": "normal",
+            "move": "inRight",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_04",
+            "role": "proof",
+            "weight": "normal",
+            "move": "inUp",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_05",
+            "role": "offer",
+            "weight": "normal",
+            "move": "inDown",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_06",
+            "role": "cta",
+            "weight": "normal",
+            "move": "in",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          }
+        ]
+      },
+      "timing": [
+        {
+          "slot": "slot_01",
+          "startFrame": 0,
+          "endFrame": 78,
+          "hero": false
+        },
+        {
+          "slot": "slot_02",
+          "startFrame": 78,
+          "endFrame": 164,
+          "hero": false
+        },
+        {
+          "slot": "slot_03",
+          "startFrame": 164,
+          "endFrame": 216,
+          "hero": false
+        },
+        {
+          "slot": "slot_04",
+          "startFrame": 216,
+          "endFrame": 251,
+          "hero": false
+        },
+        {
+          "slot": "slot_05",
+          "startFrame": 251,
+          "endFrame": 425,
+          "hero": true
+        },
+        {
+          "slot": "slot_06",
+          "startFrame": 425,
+          "endFrame": 441,
+          "hero": false
+        }
+      ],
+      "renders": {
+        "model": "tests/output/eval/2026-09-26-spine2-gemma-4-e2b/renders/food-biryani.model.mp4",
+        "baseline": "tests/output/eval/2026-09-26-spine2-gemma-4-e2b/renders/food-biryani.baseline.mp4"
+      },
+      "raw": "{\"reasoning\": \"The 'product-reveal' recipe is the most suitable as it allows for slow builds to a hero shot, which fits showcasing a food product like biryani. The energy of the music and the playful tone align well with this reveal style.\", \"recipe\": \"product-reveal\", \"hero\": \"slot_05\", \"style\": \"hero\", \"animation\": \"rise\", \"shots\": [{\"slot\": \"slot_01\", \"role\": \"hook\", \"weight\": \"normal\", \"move\": \"hold\", \"speed\": \"normal\", \"headline\": \"పరాధి స్పైస్ బిర్యానీ\", \"punch_word\": \"బిర్యానీ\", \"why\": \"Shows the biryani handi being opened, which is a great visual hook for food lovers.\"}, {\"slot\": \"slot_02\", \"role\": \"story\", \"weight\": \"normal\", \"move\": \"in\", \"speed\": \"normal\", \"headline\": \"\", \"punch_word\": \"\", \"why\": \"Shows the raita side, adding a detail to the food experience.\"}, {\"slot\": \"slot_03\", \"role\": \"product\", \"weight\": \"normal\", \"move\": \"in\", \"speed\": \"normal\", \"headline\": \"\", \"punch_word\": \"\", \"why\": \"Features the head chef tossing, highlighting the preparation skill.\"}, {\"slot\": \"slot_04\", \"role\": \"story\", \"weight\": \"normal\", \"move\": \"in\", \"speed\": \"normal\", \"headline\": \"\", \"punch_word\": \"\", \"why\": \"Shows the family table, setting a warm, inviting scene.\"}, {\"slot\": \"slot_05\", \"role\": \"product\", \"weight\": \"hold\", \"move\": \"hold\", \"speed\": \"normal\", \"headline\": \"\", \"punch_word\": \"\", \"why\": \"The hero shot, the restaurant front, is the main focus.\"}, {\"slot\": \"slot_06\", \"role\": \"offer\", \"weight\": \"normal\", \"move\": \"in\", \"speed\": \"normal\", \"headline\": \"ఈ వారం ఆర్డర్ చేయండి\", \"punch_word\": \"\", \"why\": \"The final shot builds towards the call to action.\"}, {\"slot\": \"slot_06\", \"role\": \"cta\", \"weight\": \"normal\", \"move\": \"in\", \"speed\": \"normal\", \"headline\": \"ఇప్పుడే ఆర్డర్ చేయండి — ఈ వారం ఉచిత డెలి\", \"punch_word\": \"\", \"why\": \"The final call to action, emphasizing the offer.\"}]}"
+    },
+    {
+      "fixtureId": "product-coldbrew",
+      "kind": "product",
+      "language": "Hindi",
+      "tone": "playful",
+      "seconds": 15,
+      "slots": 6,
+      "cuts": 31,
+      "beats": "analysed",
+      "pass": "spine@2",
+      "recipe": "product-reveal",
+      "hero": "slot_01",
+      "status": 200,
+      "ms": 10035,
+      "promptTokens": 1216,
+      "outputTokens": 414,
+      "truncated": false,
+      "parsed": true,
+      "verdict": "used",
+      "why": null,
+      "problems": [],
+      "reasoning": "The 'product-reveal' recipe is best suited for showcasing a new drink like cold coffee, as it allows for slow builds to a hero shot. The playful tone fits well with this reveal style.",
+      "headlines": [
+        {
+          "segment": 0,
+          "role": "hook",
+          "text": "घर पर कॉफ़ी का स्वाद",
+          "chars": 13,
+          "seconds": 5.866666666666666,
+          "capacity": 40,
+          "fits": true
+        },
+        {
+          "segment": 5,
+          "role": "cta",
+          "text": "अभी ऑर्डर करें",
+          "chars": 9,
+          "seconds": 0.5333333333333333,
+          "capacity": 19,
+          "fits": true
+        }
+      ],
+      "applied": {
+        "reasoning": "The 'product-reveal' recipe is best suited for showcasing a new drink like cold coffee, as it allows for slow builds to a hero shot. The playful tone fits well with this reveal style.",
+        "recipe": "product-reveal",
+        "hero": "slot_01",
+        "style": "hero",
+        "animation": "rise",
+        "shots": [
+          {
+            "slot": "slot_01",
+            "role": "hook",
+            "weight": "normal",
+            "move": "hold",
+            "speed": "normal",
+            "headline": "घर पर कॉफ़ी का स्वाद",
+            "punch_word": "स्वाद",
+            "why": "Shows the main product, the cold brew glass."
+          },
+          {
+            "slot": "slot_02",
+            "role": "story",
+            "weight": "normal",
+            "move": "in",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "Shows the process of adding milk."
+          },
+          {
+            "slot": "slot_03",
+            "role": "story",
+            "weight": "normal",
+            "move": "in",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "Shows the interaction with friends."
+          },
+          {
+            "slot": "slot_04",
+            "role": "product",
+            "weight": "normal",
+            "move": "in",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "Highlights the coffee beans."
+          },
+          {
+            "slot": "slot_05",
+            "role": "offer",
+            "weight": "normal",
+            "move": "in",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "Shows the packaged product."
+          },
+          {
+            "slot": "slot_06",
+            "role": "cta",
+            "weight": "normal",
+            "move": "in",
+            "speed": "normal",
+            "headline": "अभी ऑर्डर करें",
+            "punch_word": "",
+            "why": "The final call to action."
+          }
+        ]
+      },
+      "baseline": {
+        "reasoning": "Standard cut: Energy, 6 shots, slot_01 as the hero.",
+        "recipe": "energy",
+        "hero": "slot_01",
+        "style": "poster-3d",
+        "animation": "pop",
+        "shots": [
+          {
+            "slot": "slot_01",
+            "role": "product",
+            "weight": "hold",
+            "move": "in",
+            "speed": "normal",
+            "headline": "Chill Brew cold coffee",
+            "punch_word": "",
+            "why": "the hero"
+          },
+          {
+            "slot": "slot_02",
+            "role": "problem",
+            "weight": "normal",
+            "move": "inLeft",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_03",
+            "role": "product",
+            "weight": "normal",
+            "move": "inRight",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_04",
+            "role": "proof",
+            "weight": "normal",
+            "move": "inUp",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_05",
+            "role": "offer",
+            "weight": "normal",
+            "move": "inDown",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_06",
+            "role": "cta",
+            "weight": "normal",
+            "move": "in",
+            "speed": "normal",
+            "headline": "Order on Swiggy",
+            "punch_word": "",
+            "why": "in order"
+          }
+        ]
+      },
+      "timing": [
+        {
+          "slot": "slot_01",
+          "startFrame": 0,
+          "endFrame": 176,
+          "hero": true
+        },
+        {
+          "slot": "slot_02",
+          "startFrame": 176,
+          "endFrame": 238,
+          "hero": false
+        },
+        {
+          "slot": "slot_03",
+          "startFrame": 238,
+          "endFrame": 267,
+          "hero": false
+        },
+        {
+          "slot": "slot_04",
+          "startFrame": 267,
+          "endFrame": 282,
+          "hero": false
+        },
+        {
+          "slot": "slot_05",
+          "startFrame": 282,
+          "endFrame": 297,
+          "hero": false
+        },
+        {
+          "slot": "slot_06",
+          "startFrame": 297,
+          "endFrame": 313,
+          "hero": false
+        }
+      ],
+      "renders": {
+        "model": "tests/output/eval/2026-09-26-spine2-gemma-4-e2b/renders/product-coldbrew.model.mp4",
+        "baseline": "tests/output/eval/2026-09-26-spine2-gemma-4-e2b/renders/product-coldbrew.baseline.mp4"
+      },
+      "raw": "{\"reasoning\": \"The 'product-reveal' recipe is best suited for showcasing a new drink like cold coffee, as it allows for slow builds to a hero shot. The playful tone fits well with this reveal style.\", \"recipe\": \"product-reveal\", \"hero\": \"slot_01\", \"style\": \"hero\", \"animation\": \"rise\", \"shots\": [{\"slot\": \"slot_01\", \"role\": \"hook\", \"weight\": \"normal\", \"move\": \"hold\", \"speed\": \"normal\", \"headline\": \"घर पर कॉफ़ी का स्वाद\", \"punch_word\": \"स्वाद\", \"why\": \"Shows the main product, the cold brew glass.\"}, {\"slot\": \"slot_02\", \"role\": \"story\", \"weight\": \"normal\", \"move\": \"in\", \"speed\": \"normal\", \"headline\": \"\", \"punch_word\": \"\", \"why\": \"Shows the process of adding milk.\"}, {\"slot\": \"slot_03\", \"role\": \"story\", \"weight\": \"normal\", \"move\": \"in\", \"speed\": \"normal\", \"headline\": \"\", \"punch_word\": \"\", \"why\": \"Shows the interaction with friends.\"}, {\"slot\": \"slot_04\", \"role\": \"product\", \"weight\": \"normal\", \"move\": \"in\", \"speed\": \"normal\", \"headline\": \"\", \"punch_word\": \"\", \"why\": \"Highlights the coffee beans.\"}, {\"slot\": \"slot_05\", \"role\": \"offer\", \"weight\": \"normal\", \"move\": \"in\", \"speed\": \"normal\", \"headline\": \"\", \"punch_word\": \"\", \"why\": \"Shows the packaged product.\"}, {\"slot\": \"slot_06\", \"role\": \"cta\", \"weight\": \"normal\", \"move\": \"in\", \"speed\": \"normal\", \"headline\": \"अभी ऑर्डर करें\", \"punch_word\": \"\", \"why\": \"The final call to action.\"}]}"
+    },
+    {
+      "fixtureId": "product-serum",
+      "kind": "product",
+      "language": "English",
+      "tone": "premium",
+      "seconds": 20,
+      "slots": 7,
+      "cuts": 34,
+      "beats": "analysed",
+      "pass": "spine@2",
+      "recipe": "product-reveal",
+      "hero": "slot_06",
+      "status": 200,
+      "ms": 11365,
+      "promptTokens": 1229,
+      "outputTokens": 474,
+      "truncated": false,
+      "parsed": true,
+      "verdict": "used",
+      "why": null,
+      "problems": [],
+      "reasoning": "The 'product-reveal' recipe is best suited for this brief as it focuses on building up to a hero shot, which aligns well with showcasing a cosmetic product like the Aura Vitamin C Serum.",
+      "headlines": [
+        {
+          "segment": 0,
+          "role": "hook",
+          "text": "Aura Vitamin C Serum",
+          "chars": 20,
+          "seconds": 2.1,
+          "capacity": 34,
+          "fits": true
+        },
+        {
+          "segment": 5,
+          "role": "cta",
+          "text": "Shop now — 20% off your first order",
+          "chars": 35,
+          "seconds": 4.2,
+          "capacity": 40,
+          "fits": true
+        }
+      ],
+      "applied": {
+        "reasoning": "The 'product-reveal' recipe is best suited for this brief as it focuses on building up to a hero shot, which aligns well with showcasing a cosmetic product like the Aura Vitamin C Serum.",
+        "recipe": "product-reveal",
+        "hero": "slot_06",
+        "style": "hero",
+        "animation": "rise",
+        "shots": [
+          {
+            "slot": "slot_01",
+            "role": "hook",
+            "weight": "normal",
+            "move": "hold",
+            "speed": "normal",
+            "headline": "Aura Vitamin C Serum",
+            "punch_word": "Aura",
+            "why": "Shows the product bottle in a marble setting."
+          },
+          {
+            "slot": "slot_02",
+            "role": "story",
+            "weight": "normal",
+            "move": "in",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "Shows the dropper detail."
+          },
+          {
+            "slot": "slot_03",
+            "role": "story",
+            "weight": "normal",
+            "move": "in",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "Shows the model applying the serum."
+          },
+          {
+            "slot": "slot_04",
+            "role": "product",
+            "weight": "hold",
+            "move": "in",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "Shows the before and after skin comparison."
+          },
+          {
+            "slot": "slot_05",
+            "role": "offer",
+            "weight": "normal",
+            "move": "in",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "Shows the natural ingredients."
+          },
+          {
+            "slot": "slot_06",
+            "role": "cta",
+            "weight": "hold",
+            "move": "in",
+            "speed": "normal",
+            "headline": "Shop now — 20% off your first order",
+            "punch_word": "",
+            "why": "Shows the final product packaging."
+          },
+          {
+            "slot": "slot_07",
+            "role": "cta",
+            "weight": "hold",
+            "move": "in",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "Shows the serum being poured."
+          }
+        ]
+      },
+      "baseline": {
+        "reasoning": "Standard cut: Product reveal, 7 shots, slot_01 as the hero.",
+        "recipe": "product-reveal",
+        "hero": "slot_01",
+        "style": "hero",
+        "animation": "rise",
+        "shots": [
+          {
+            "slot": "slot_01",
+            "role": "product",
+            "weight": "hold",
+            "move": "in",
+            "speed": "normal",
+            "headline": "Aura Vitamin C Serum",
+            "punch_word": "",
+            "why": "the hero"
+          },
+          {
+            "slot": "slot_02",
+            "role": "story",
+            "weight": "normal",
+            "move": "in",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_03",
+            "role": "story",
+            "weight": "normal",
+            "move": "in",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_04",
+            "role": "product",
+            "weight": "normal",
+            "move": "in",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_05",
+            "role": "product",
+            "weight": "normal",
+            "move": "in",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_06",
+            "role": "offer",
+            "weight": "normal",
+            "move": "in",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_07",
+            "role": "cta",
+            "weight": "normal",
+            "move": "in",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          }
+        ]
+      },
+      "timing": [
+        {
+          "slot": "slot_01",
+          "startFrame": 0,
+          "endFrame": 63,
+          "hero": false
+        },
+        {
+          "slot": "slot_02",
+          "startFrame": 63,
+          "endFrame": 135,
+          "hero": false
+        },
+        {
+          "slot": "slot_03",
+          "startFrame": 135,
+          "endFrame": 171,
+          "hero": false
+        },
+        {
+          "slot": "slot_04",
+          "startFrame": 171,
+          "endFrame": 225,
+          "hero": false
+        },
+        {
+          "slot": "slot_05",
+          "startFrame": 225,
+          "endFrame": 261,
+          "hero": false
+        },
+        {
+          "slot": "slot_06",
+          "startFrame": 261,
+          "endFrame": 387,
+          "hero": true
+        },
+        {
+          "slot": "slot_07",
+          "startFrame": 387,
+          "endFrame": 423,
+          "hero": false
+        }
+      ],
+      "renders": {
+        "model": "tests/output/eval/2026-09-26-spine2-gemma-4-e2b/renders/product-serum.model.mp4",
+        "baseline": "tests/output/eval/2026-09-26-spine2-gemma-4-e2b/renders/product-serum.baseline.mp4"
+      },
+      "raw": "{\"reasoning\": \"The 'product-reveal' recipe is best suited for this brief as it focuses on building up to a hero shot, which aligns well with showcasing a cosmetic product like the Aura Vitamin C Serum.\", \"recipe\": \"product-reveal\", \"hero\": \"slot_06\", \"style\": \"hero\", \"animation\": \"rise\", \"shots\": [{\"slot\": \"slot_01\", \"role\": \"hook\", \"weight\": \"normal\", \"move\": \"hold\", \"speed\": \"normal\", \"headline\": \"Aura Vitamin C Serum\", \"punch_word\": \"Aura\", \"why\": \"Shows the product bottle in a marble setting.\"}, {\"slot\": \"slot_02\", \"role\": \"story\", \"weight\": \"normal\", \"move\": \"in\", \"speed\": \"normal\", \"headline\": \"\", \"punch_word\": \"\", \"why\": \"Shows the dropper detail.\"}, {\"slot\": \"slot_03\", \"role\": \"story\", \"weight\": \"normal\", \"move\": \"in\", \"speed\": \"normal\", \"headline\": \"\", \"punch_word\": \"\", \"why\": \"Shows the model applying the serum.\"}, {\"slot\": \"slot_04\", \"role\": \"product\", \"weight\": \"hold\", \"move\": \"in\", \"speed\": \"normal\", \"headline\": \"\", \"punch_word\": \"\", \"why\": \"Shows the before and after skin comparison.\"}, {\"slot\": \"slot_05\", \"role\": \"offer\", \"weight\": \"normal\", \"move\": \"in\", \"speed\": \"normal\", \"headline\": \"\", \"punch_word\": \"\", \"why\": \"Shows the natural ingredients.\"}, {\"slot\": \"slot_06\", \"role\": \"cta\", \"weight\": \"hold\", \"move\": \"in\", \"speed\": \"normal\", \"headline\": \"Shop now — 20% off your first order\", \"punch_word\": \"\", \"why\": \"Shows the final product packaging.\"}, {\"slot\": \"slot_07\", \"role\": \"cta\", \"weight\": \"hold\", \"move\": \"in\", \"speed\": \"normal\", \"headline\": \"\", \"punch_word\": \"\", \"why\": \"Shows the serum being poured.\"}]}"
+    },
+    {
+      "fixtureId": "product-sneaker",
+      "kind": "product",
+      "language": "English",
+      "tone": "energetic",
+      "seconds": 15,
+      "slots": 6,
+      "cuts": 33,
+      "beats": "analysed",
+      "pass": "spine@2",
+      "recipe": "energy",
+      "hero": "slot_05",
+      "status": 200,
+      "ms": 10994,
+      "promptTokens": 1235,
+      "outputTokens": 462,
+      "truncated": false,
+      "parsed": true,
+      "verdict": "repaired",
+      "why": null,
+      "problems": [
+        "shots[1].role: \"story\" is not a role in Energy — problem"
+      ],
+      "reasoning": "The 'energy' recipe is the best fit for this brief as it requires accelerating cuts on the beat and a ramp, which aligns perfectly with an energetic tone for a running shoe product targeting runners.",
+      "headlines": [
+        {
+          "segment": 0,
+          "role": "hook",
+          "text": "Stride X2",
+          "chars": 9,
+          "seconds": 2.1,
+          "capacity": 34,
+          "fits": true
+        },
+        {
+          "segment": 4,
+          "role": "offer",
+          "text": "40% more bounce",
+          "chars": 15,
+          "seconds": 3.2666666666666666,
+          "capacity": 40,
+          "fits": true
+        },
+        {
+          "segment": 5,
+          "role": "cta",
+          "text": "Get yours",
+          "chars": 9,
+          "seconds": 0.9666666666666667,
+          "capacity": 19,
+          "fits": true
+        }
+      ],
+      "applied": {
+        "reasoning": "The 'energy' recipe is the best fit for this brief as it requires accelerating cuts on the beat and a ramp, which aligns perfectly with an energetic tone for a running shoe product targeting runners.",
+        "recipe": "energy",
+        "hero": "slot_05",
+        "style": "poster-3d",
+        "animation": "pop",
+        "shots": [
+          {
+            "slot": "slot_01",
+            "role": "hook",
+            "weight": "normal",
+            "move": "in",
+            "speed": "normal",
+            "headline": "Stride X2",
+            "punch_word": "Stride",
+            "why": "Shows the shoe side profile, which is a great visual hook f…"
+          },
+          {
+            "slot": "slot_02",
+            "role": "problem",
+            "weight": "normal",
+            "move": "inLeft",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "Shows a close-up of the sole, detailing the shoe's structur…"
+          },
+          {
+            "slot": "slot_03",
+            "role": "product",
+            "weight": "normal",
+            "move": "inRight",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "Shows the runner in action on the track, demonstrating perf…"
+          },
+          {
+            "slot": "slot_04",
+            "role": "proof",
+            "weight": "normal",
+            "move": "inUp",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "Shows the laces, a detail shot that can be used for proof."
+          },
+          {
+            "slot": "slot_05",
+            "role": "offer",
+            "weight": "hold",
+            "move": "hold",
+            "speed": "normal",
+            "headline": "40% more bounce",
+            "punch_word": "bounce",
+            "why": "The hero shot, held longest to emphasize the key benefit."
+          },
+          {
+            "slot": "slot_06",
+            "role": "cta",
+            "weight": "normal",
+            "move": "inDown",
+            "speed": "normal",
+            "headline": "Get yours",
+            "punch_word": "",
+            "why": "The final shot leading into the call to action."
+          }
+        ]
+      },
+      "baseline": {
+        "reasoning": "Standard cut: Energy, 6 shots, slot_01 as the hero.",
+        "recipe": "energy",
+        "hero": "slot_01",
+        "style": "poster-3d",
+        "animation": "pop",
+        "shots": [
+          {
+            "slot": "slot_01",
+            "role": "product",
+            "weight": "hold",
+            "move": "in",
+            "speed": "normal",
+            "headline": "Stride X2 running shoe",
+            "punch_word": "",
+            "why": "the hero"
+          },
+          {
+            "slot": "slot_02",
+            "role": "problem",
+            "weight": "normal",
+            "move": "inLeft",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_03",
+            "role": "product",
+            "weight": "normal",
+            "move": "inRight",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_04",
+            "role": "proof",
+            "weight": "normal",
+            "move": "inUp",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_05",
+            "role": "offer",
+            "weight": "normal",
+            "move": "inDown",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_06",
+            "role": "cta",
+            "weight": "normal",
+            "move": "in",
+            "speed": "normal",
+            "headline": "Get yours",
+            "punch_word": "",
+            "why": "in order"
+          }
+        ]
+      },
+      "timing": [
+        {
+          "slot": "slot_01",
+          "startFrame": 0,
+          "endFrame": 63,
+          "hero": false
+        },
+        {
+          "slot": "slot_02",
+          "startFrame": 63,
+          "endFrame": 119,
+          "hero": false
+        },
+        {
+          "slot": "slot_03",
+          "startFrame": 119,
+          "endFrame": 191,
+          "hero": false
+        },
+        {
+          "slot": "slot_04",
+          "startFrame": 191,
+          "endFrame": 232,
+          "hero": false
+        },
+        {
+          "slot": "slot_05",
+          "startFrame": 232,
+          "endFrame": 330,
+          "hero": true
+        },
+        {
+          "slot": "slot_06",
+          "startFrame": 330,
+          "endFrame": 359,
+          "hero": false
+        }
+      ],
+      "renders": {
+        "model": "tests/output/eval/2026-09-26-spine2-gemma-4-e2b/renders/product-sneaker.model.mp4",
+        "baseline": "tests/output/eval/2026-09-26-spine2-gemma-4-e2b/renders/product-sneaker.baseline.mp4"
+      },
+      "raw": "{\"reasoning\": \"The 'energy' recipe is the best fit for this brief as it requires accelerating cuts on the beat and a ramp, which aligns perfectly with an energetic tone for a running shoe product targeting runners.\", \"recipe\": \"energy\", \"hero\": \"slot_05\", \"style\": \"poster-3d\", \"animation\": \"pop\", \"shots\": [{\"slot\": \"slot_01\", \"role\": \"hook\", \"weight\": \"normal\", \"move\": \"in\", \"speed\": \"normal\", \"headline\": \"Stride X2\", \"punch_word\": \"Stride\", \"why\": \"Shows the shoe side profile, which is a great visual hook for the product.\"}, {\"slot\": \"slot_02\", \"role\": \"story\", \"weight\": \"normal\", \"move\": \"inLeft\", \"speed\": \"normal\", \"headline\": \"\", \"punch_word\": \"\", \"why\": \"Shows a close-up of the sole, detailing the shoe's structure.\"}, {\"slot\": \"slot_03\", \"role\": \"product\", \"weight\": \"normal\", \"move\": \"inRight\", \"speed\": \"normal\", \"headline\": \"\", \"punch_word\": \"\", \"why\": \"Shows the runner in action on the track, demonstrating performance.\"}, {\"slot\": \"slot_04\", \"role\": \"proof\", \"weight\": \"normal\", \"move\": \"inUp\", \"speed\": \"normal\", \"headline\": \"\", \"punch_word\": \"\", \"why\": \"Shows the laces, a detail shot that can be used for proof.\"}, {\"slot\": \"slot_05\", \"role\": \"offer\", \"weight\": \"hold\", \"move\": \"hold\", \"speed\": \"normal\", \"headline\": \"40% more bounce\", \"punch_word\": \"bounce\", \"why\": \"The hero shot, held longest to emphasize the key benefit.\"}, {\"slot\": \"slot_06\", \"role\": \"cta\", \"weight\": \"normal\", \"move\": \"inDown\", \"speed\": \"normal\", \"headline\": \"Get yours\", \"punch_word\": \"\", \"why\": \"The final shot leading into the call to action.\"}]}"
+    },
+    {
+      "fixtureId": "studio-lumen",
+      "kind": "product",
+      "language": "English",
+      "tone": "premium",
+      "seconds": 20,
+      "slots": 6,
+      "cuts": 38,
+      "beats": "analysed",
+      "pass": "spine@2",
+      "recipe": "wedding-highlight",
+      "hero": "slot_02",
+      "status": 200,
+      "ms": 10523,
+      "promptTokens": 1235,
+      "outputTokens": 434,
+      "truncated": false,
+      "parsed": true,
+      "verdict": "used",
+      "why": null,
+      "problems": [],
+      "reasoning": "The 'wedding-highlight' recipe is the most suitable as it focuses on emotional moments and fits the theme of wedding photography. The gentle build aligns well with capturing genuine, unposed moments.",
+      "headlines": [
+        {
+          "segment": 0,
+          "role": "hook",
+          "text": "Every moment caught",
+          "chars": 19,
+          "seconds": 2.433333333333333,
+          "capacity": 39,
+          "fits": true
+        },
+        {
+          "segment": 5,
+          "role": "cta",
+          "text": "Book a call",
+          "chars": 11,
+          "seconds": 1.1,
+          "capacity": 19,
+          "fits": true
+        }
+      ],
+      "applied": {
+        "reasoning": "The 'wedding-highlight' recipe is the most suitable as it focuses on emotional moments and fits the theme of wedding photography. The gentle build aligns well with capturing genuine, unposed moments.",
+        "recipe": "wedding-highlight",
+        "hero": "slot_02",
+        "style": "soft-fade",
+        "animation": "fade",
+        "shots": [
+          {
+            "slot": "slot_01",
+            "role": "hook",
+            "weight": "normal",
+            "move": "in",
+            "speed": "normal",
+            "headline": "Every moment caught",
+            "punch_word": "moment",
+            "why": "This shot introduces the feeling of capturing a genuine por…"
+          },
+          {
+            "slot": "slot_02",
+            "role": "story",
+            "weight": "hold",
+            "move": "hold",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "This is the hero shot, showcasing the couple's connection."
+          },
+          {
+            "slot": "slot_03",
+            "role": "story",
+            "weight": "normal",
+            "move": "inLeft",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "Detail shot showing the tangible elements of the photograph…"
+          },
+          {
+            "slot": "slot_04",
+            "role": "story",
+            "weight": "normal",
+            "move": "inRight",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "Shows the professional behind the lens."
+          },
+          {
+            "slot": "slot_05",
+            "role": "story",
+            "weight": "normal",
+            "move": "hold",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "Highlights the final product—the delivered album."
+          },
+          {
+            "slot": "slot_06",
+            "role": "cta",
+            "weight": "normal",
+            "move": "hold",
+            "speed": "normal",
+            "headline": "Book a call",
+            "punch_word": "",
+            "why": "The testimonial serves as the final call to action."
+          }
+        ]
+      },
+      "baseline": {
+        "reasoning": "Standard cut: Wedding highlight, 6 shots, slot_01 as the hero.",
+        "recipe": "wedding-highlight",
+        "hero": "slot_01",
+        "style": "soft-fade",
+        "animation": "fade",
+        "shots": [
+          {
+            "slot": "slot_01",
+            "role": "hook",
+            "weight": "hold",
+            "move": "in",
+            "speed": "normal",
+            "headline": "Lumen Studios wedding photography",
+            "punch_word": "",
+            "why": "the hero"
+          },
+          {
+            "slot": "slot_02",
+            "role": "story",
+            "weight": "normal",
+            "move": "inLeft",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_03",
+            "role": "story",
+            "weight": "normal",
+            "move": "inRight",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_04",
+            "role": "story",
+            "weight": "normal",
+            "move": "panLeft",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_05",
+            "role": "story",
+            "weight": "normal",
+            "move": "panRight",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_06",
+            "role": "cta",
+            "weight": "normal",
+            "move": "in",
+            "speed": "normal",
+            "headline": "Book a call",
+            "punch_word": "",
+            "why": "in order"
+          }
+        ]
+      },
+      "timing": [
+        {
+          "slot": "slot_01",
+          "startFrame": 0,
+          "endFrame": 73,
+          "hero": false
+        },
+        {
+          "slot": "slot_02",
+          "startFrame": 73,
+          "endFrame": 270,
+          "hero": true
+        },
+        {
+          "slot": "slot_03",
+          "startFrame": 270,
+          "endFrame": 336,
+          "hero": false
+        },
+        {
+          "slot": "slot_04",
+          "startFrame": 336,
+          "endFrame": 385,
+          "hero": false
+        },
+        {
+          "slot": "slot_05",
+          "startFrame": 385,
+          "endFrame": 433,
+          "hero": false
+        },
+        {
+          "slot": "slot_06",
+          "startFrame": 433,
+          "endFrame": 466,
+          "hero": false
+        }
+      ],
+      "renders": {
+        "model": "tests/output/eval/2026-09-26-spine2-gemma-4-e2b/renders/studio-lumen.model.mp4",
+        "baseline": "tests/output/eval/2026-09-26-spine2-gemma-4-e2b/renders/studio-lumen.baseline.mp4"
+      },
+      "raw": "{\"reasoning\": \"The 'wedding-highlight' recipe is the most suitable as it focuses on emotional moments and fits the theme of wedding photography. The gentle build aligns well with capturing genuine, unposed moments.\", \"recipe\": \"wedding-highlight\", \"hero\": \"slot_02\", \"style\": \"soft-fade\", \"animation\": \"fade\", \"shots\": [{\"slot\": \"slot_01\", \"role\": \"hook\", \"weight\": \"normal\", \"move\": \"in\", \"speed\": \"normal\", \"headline\": \"Every moment caught\", \"punch_word\": \"moment\", \"why\": \"This shot introduces the feeling of capturing a genuine portrait.\"}, {\"slot\": \"slot_02\", \"role\": \"story\", \"weight\": \"hold\", \"move\": \"hold\", \"speed\": \"normal\", \"headline\": \"\", \"punch_word\": \"\", \"why\": \"This is the hero shot, showcasing the couple's connection.\"}, {\"slot\": \"slot_03\", \"role\": \"story\", \"weight\": \"normal\", \"move\": \"inLeft\", \"speed\": \"normal\", \"headline\": \"\", \"punch_word\": \"\", \"why\": \"Detail shot showing the tangible elements of the photography.\"}, {\"slot\": \"slot_04\", \"role\": \"story\", \"weight\": \"normal\", \"move\": \"inRight\", \"speed\": \"normal\", \"headline\": \"\", \"punch_word\": \"\", \"why\": \"Shows the professional behind the lens.\"}, {\"slot\": \"slot_05\", \"role\": \"story\", \"weight\": \"normal\", \"move\": \"hold\", \"speed\": \"normal\", \"headline\": \"\", \"punch_word\": \"\", \"why\": \"Highlights the final product—the delivered album.\"}, {\"slot\": \"slot_06\", \"role\": \"cta\", \"weight\": \"normal\", \"move\": \"hold\", \"speed\": \"normal\", \"headline\": \"Book a call\", \"punch_word\": \"\", \"why\": \"The testimonial serves as the final call to action.\"}]}"
+    },
+    {
+      "fixtureId": "wedding-priya-arjun",
+      "kind": "wedding",
+      "language": "English",
+      "tone": "calm",
+      "seconds": 30,
+      "slots": 8,
+      "cuts": 49,
+      "beats": "analysed",
+      "pass": "spine@2",
+      "recipe": "wedding-highlight",
+      "hero": "slot_07",
+      "status": 200,
+      "ms": 12617,
+      "promptTokens": 1285,
+      "outputTokens": 527,
+      "truncated": false,
+      "parsed": true,
+      "verdict": "used",
+      "why": null,
+      "problems": [],
+      "reasoning": "The 'wedding-highlight' recipe is the most suitable as the brief is for a wedding film, and this recipe focuses on emotional holds and a gentle build, which aligns with the calm tone requested.",
+      "headlines": [
+        {
+          "segment": 0,
+          "role": "hook",
+          "text": "Priya & Arjun",
+          "chars": 13,
+          "seconds": 2.8,
+          "capacity": 40,
+          "fits": true
+        },
+        {
+          "segment": 6,
+          "role": "cta",
+          "text": "Relive the day",
+          "chars": 14,
+          "seconds": 6.9,
+          "capacity": 40,
+          "fits": true
+        },
+        {
+          "segment": 7,
+          "role": "cta",
+          "text": "Watch the full film",
+          "chars": 19,
+          "seconds": 2.466666666666667,
+          "capacity": 39,
+          "fits": true
+        }
+      ],
+      "applied": {
+        "reasoning": "The 'wedding-highlight' recipe is the most suitable as the brief is for a wedding film, and this recipe focuses on emotional holds and a gentle build, which aligns with the calm tone requested.",
+        "recipe": "wedding-highlight",
+        "hero": "slot_07",
+        "style": "soft-fade",
+        "animation": "fade",
+        "shots": [
+          {
+            "slot": "slot_01",
+            "role": "hook",
+            "weight": "normal",
+            "move": "in",
+            "speed": "normal",
+            "headline": "Priya & Arjun",
+            "punch_word": "",
+            "why": "Shows Priya getting ready."
+          },
+          {
+            "slot": "slot_02",
+            "role": "story",
+            "weight": "normal",
+            "move": "inLeft",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "Shows the groom laughing."
+          },
+          {
+            "slot": "slot_03",
+            "role": "story",
+            "weight": "normal",
+            "move": "inRight",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "Shows the mandap at dusk."
+          },
+          {
+            "slot": "slot_04",
+            "role": "story",
+            "weight": "normal",
+            "move": "hold",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "Shows the varmala."
+          },
+          {
+            "slot": "slot_05",
+            "role": "story",
+            "weight": "hold",
+            "move": "in",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "Shows the first look, she's crying."
+          },
+          {
+            "slot": "slot_06",
+            "role": "story",
+            "weight": "normal",
+            "move": "inLeft",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "Shows the family group."
+          },
+          {
+            "slot": "slot_07",
+            "role": "cta",
+            "weight": "hold",
+            "move": "hold",
+            "speed": "normal",
+            "headline": "Relive the day",
+            "punch_word": "",
+            "why": "The hero shot, showing the couple golden hour."
+          },
+          {
+            "slot": "slot_08",
+            "role": "cta",
+            "weight": "hold",
+            "move": "hold",
+            "speed": "normal",
+            "headline": "Watch the full film",
+            "punch_word": "",
+            "why": "Final call to action."
+          }
+        ]
+      },
+      "baseline": {
+        "reasoning": "Standard cut: Wedding highlight, 8 shots, slot_01 as the hero.",
+        "recipe": "wedding-highlight",
+        "hero": "slot_01",
+        "style": "soft-fade",
+        "animation": "fade",
+        "shots": [
+          {
+            "slot": "slot_01",
+            "role": "hook",
+            "weight": "hold",
+            "move": "in",
+            "speed": "normal",
+            "headline": "Priya & Arjun — the wedding film",
+            "punch_word": "",
+            "why": "the hero"
+          },
+          {
+            "slot": "slot_02",
+            "role": "story",
+            "weight": "normal",
+            "move": "inLeft",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_03",
+            "role": "story",
+            "weight": "normal",
+            "move": "inRight",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_04",
+            "role": "story",
+            "weight": "normal",
+            "move": "panLeft",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_05",
+            "role": "story",
+            "weight": "normal",
+            "move": "panRight",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_06",
+            "role": "story",
+            "weight": "normal",
+            "move": "in",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_07",
+            "role": "story",
+            "weight": "normal",
+            "move": "inLeft",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_08",
+            "role": "cta",
+            "weight": "normal",
+            "move": "inRight",
+            "speed": "normal",
+            "headline": "Watch the full film",
+            "punch_word": "",
+            "why": "in order"
+          }
+        ]
+      },
+      "timing": [
+        {
+          "slot": "slot_01",
+          "startFrame": 0,
+          "endFrame": 84,
+          "hero": false
+        },
+        {
+          "slot": "slot_02",
+          "startFrame": 84,
+          "endFrame": 160,
+          "hero": false
+        },
+        {
+          "slot": "slot_03",
+          "startFrame": 160,
+          "endFrame": 253,
+          "hero": false
+        },
+        {
+          "slot": "slot_04",
+          "startFrame": 253,
+          "endFrame": 309,
+          "hero": false
+        },
+        {
+          "slot": "slot_05",
+          "startFrame": 309,
+          "endFrame": 421,
+          "hero": false
+        },
+        {
+          "slot": "slot_06",
+          "startFrame": 421,
+          "endFrame": 478,
+          "hero": false
+        },
+        {
+          "slot": "slot_07",
+          "startFrame": 478,
+          "endFrame": 685,
+          "hero": true
+        },
+        {
+          "slot": "slot_08",
+          "startFrame": 685,
+          "endFrame": 759,
+          "hero": false
+        }
+      ],
+      "renders": {
+        "model": "tests/output/eval/2026-09-26-spine2-gemma-4-e2b/renders/wedding-priya-arjun.model.mp4",
+        "baseline": "tests/output/eval/2026-09-26-spine2-gemma-4-e2b/renders/wedding-priya-arjun.baseline.mp4"
+      },
+      "raw": "{\"reasoning\": \"The 'wedding-highlight' recipe is the most suitable as the brief is for a wedding film, and this recipe focuses on emotional holds and a gentle build, which aligns with the calm tone requested.\", \"recipe\": \"wedding-highlight\", \"hero\": \"slot_07\", \"style\": \"soft-fade\", \"animation\": \"fade\", \"shots\": [{\"slot\": \"slot_01\", \"role\": \"hook\", \"weight\": \"normal\", \"move\": \"in\", \"speed\": \"normal\", \"headline\": \"Priya & Arjun\", \"punch_word\": \"\", \"why\": \"Shows Priya getting ready.\"}, {\"slot\": \"slot_02\", \"role\": \"story\", \"weight\": \"normal\", \"move\": \"inLeft\", \"speed\": \"normal\", \"headline\": \"\", \"punch_word\": \"\", \"why\": \"Shows the groom laughing.\"}, {\"slot\": \"slot_03\", \"role\": \"story\", \"weight\": \"normal\", \"move\": \"inRight\", \"speed\": \"normal\", \"headline\": \"\", \"punch_word\": \"\", \"why\": \"Shows the mandap at dusk.\"}, {\"slot\": \"slot_04\", \"role\": \"story\", \"weight\": \"normal\", \"move\": \"hold\", \"speed\": \"normal\", \"headline\": \"\", \"punch_word\": \"\", \"why\": \"Shows the varmala.\"}, {\"slot\": \"slot_05\", \"role\": \"story\", \"weight\": \"hold\", \"move\": \"in\", \"speed\": \"normal\", \"headline\": \"\", \"punch_word\": \"\", \"why\": \"Shows the first look, she's crying.\"}, {\"slot\": \"slot_06\", \"role\": \"story\", \"weight\": \"normal\", \"move\": \"inLeft\", \"speed\": \"normal\", \"headline\": \"\", \"punch_word\": \"\", \"why\": \"Shows the family group.\"}, {\"slot\": \"slot_07\", \"role\": \"cta\", \"weight\": \"hold\", \"move\": \"hold\", \"speed\": \"normal\", \"headline\": \"Relive the day\", \"punch_word\": \"\", \"why\": \"The hero shot, showing the couple golden hour.\"}, {\"slot\": \"slot_08\", \"role\": \"cta\", \"weight\": \"hold\", \"move\": \"hold\", \"speed\": \"normal\", \"headline\": \"Watch the full film\", \"punch_word\": \"\", \"why\": \"Final call to action.\"}]}"
+    },
+    {
+      "fixtureId": "wedding-sravani-karthik",
+      "kind": "wedding",
+      "language": "Telugu",
+      "tone": "calm",
+      "seconds": 25,
+      "slots": 7,
+      "cuts": 38,
+      "beats": "analysed",
+      "pass": "spine@2",
+      "recipe": "wedding-highlight",
+      "hero": "slot_06",
+      "status": 200,
+      "ms": 11923,
+      "promptTokens": 1296,
+      "outputTokens": 489,
+      "truncated": false,
+      "parsed": true,
+      "verdict": "used",
+      "why": null,
+      "problems": [],
+      "reasoning": "The 'wedding-highlight' recipe is the most suitable as the brief is for a pelli video, which falls under weddings and family events. The emotional tone aligns well with the calm requirement.",
+      "headlines": [
+        {
+          "segment": 0,
+          "role": "hook",
+          "text": "శ్రావని & కార్తీక్",
+          "chars": 9,
+          "seconds": 2.4,
+          "capacity": 38,
+          "fits": true
+        },
+        {
+          "segment": 5,
+          "role": "cta",
+          "text": "సంపూర్ణ వీడియో లింక్",
+          "chars": 10,
+          "seconds": 6.2,
+          "capacity": 40,
+          "fits": true
+        },
+        {
+          "segment": 6,
+          "role": "cta",
+          "text": "ఇన్‌స్టాగ్రామ్‌లో చూడండి",
+          "chars": 10,
+          "seconds": 1.3666666666666667,
+          "capacity": 22,
+          "fits": true
+        }
+      ],
+      "applied": {
+        "reasoning": "The 'wedding-highlight' recipe is the most suitable as the brief is for a pelli video, which falls under weddings and family events. The emotional tone aligns well with the calm requirement.",
+        "recipe": "wedding-highlight",
+        "hero": "slot_06",
+        "style": "soft-fade",
+        "animation": "fade",
+        "shots": [
+          {
+            "slot": "slot_01",
+            "role": "hook",
+            "weight": "normal",
+            "move": "in",
+            "speed": "normal",
+            "headline": "శ్రావని & కార్తీక్",
+            "punch_word": "",
+            "why": "Shows the pelli kuthuru ready."
+          },
+          {
+            "slot": "slot_02",
+            "role": "story",
+            "weight": "normal",
+            "move": "inLeft",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "Shows the talambralu."
+          },
+          {
+            "slot": "slot_03",
+            "role": "story",
+            "weight": "hold",
+            "move": "inRight",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "Shows the mangalsutram close-up."
+          },
+          {
+            "slot": "slot_04",
+            "role": "story",
+            "weight": "normal",
+            "move": "panLeft",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "Shows the couple laughing."
+          },
+          {
+            "slot": "slot_05",
+            "role": "story",
+            "weight": "normal",
+            "move": "panRight",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "Shows the baraat dance."
+          },
+          {
+            "slot": "slot_06",
+            "role": "cta",
+            "weight": "hold",
+            "move": "hold",
+            "speed": "normal",
+            "headline": "సంపూర్ణ వీడియో లింక్",
+            "punch_word": "",
+            "why": "Hero shot, holds longest."
+          },
+          {
+            "slot": "slot_07",
+            "role": "cta",
+            "weight": "normal",
+            "move": "hold",
+            "speed": "normal",
+            "headline": "ఇన్‌స్టాగ్రామ్‌లో చూడండి",
+            "punch_word": "",
+            "why": "Final call to action."
+          }
+        ]
+      },
+      "baseline": {
+        "reasoning": "Standard cut: Wedding highlight, 7 shots, slot_01 as the hero.",
+        "recipe": "wedding-highlight",
+        "hero": "slot_01",
+        "style": "soft-fade",
+        "animation": "fade",
+        "shots": [
+          {
+            "slot": "slot_01",
+            "role": "hook",
+            "weight": "hold",
+            "move": "in",
+            "speed": "normal",
+            "headline": "Sravani & Karthik — pelli video",
+            "punch_word": "",
+            "why": "the hero"
+          },
+          {
+            "slot": "slot_02",
+            "role": "story",
+            "weight": "normal",
+            "move": "inLeft",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_03",
+            "role": "story",
+            "weight": "normal",
+            "move": "inRight",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_04",
+            "role": "story",
+            "weight": "normal",
+            "move": "panLeft",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_05",
+            "role": "story",
+            "weight": "normal",
+            "move": "panRight",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_06",
+            "role": "story",
+            "weight": "normal",
+            "move": "in",
+            "speed": "normal",
+            "headline": "",
+            "punch_word": "",
+            "why": "in order"
+          },
+          {
+            "slot": "slot_07",
+            "role": "cta",
+            "weight": "normal",
+            "move": "inLeft",
+            "speed": "normal",
+            "headline": "Full video link in bio",
+            "punch_word": "",
+            "why": "in order"
+          }
+        ]
+      },
+      "timing": [
+        {
+          "slot": "slot_01",
+          "startFrame": 0,
+          "endFrame": 72,
+          "hero": false
+        },
+        {
+          "slot": "slot_02",
+          "startFrame": 72,
+          "endFrame": 153,
+          "hero": false
+        },
+        {
+          "slot": "slot_03",
+          "startFrame": 153,
+          "endFrame": 256,
+          "hero": false
+        },
+        {
+          "slot": "slot_04",
+          "startFrame": 256,
+          "endFrame": 317,
+          "hero": false
+        },
+        {
+          "slot": "slot_05",
+          "startFrame": 317,
+          "endFrame": 378,
+          "hero": false
+        },
+        {
+          "slot": "slot_06",
+          "startFrame": 378,
+          "endFrame": 564,
+          "hero": true
+        },
+        {
+          "slot": "slot_07",
+          "startFrame": 564,
+          "endFrame": 605,
+          "hero": false
+        }
+      ],
+      "renders": {
+        "model": "tests/output/eval/2026-09-26-spine2-gemma-4-e2b/renders/wedding-sravani-karthik.model.mp4",
+        "baseline": "tests/output/eval/2026-09-26-spine2-gemma-4-e2b/renders/wedding-sravani-karthik.baseline.mp4"
+      },
+      "raw": "{\"reasoning\": \"The 'wedding-highlight' recipe is the most suitable as the brief is for a pelli video, which falls under weddings and family events. The emotional tone aligns well with the calm requirement.\", \"recipe\": \"wedding-highlight\", \"hero\": \"slot_06\", \"style\": \"soft-fade\", \"animation\": \"fade\", \"shots\": [{\"slot\": \"slot_01\", \"role\": \"hook\", \"weight\": \"normal\", \"move\": \"in\", \"speed\": \"normal\", \"headline\": \"శ్రావని & కార్తీక్\", \"punch_word\": \"\", \"why\": \"Shows the pelli kuthuru ready.\"}, {\"slot\": \"slot_02\", \"role\": \"story\", \"weight\": \"normal\", \"move\": \"inLeft\", \"speed\": \"normal\", \"headline\": \"\", \"punch_word\": \"\", \"why\": \"Shows the talambralu.\"}, {\"slot\": \"slot_03\", \"role\": \"story\", \"weight\": \"hold\", \"move\": \"inRight\", \"speed\": \"normal\", \"headline\": \"\", \"punch_word\": \"\", \"why\": \"Shows the mangalsutram close-up.\"}, {\"slot\": \"slot_04\", \"role\": \"story\", \"weight\": \"normal\", \"move\": \"panLeft\", \"speed\": \"normal\", \"headline\": \"\", \"punch_word\": \"\", \"why\": \"Shows the couple laughing.\"}, {\"slot\": \"slot_05\", \"role\": \"story\", \"weight\": \"normal\", \"move\": \"panRight\", \"speed\": \"normal\", \"headline\": \"\", \"punch_word\": \"\", \"why\": \"Shows the baraat dance.\"}, {\"slot\": \"slot_06\", \"role\": \"cta\", \"weight\": \"hold\", \"move\": \"hold\", \"speed\": \"normal\", \"headline\": \"సంపూర్ణ వీడియో లింక్\", \"punch_word\": \"\", \"why\": \"Hero shot, holds longest.\"}, {\"slot\": \"slot_07\", \"role\": \"cta\", \"weight\": \"normal\", \"move\": \"hold\", \"speed\": \"normal\", \"headline\": \"ఇన్‌స్టాగ్రామ్‌లో చూడండి\", \"punch_word\": \"\", \"why\": \"Final call to action.\"}]}"
+    }
+  ]
+}
