@@ -426,21 +426,26 @@ async function drawSolid(file: string, color: string, opacity: number, width: nu
  * as the store draws them in the app, so the black, the end card's ground and
  * the recipe's grade are all in the render.
  */
-export async function renderEval(
-  project: Project,
-  out: string,
-  options: {
-    extraTransitions: TransitionDef[]
-    resolveAsset?: (rel: string) => string
-    /**
-     * A folder of headline cards drawn by the app's own text renderer, one
-     * `<clip id>.png` each (the harness's `__forgeEvalCards`, evalRelay.ts). A card
-     * with its picture there is rendered; one without is left out, as before.
-     */
-    cards?: string
-    canvas?: { width: number; height: number }
-  }
-): Promise<void> {
+export interface EvalRenderOptions {
+  extraTransitions: TransitionDef[]
+  resolveAsset?: (rel: string) => string
+  /**
+   * A folder of headline cards drawn by the app's own text renderer, one
+   * `<clip id>.png` each (the harness's `__forgeEvalCards`, evalRelay.ts). A card
+   * with its picture there is rendered; one without is left out, as before.
+   */
+  cards?: string
+  canvas?: { width: number; height: number }
+}
+
+export async function renderEval(project: Project, out: string, options: EvalRenderOptions): Promise<void> {
+  const plan = await evalRenderPlan(project, out, options)
+  await mkdir(dirname(out), { recursive: true })
+  await run(FFMPEG, plan.args, { maxBuffer: 64 * 1024 * 1024 })
+}
+
+/** The ffmpeg plan `renderEval` runs — for a check that reads the graph as well as the frames. */
+export async function evalRenderPlan(project: Project, out: string, options: EvalRenderOptions): Promise<ReturnType<typeof buildRenderPlan>> {
   const canvas = options.canvas ?? RENDER_CANVAS
   const drawnCard = (id: string): string | null => {
     const file = options.cards ? join(options.cards, `${id}.png`) : null
@@ -464,15 +469,13 @@ export async function renderEval(
   }, (clip, err) => {
     throw new Error(`${clip.id} could not be drawn: ${String(err)}`)
   })
-  const plan = buildRenderPlan({
+  return buildRenderPlan({
     project: baked,
     outputPath: out,
     canvas,
     extraTransitions: options.extraTransitions,
     ...(options.resolveAsset ? { resolveAsset: options.resolveAsset } : {})
   })
-  await mkdir(dirname(out), { recursive: true })
-  await run(FFMPEG, plan.args, { maxBuffer: 64 * 1024 * 1024 })
 }
 
 /** A problem the model caused, as opposed to a note about the music (the engine's layout notes and dropped shots). */

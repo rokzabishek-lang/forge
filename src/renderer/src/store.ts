@@ -1712,7 +1712,8 @@ export const useEditor = create<EditorState>((set, get) => ({
 
     const startProject = get().project
     const fps = startProject.settings.fps
-    const videoTrack = startProject.tracks.find((t) => t.kind === 'video' && !t.locked)
+    // Never the lane the last ad's backdrops sat on: that goes with the ad (clearDirector).
+    const videoTrack = startProject.tracks.find((t) => t.kind === 'video' && !t.locked && !t.director)
     if (!videoTrack) {
       notify('There is no video track to build onto', 'info')
       return

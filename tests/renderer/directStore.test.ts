@@ -121,6 +121,27 @@ describe('direct() runs spine@2', () => {
     }
   })
 
+  it('a square photo is shown whole over a blurred copy on a lane under the ad — and the next run builds on the user’s track again', async () => {
+    // A tall ad, so the 4:5 photos are merely cropped and only the square one needs a backdrop.
+    const empty = emptyProject()
+    useEditor.setState({ project: { ...empty, settings: { ...empty.settings, width: 1080, height: 1920 }, assets: [{ ...photo('a'), width: 2000, height: 2000 }, photo('b'), photo('c')] } })
+    await useEditor.getState().direct()
+    const first = useEditor.getState().project
+    const lanes = first.tracks.filter((t) => t.director)
+    expect(lanes).toHaveLength(1)
+    expect(first.tracks[0].id).toBe(lanes[0].id)
+    const backs = first.clips.filter((c) => c.generatedBy?.rule === 'director.backdrop')
+    expect(backs.length).toBeGreaterThan(0)
+    expect(backs.every((b) => b.trackId === lanes[0].id && b.assetId === 'a')).toBe(true)
+    expect(first.clips.filter((c) => c.generatedBy?.rule === 'director.spine').every((c) => c.trackId === 'v1')).toBe(true)
+
+    await useEditor.getState().direct()
+    const second = useEditor.getState().project
+    expect(second.tracks.filter((t) => t.director)).toHaveLength(1)
+    expect(second.tracks.length).toBe(first.tracks.length)
+    expect(second.clips.filter((c) => c.generatedBy?.rule === 'director.spine').every((c) => c.trackId === 'v1')).toBe(true)
+  })
+
   it('a plan the model wrote lands as directed, in the recipe it chose', async () => {
     const shot = (slot: string, role: string, headline = ''): object => ({ slot, role, weight: 'normal', move: 'hold', speed: 'normal', headline, punch_word: '', why: 'x' })
     answer = JSON.stringify({

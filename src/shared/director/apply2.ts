@@ -1,9 +1,10 @@
-import type { Clip, MediaAsset, Motion, MotionMove, Project, TextSpec } from '../timeline'
+import type { Clip, CropRect, MediaAsset, Motion, MotionMove, Project, TextSpec } from '../timeline'
 import { DEFAULT_TEXT, addTrack, anchorTransition, clipEnd, overlapsOn, stackedSlot, trackLimitReached } from '../timeline'
 import { detachAudio } from '../edit/recipes'
 import type { DecisionRecord } from '../project'
 import type { Problem } from './conforms'
 import {
+  BACKDROP_RULE,
   COPY_RULE,
   ENDING_RULE,
   LOOK_RULE,
@@ -15,6 +16,7 @@ import {
   memberFor,
   trimMusic
 } from './apply'
+import { dropPatch } from '../render/dropIntent'
 import { punchIndex } from './validate'
 import type { Brief } from './schema'
 import type { Role2 } from './recipes'
@@ -77,6 +79,17 @@ export function moveAmount(intensity: number): number {
 }
 
 /**
+ * A picture whose reframe would keep less than this much of it is shown whole
+ * instead, over a blurred copy of itself. A square photo in a 9:16 ad keeps
+ * 56 % under the frame's crop, a 4:5 one 70 %, a 3:4 one 75 %: the square gets
+ * a backdrop, the others are cropped. Found on the first real run — a square
+ * product photo cropped to the frame lost its own text and half the bottle.
+ */
+export const BACKDROP_KEEP = 2 / 3
+/** How much darker the backdrop is than the picture, so the picture and the type read over it. */
+export const BACKDROP_BRIGHTNESS = -0.25
+
+/**
  * Type size from the role and the line's length — the ladder `spine@1` uses —
  * scaled by the ad's intensity (coherence.ts): ±10 % between the calmest ad
  * and the loudest, 1.0 at the middle.
@@ -121,7 +134,7 @@ export function applyRecipe(project: Project, composed: Composed, menu: Menu2, c
   const amount = moveAmount(intensity)
 
   /* The shots. */
-  const shots: { clip: Clip; slotId: string; video: boolean; index: number; speaks: boolean }[] = []
+  const shots: { clip: Clip; slotId: string; video: boolean; index: number; speaks: boolean; backdrop: CropRect | null }[] = []
   let anySpeech = false
   layout.shots.forEach((laid, i) => {
     const shot = plan.shots[i]
@@ -145,7 +158,11 @@ export function applyRecipe(project: Project, composed: Composed, menu: Menu2, c
     const frames = laid.endFrame - laid.startFrame
     // Filled, not letterboxed: the reframe every dropped clip gets — the largest centred rectangle of the
     // ad's shape (C0 found 4:5 photos in a 9:16 ad floating in black). The user drags it when it lands wrong.
+    // Unless the reframe would lose more than a third of the picture: then the picture stays whole and the
+    // crop goes to a blurred copy underneath it (BACKDROP_KEEP; placed after the J-cuts, below).
     const crop = solveCrop(asset, { width, height })
+    const kept = crop && asset.width && asset.height ? (crop.width * crop.height) / (asset.width * asset.height) : 1
+    const backdrop = crop !== undefined && kept < BACKDROP_KEEP ? crop : null
     const slow = slot.kind === 'video' && shot.speed === 'slow'
     const speaks = slot.kind === 'video' && hasSpeech(next, asset, laid.clipFrames, fps)
     if (speaks) anySpeech = true
@@ -164,10 +181,10 @@ export function applyRecipe(project: Project, composed: Composed, menu: Menu2, c
       ...(motion ? { motion } : {}),
       ...(slow ? { speed: SLOW_SPEED } : {}),
       ...(ramped ? { ramp: { ...DIRECTOR_RAMP } } : {}),
-      ...(crop ? { crop } : {})
+      ...(crop && !backdrop ? { crop } : {})
     }
     if (laid.clipFrames < frames) problems.push({ path: `$.shots[${i}]`, message: `${slot.id} ends ${((frames - laid.clipFrames) / fps).toFixed(1)}s before its shot` })
-    shots.push({ clip, slotId: slot.id, video: slot.kind === 'video', index: i, speaks })
+    shots.push({ clip, slotId: slot.id, video: slot.kind === 'video', index: i, speaks, backdrop })
   })
   next = { ...next, clips: [...next.clips, ...shots.map((s) => s.clip)] }
 
@@ -217,6 +234,46 @@ export function applyRecipe(project: Project, composed: Composed, menu: Menu2, c
     shots[k] = { ...s, clip: { ...shifted, audioDetached: true } }
   }
 
+  /*
+   * Backdrops (docs/PLAN.md §5.5): a picture whose reframe would lose more than
+   * a third of it — a square product photo, a landscape frame, in a 9:16 ad —
+   * is shown WHOLE, contained, over a blurred and darkened copy of itself that
+   * fills the frame. The treatment every vertical ad gives such a picture, and
+   * exactly what the editor's own "Blurred background" drop makes
+   * (render/dropIntent.ts), so the user can edit it as they would their own.
+   * The copy sits on a lane UNDER the ad's — one the Director adds and takes
+   * away with the ad — and plays the shot's footage at the shot's speed, silent.
+   * After the J-cuts, so a shifted picture's copy is shifted with it.
+   */
+  const backdropOf = new Map<number, Clip>()
+  const backing = dropPatch('background', { width, height })
+  for (const s of shots) {
+    if (!s.backdrop) continue
+    const lane = laneBelow(s.clip.start, s.clip.duration)
+    if (!lane) {
+      problems.push({ path: `$.shots[${s.index}]`, message: `${s.slotId} is shown whole with nothing behind it — no lane under the ad for its backdrop` })
+      continue
+    }
+    const copy: Clip = {
+      id: newId('dir-backdrop'),
+      assetId: s.clip.assetId,
+      trackId: lane,
+      start: s.clip.start,
+      duration: s.clip.duration,
+      inPoint: s.clip.inPoint,
+      volume: 0,
+      transform: { ...backing.transform },
+      color: { ...NEUTRAL, brightness: BACKDROP_BRIGHTNESS },
+      crop: s.backdrop,
+      ...(backing.mask ? { mask: backing.mask } : {}),
+      ...(s.clip.speed !== undefined ? { speed: s.clip.speed } : {}),
+      ...(s.clip.ramp ? { ramp: { ...s.clip.ramp } } : {}),
+      generatedBy: { rule: BACKDROP_RULE, reason: `${recipe.name} · ${s.slotId} shown whole, over a blurred copy of itself` }
+    }
+    next = { ...next, clips: [...next.clips, copy] }
+    backdropOf.set(s.index, copy)
+  }
+
   /* Transitions, anchored on the boundary the engine chose; never across a gap, never from a clip with no footage left. */
   for (const t of layout.transitions) {
     const shot = shots.find((s) => s.index === t.shot)
@@ -244,6 +301,12 @@ export function applyRecipe(project: Project, composed: Composed, menu: Menu2, c
       continue
     }
     next = anchorTransition(next, shot.clip.id, member, frames)
+    // A backdrop crosses the same boundary the same way, when the shot before it has one on the same lane.
+    const under = backdropOf.get(t.shot)
+    const underPrev = backdropOf.get(t.shot - 1)
+    if (under && underPrev && under.trackId === underPrev.trackId && clipEnd(underPrev) === under.start) {
+      next = anchorTransition(next, under.id, member, frames)
+    }
   }
 
   /* The black and the end card, on the shots' track. */
@@ -290,6 +353,21 @@ export function applyRecipe(project: Project, composed: Composed, menu: Menu2, c
     } else problems.push({ path: '$.look', message: 'no free layer for the look — not graded' })
   } else if (recipe.look !== 'none' && !ctx.lookFile) {
     problems.push({ path: '$.look', message: `the "${recipe.look}" look is not installed — not graded` })
+  }
+
+  /** A free lane UNDER the shots, for a backdrop: the lowest video track free over the span, else a new bottom track marked the Director's. */
+  function laneBelow(start: number, duration: number): string | null {
+    const lanes = next.tracks.filter((t) => t.kind === 'video')
+    const at = lanes.findIndex((t) => t.id === ctx.videoTrackId)
+    for (let i = 0; i < at; i++) {
+      const track = lanes[i]
+      if (!track.locked && overlapsOn(next, track.id, start, duration).length === 0) return track.id
+    }
+    if (trackLimitReached(next)) return null
+    next = addTrack(next, 'video', 'bottom')
+    const bottom = next.tracks[0]
+    next = { ...next, tracks: next.tracks.map((t) => (t.id === bottom.id ? { ...t, director: true as const } : t)) }
+    return bottom.id
   }
 
   /* The cards: headlines over their shots, and the end card over its black. */

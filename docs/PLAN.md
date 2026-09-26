@@ -864,6 +864,22 @@ All on filters listed in §8; each with a render check.
   snap to `automation/lyrics.ts`'s sung-syllable cuts rather than the
   metronome.
 
+- **Backdrop** — built 2026-09-26 from the first real run (`eval/findings.md`):
+  a picture whose reframe would keep less than `BACKDROP_KEEP` (two thirds)
+  of it — a square photo, a landscape frame, in a 9:16 ad — is shown whole,
+  contained, over a blurred and darkened copy of itself on a lane the
+  Director adds UNDER the ad (`Track.director`, removed with the ad by
+  `clearDirector`, never the track the next ad is built on). The copy is the
+  editor's own "Blurred background" drop (`render/dropIntent.ts`: the
+  frame's crop, `fit: cover`, a full-frame blur mask at `BACKGROUND_BLUR`)
+  darkened by `BACKDROP_BRIGHTNESS`, playing the shot's footage at its
+  speed, silent; a transition into the shot crosses the copy the same way
+  when the shot before has one on the lane. `tests/directorBackdrop.test.ts`
+  (the rule at 1:1, 16:9, 4:5, 3:4; the lane; the clearing; the mirrored
+  transition) and `tests/integration/backdrop.int.test.ts` (a banded square
+  rendered: its bands at the frame's edges, the copy above it blue, darker,
+  and blurred); seven mutants and the store's own test all fail as they should.
+
 ### 5.6 Apply, decisions, panel
 
 `applySpine` takes `spine@2` + the engine's layout and events; still one

@@ -146,11 +146,16 @@ Serum" with "Serum" the punch word, "Shop now" on the hero, no repairs.
    baseline steps by the row above's descent plus its own ascent — with
    `tests/textPaint.test.ts` driving the painter through a stand-in canvas.
 3. **A square photo cover-cropped to 9:16 loses its sides**: the hook photo's
-   "HOW TO LAYER" text and half the bottle are out of frame, the model shot's
-   baked text too. Not fixed yet: the answer is the blurred backdrop the
-   editor already has for a dropped photo (`dropIntent.ts` `background`) —
-   the still contained over a blurred, covered copy of itself — placed by the
-   Director for a still whose shape is far from the frame's.
+   "HOW TO LAYER" text and half the bottle were out of frame, the model shot's
+   baked text too. Fixed the same day: a picture whose reframe would keep
+   less than two thirds of it is shown whole over a blurred, darkened copy of
+   itself on a lane the Director adds under the ad — the editor's own
+   "Blurred background" drop (`apply2.ts` `BACKDROP_KEEP`, PLAN §5.5).
+   Re-rendered from the same answer in `tests/output/eval/real-serum-e2b-backdrop/`:
+   every photo whole, the copy soft above and below it.
 
 Also: the photos were AVIF and the app could not import them at all
-(EFFECTS.md §31, fixed the same day). Not yet rated blind by the user.
+(EFFECTS.md §31, fixed the same day). Still open: the hook card "Good
+Molecules Serum" sits over the photo's own baked "HOW TO LAYER" text — the
+look's words say "label text", so the Director could learn to place a card
+lower, or choose a cleaner hook. Not yet rated blind by the user.

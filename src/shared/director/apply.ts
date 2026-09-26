@@ -1,4 +1,4 @@
-import type { Clip, MediaAsset, Motion, MotionMove, Project, TextSpec } from '../timeline'
+import type { Clip, MediaAsset, Motion, MotionMove, Project, TextSpec, Track } from '../timeline'
 import {
   DEFAULT_TEXT,
   addTrack,
@@ -40,7 +40,9 @@ export const COPY_RULE = 'director.copy'
 export const ENDING_RULE = 'director.ending'
 /** The recipe's one grade, an adjustment layer over the shots (apply2.ts). */
 export const LOOK_RULE = 'director.look'
-export const DIRECTOR_RULES: readonly string[] = [SPINE_RULE, COPY_RULE, ENDING_RULE, LOOK_RULE]
+/** A blurred copy of a shot under it, for a picture whose shape is far from the frame's (apply2.ts). */
+export const BACKDROP_RULE = 'director.backdrop'
+export const DIRECTOR_RULES: readonly string[] = [SPINE_RULE, COPY_RULE, ENDING_RULE, LOOK_RULE, BACKDROP_RULE]
 
 /**
  * The accent on the punch word.
@@ -107,7 +109,8 @@ export function clearDirector(project: Project): Project {
   const removed = project.clips.filter(
     (c) => c.generatedBy !== undefined && DIRECTOR_RULES.includes(c.generatedBy.rule)
   )
-  if (removed.length === 0 && !project.clips.some((c) => c.directorTrim)) return project
+  const emptyDirectorTrack = (clips: Clip[]) => (t: Track): boolean => t.director === true && !clips.some((c) => c.trackId === t.id)
+  if (removed.length === 0 && !project.clips.some((c) => c.directorTrim) && !project.tracks.some(emptyDirectorTrack(project.clips))) return project
 
   const gone = new Set(removed.map((c) => c.id))
   const survivors = project.clips.filter((c) => !gone.has(c.id))
@@ -118,6 +121,8 @@ export function clearDirector(project: Project): Project {
 
   return {
     ...project,
+    // The track the Director added under the ad goes with the ad; one the user has since put a clip on stays.
+    tracks: project.tracks.filter((t) => !emptyDirectorTrack(survivors)(t)),
     clips: survivors.map((c) => (c.directorTrim ? restoreTrim(c) : c)),
     assets: project.assets.filter((a) => !(cardAssets.has(a.id) && !stillUsed.has(a.id)))
   }

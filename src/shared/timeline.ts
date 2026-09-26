@@ -746,6 +746,12 @@ export interface Track {
   hidden: boolean
   locked: boolean
   /**
+   * Made by the Director for what it puts UNDER the ad — the blurred backdrops
+   * (director/apply2.ts). Goes with the ad's clips when `clearDirector` empties
+   * it, and is never the track the next ad is built on.
+   */
+  director?: true
+  /**
    * Duck this track under dialogue.
    *
    * Audio tracks only. The render sidechains it against the picture's own audio,

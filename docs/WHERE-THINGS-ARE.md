@@ -386,7 +386,10 @@ OpenAI-shaped server such as LM Studio, with a write-only key field). Direct
 asks the model for a plan, checks it, and the recipe times it to the beat:
 shots on V1 with the black and the end card after them, the recipe's grade as
 an adjustment layer on the lane above, headline cards above that, and the
-music trimmed to the ad — as ONE undo. The result box names the recipe and
+music trimmed to the ad — as ONE undo. A square or landscape picture in a
+tall ad is shown whole over a blurred, darkened copy of itself: the copy sits
+on a lane the Director adds UNDER V1 (the same thing the Blurred background
+drop makes, so it edits like your own), and goes when the ad is cleared. The result box names the recipe and
 the picture the ad was built around. When the model's plan cannot be used you
 get the standard cut of the recipe and a note saying why. Clear takes exactly
 its own work back, music included. See `docs/LLM.md`.
