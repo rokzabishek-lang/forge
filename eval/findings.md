@@ -113,3 +113,44 @@ is why it is only ever a filter beside the measurements.
 "insufficient system resources" — so the second configuration waits until E2B
 is unloaded. What the images add to time and memory is unmeasured until real
 photos are supplied (`FORGE_EVAL_MEDIA`).
+
+### The first real ad — the user's serum photos on Gemma 4 E2B (2026-09-26)
+
+`npm run eval:real` (`tests/eval/real.eval.test.ts`): four Good Molecules
+Hyaluronic Acid Serum listing photos (2000×2000, two on a white studio
+backdrop, two with the shop's own text baked in) and a 143.6 BPM techno track,
+brief "deep hydration that plumps fine lines", premium, 15 s, recipe left to
+the model — through the whole Director, the headline cards drawn by the app's
+own type renderer in the harness, rendered at 1080×1920 with the standard cut
+beside it. Run `tests/output/eval/real-serum-e2b/` (README.md has everything).
+
+**The eyes work on real pictures.** 2.5–4.0 s a photo, 299 + ~65 tokens; every
+look named the product, the count was right (the model shot: "one"), the words
+were concrete ("bottle serum dropper liquid glass cap label text"). `hero` was
+"usable" for all four — a 2B does not rank, as expected, which is why it is
+only a filter. **The plan landed first time** (8.5 s, 1215 + 335 tokens):
+Product reveal, the woman with the bottle as hero, hook "Good Molecules
+Serum" with "Serum" the punch word, "Shop now" on the hero, no repairs.
+
+**Three findings, two fixed the same day:**
+
+1. **The gate called both white-backdrop photos blown** (71 % and 61 % of
+   their pixels clip to white, by design), so the box and the bottle on white
+   could never be the hero and the prompt told the model they were "measured
+   blown". Fixed: `vision.measure` now sets `backdropClip` apart — clipped
+   white in regions touching the frame's edge (`scipy.ndimage.label`) — and
+   the gate judges what clips INSIDE the picture (`gate.ts`, PLAN §4.2).
+2. **The Hero style's end card drew SHOP NOW through the product's name**: the
+   painter stepped from a small row to a big one by the small row's line
+   height, and the big caps climbed over it. Fixed in `textPaint.ts` — each
+   baseline steps by the row above's descent plus its own ascent — with
+   `tests/textPaint.test.ts` driving the painter through a stand-in canvas.
+3. **A square photo cover-cropped to 9:16 loses its sides**: the hook photo's
+   "HOW TO LAYER" text and half the bottle are out of frame, the model shot's
+   baked text too. Not fixed yet: the answer is the blurred backdrop the
+   editor already has for a dropped photo (`dropIntent.ts` `background`) —
+   the still contained over a blurred, covered copy of itself — placed by the
+   Director for a still whose shape is far from the frame's.
+
+Also: the photos were AVIF and the app could not import them at all
+(EFFECTS.md §31, fixed the same day). Not yet rated blind by the user.

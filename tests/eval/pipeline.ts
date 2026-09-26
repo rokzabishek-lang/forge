@@ -4,7 +4,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { dirname, join } from 'node:path'
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg'
-import { emptyProject, type Clip, type MediaAsset, type Project } from '@shared/timeline'
+import { emptyProject, type Clip, type MediaAsset, type Project, type TextSpec } from '@shared/timeline'
 import type { MusicAnalysis } from '@shared/automation/cutPlan'
 import type { Slot } from '@shared/director/menu'
 import { maxTokensFor2, spine2Prompt } from '@shared/director/prompt2'
@@ -17,7 +17,7 @@ import { graphemes, type Composed } from '@shared/director/compose'
 import { gate } from '@shared/director/gate'
 import { recipeById, type Recipe, type RecipeId } from '@shared/director/recipes'
 import type { Grid } from '@shared/director/rhythm'
-import { bakeForExport } from '@shared/render/exportBake'
+import { bakeForExport, exportBakeSizes } from '@shared/render/exportBake'
 import { cubeFor, lookById } from '@shared/render/looks'
 import {
   ollamaAnswer,
@@ -359,7 +359,7 @@ function counter(): (prefix: string) => string {
  * The recipe's look as a file an eval render can read: the same generated
  * .cube the app writes on launch (main/looks.ts), written beside the renders.
  */
-async function lookFileFor(recipe: Recipe, dir: string): Promise<{ file: string; name: string } | null> {
+export async function lookFileFor(recipe: Recipe, dir: string): Promise<{ file: string; name: string } | null> {
   const look = recipe.look === 'none' ? undefined : lookById(recipe.look)
   if (!look) return null
   const file = join(dir, 'looks', `${look.id}.cube`)
@@ -371,7 +371,7 @@ async function lookFileFor(recipe: Recipe, dir: string): Promise<{ file: string;
 }
 
 /** Apply a settled ad the way `direct()` does. */
-function applied(prepared: Prepared, composed: Composed, menu: Menu2, model: string, lookFile: { file: string; name: string } | null): Project {
+export function applied(prepared: Prepared, composed: Composed, menu: Menu2, model: string, lookFile: { file: string; name: string } | null): Project {
   return applyRecipe(prepared.project, composed, menu, {
     fps: menu.fps,
     videoTrackId: prepared.videoTrackId,
@@ -386,6 +386,28 @@ function applied(prepared: Prepared, composed: Composed, menu: Menu2, model: str
 }
 
 const RENDER_CANVAS = { width: 540, height: 960 }
+
+/** One headline card for the harness to draw (`__forgeEvalCards`, evalRelay.ts): the spec, the size, and where the PNG goes, relative to the run. */
+export interface CardRequest {
+  id: string
+  /** `cards/model/dir-card-1.png` — a run-relative path with forward slashes, which is what the relay's URL carries. */
+  file: string
+  spec: TextSpec
+  width: number
+  height: number
+}
+
+/**
+ * The headline cards an applied ad carries, each at the size the export would
+ * draw it (`exportBakeSizes`, the same call `renderEval` makes through
+ * `bakeForExport`), so the drawn PNG is exactly the still the render expects.
+ */
+export function cardsOf(project: Project, canvas: { width: number; height: number }, dir: string): CardRequest[] {
+  const { stills } = exportBakeSizes(project.settings, canvas)
+  return project.clips
+    .filter((c): c is Clip & { text: TextSpec } => c.generatedBy?.rule === COPY_RULE && c.text !== undefined)
+    .map((c) => ({ id: c.id, file: `${dir}/${c.id}.png`, spec: c.text, width: stills.width, height: stills.height }))
+}
 
 /** A still of one colour, or the transparent square an adjustment layer carries — what the store draws, drawn with ffmpeg. */
 async function drawSolid(file: string, color: string, opacity: number, width: number, height: number): Promise<string> {
@@ -407,9 +429,24 @@ async function drawSolid(file: string, color: string, opacity: number, width: nu
 export async function renderEval(
   project: Project,
   out: string,
-  options: { extraTransitions: TransitionDef[]; resolveAsset?: (rel: string) => string }
+  options: {
+    extraTransitions: TransitionDef[]
+    resolveAsset?: (rel: string) => string
+    /**
+     * A folder of headline cards drawn by the app's own text renderer, one
+     * `<clip id>.png` each (the harness's `__forgeEvalCards`, evalRelay.ts). A card
+     * with its picture there is rendered; one without is left out, as before.
+     */
+    cards?: string
+    canvas?: { width: number; height: number }
+  }
 ): Promise<void> {
-  const cards = new Set(project.clips.filter((c) => c.generatedBy?.rule === COPY_RULE).map((c) => c.id))
+  const canvas = options.canvas ?? RENDER_CANVAS
+  const drawnCard = (id: string): string | null => {
+    const file = options.cards ? join(options.cards, `${id}.png`) : null
+    return file && existsSync(file) ? file : null
+  }
+  const cards = new Set(project.clips.filter((c) => c.generatedBy?.rule === COPY_RULE && !drawnCard(c.id)).map((c) => c.id))
   const without: Project = { ...project, clips: project.clips.filter((c) => !cards.has(c.id)) }
   const drawn = join(dirname(out), 'drawn')
   const looks = new Set(without.clips.filter((c) => c.generatedBy?.rule === LOOK_RULE).map((c) => c.assetId))
@@ -418,16 +455,19 @@ export async function renderEval(
   const unused = async (): Promise<never> => {
     throw new Error('not drawn in an eval render')
   }
-  const baked = await bakeForExport(withLook, RENDER_CANVAS, {
+  const baked = await bakeForExport(withLook, canvas, {
     solid: (spec, key, w, h) => drawSolid(join(drawn, `${key}.png`), spec.color, spec.opacity, w, h),
-    text: unused, textSequence: unused, title: unused, paper: unused, carousel: unused
+    // The card the harness drew for this clip (key is `<clip id>-export`, exportBake.ts); stills only.
+    text: async (_spec, key) => drawnCard(key.replace(/-export$/, '')) ?? unused(),
+    textSequence: async () => null,
+    title: unused, paper: unused, carousel: unused
   }, (clip, err) => {
     throw new Error(`${clip.id} could not be drawn: ${String(err)}`)
   })
   const plan = buildRenderPlan({
     project: baked,
     outputPath: out,
-    canvas: RENDER_CANVAS,
+    canvas,
     extraTransitions: options.extraTransitions,
     ...(options.resolveAsset ? { resolveAsset: options.resolveAsset } : {})
   })
@@ -438,16 +478,26 @@ export async function renderEval(
 /** A problem the model caused, as opposed to a note about the music (the engine's layout notes and dropped shots). */
 const isRepair = (p: { path: string }): boolean => p.path !== '$.layout' && p.path !== '$.shots'
 
-export async function scoreFixture(
-  fixture: Fixture,
-  prepared: Prepared,
-  request: EvalRequest,
-  response: EvalResponse | null,
-  options: {
-    model: string
-    render: { dir: string; extraTransitions: TransitionDef[]; resolveAsset?: (rel: string) => string } | null
-  }
-): Promise<BriefResult> {
+export interface SettledAnswer {
+  menu: Menu2
+  grids: (recipe: Recipe) => Grid
+  answer: ModelAnswer | null
+  raw: unknown
+  parsed: boolean
+  verdict: Verdict
+  why: string | null
+  /** The validator's repairs and the engine's notes, as sentences. */
+  problems: string[]
+  /** The model's plan, settled — null when it could not be used. */
+  settled: Settled2 | null
+  /** The standard cut from the same menu: what a rejected plan becomes, and what every plan is rated against. */
+  standard: Settled2
+  /** The ad that landed: the model's, or the standard cut. */
+  landed: Settled2
+}
+
+/** The model's raw answer, read and settled exactly as `direct()` settles it, with the standard cut beside it. */
+export function settleAnswer(prepared: Prepared, request: EvalRequest, response: EvalResponse | null): SettledAnswer {
   const { brief } = prepared
   const { menu, grids } = menuOf(prepared)
   const extras = { installed: new Set(prepared.catalogue.map((c) => c.family)) }
@@ -479,7 +529,6 @@ export async function scoreFixture(
     } else {
       parsed = true
       raw = json.value
-      // Settled exactly as `direct()` settles it.
       settled = settle2({ value: json.value, truncated: answer.truncated }, menu, brief, grids, extras)
       problems = settled.problems.map(describe)
       if (settled.baseline) {
@@ -492,20 +541,46 @@ export async function scoreFixture(
     }
   }
 
-  // The standard cut, always: it is what a rejected plan becomes, and what every plan is rated against.
   const standard = settle2({ error: 'the standard cut' }, menu, brief, grids, extras)
-  const landed = settled ?? standard
+  return { menu, grids, answer, raw, parsed, verdict, why, problems, settled, standard, landed: settled ?? standard }
+}
+
+export interface RenderOptions {
+  dir: string
+  extraTransitions: TransitionDef[]
+  resolveAsset?: (rel: string) => string
+  /** The render's size; the small 540×960 unless said otherwise. */
+  canvas?: { width: number; height: number }
+  /** Folders of drawn headline cards, one for each ad (renderEval's `cards`). */
+  cards?: { model?: string; baseline?: string }
+}
+
+export async function scoreFixture(
+  fixture: Pick<Fixture, 'id' | 'kind'>,
+  prepared: Prepared,
+  request: EvalRequest,
+  response: EvalResponse | null,
+  options: { model: string; render: RenderOptions | null }
+): Promise<BriefResult> {
+  const { brief } = prepared
+  const { menu, grids, answer, raw, parsed, verdict, why, problems, settled, standard, landed } = settleAnswer(prepared, request, response)
 
   const renders: BriefResult['renders'] = { model: null, baseline: null }
   if (options.render) {
-    const { dir, extraTransitions, resolveAsset } = options.render
+    const { dir, extraTransitions, resolveAsset, canvas, cards } = options.render
+    const renderOptions = (drawn: string | undefined): Parameters<typeof renderEval>[2] => ({
+      extraTransitions,
+      ...(resolveAsset ? { resolveAsset } : {}),
+      ...(canvas ? { canvas } : {}),
+      ...(drawn ? { cards: drawn } : {})
+    })
     renders.baseline = join(dir, `${fixture.id}.baseline.mp4`)
     const standardLook = await lookFileFor(standard.composed.recipe, dir)
-    await renderEval(applied(prepared, standard.composed, menu, 'baseline', standardLook), renders.baseline, { extraTransitions, resolveAsset })
+    await renderEval(applied(prepared, standard.composed, menu, 'baseline', standardLook), renders.baseline, renderOptions(cards?.baseline))
     if (settled) {
       renders.model = join(dir, `${fixture.id}.model.mp4`)
       const look = await lookFileFor(settled.composed.recipe, dir)
-      await renderEval(applied(prepared, settled.composed, menu, options.model, look), renders.model, { extraTransitions, resolveAsset })
+      await renderEval(applied(prepared, settled.composed, menu, options.model, look), renders.model, renderOptions(cards?.model))
     }
   }
 

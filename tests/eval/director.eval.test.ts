@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { existsSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
-import { join, relative, resolve } from 'node:path'
-import { TRANSITIONS, transitionsFromMasks, type TransitionDef } from '@shared/transitions/registry'
-import type { MusicAnalysis } from '@shared/automation/cutPlan'
-import { SidecarClient } from '../../src/main/sidecar/client'
+import { join, relative } from 'node:path'
+import { TRANSITIONS } from '@shared/transitions/registry'
 import { loadFixtures } from './fixtures'
-import { FFMPEG, makeFixtureMedia } from './media'
+import { makeFixtureMedia } from './media'
+import { REPO, libraryTransitions, sidecarBeats } from './local'
 import {
   askNode,
   prepareFixture,
@@ -14,7 +13,6 @@ import {
   requestFor,
   scoreFixture,
   writeJson,
-  type AnalyseBeats,
   type EvalConfig,
   type EvalRequest,
   type EvalResponse,
@@ -50,44 +48,9 @@ import { recipeById, type RecipeId } from '@shared/director/recipes'
 
 const PROVIDER = process.env.FORGE_EVAL as EvalConfig['provider'] | undefined
 const STEP = (process.env.FORGE_EVAL_STEP ?? 'all') as 'prepare' | 'score' | 'all'
-const REPO = resolve(__dirname, '..', '..')
-const SIDECAR_DIR = join(REPO, 'sidecar')
-const VENV_PYTHON = join(SIDECAR_DIR, '.venv', 'bin', 'python')
 
 function stamp(): string {
   return new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-}
-
-/** The library's wipes, when the library is on this machine. */
-async function libraryTransitions(): Promise<{ transitions: TransitionDef[]; resolveAsset?: (rel: string) => string }> {
-  const root = process.env.FORGE_ASSETS_DIR ?? join(REPO, 'assets')
-  if (!existsSync(join(root, 'transitions'))) return { transitions: [] }
-  process.env.FORGE_ASSETS_DIR = root
-  const { scanAssets, resolveAssetFile } = await import('../../src/main/assets/scan')
-  const { entriesOfKind } = await import('@shared/assets/catalog')
-  const catalog = await scanAssets(root)
-  const masks = entriesOfKind(catalog, 'transition').map((e) => ({ id: e.id, name: e.name, file: e.file }))
-  return { transitions: transitionsFromMasks(masks), resolveAsset: resolveAssetFile }
-}
-
-/** Beats through the sidecar, as the app gets them — or null when the sidecar cannot. */
-async function sidecarBeats(): Promise<{ analyse: AnalyseBeats | null; stop: () => void; note: string | null }> {
-  const python = existsSync(VENV_PYTHON) ? VENV_PYTHON : process.env.FORGE_PYTHON
-  if (!python) return { analyse: null, stop: () => undefined, note: 'no Python for the sidecar' }
-  const client = new SidecarClient({ cwd: SIDECAR_DIR, python, maxRestarts: 0 })
-  try {
-    const hello = await client.start()
-    if (!hello.capabilities.includes('audio.beats') || hello.degraded['audio.beats']) {
-      client.stop()
-      return { analyse: null, stop: () => undefined, note: hello.degraded['audio.beats'] ?? 'audio.beats is not available' }
-    }
-  } catch (err) {
-    client.stop()
-    return { analyse: null, stop: () => undefined, note: err instanceof Error ? err.message : String(err) }
-  }
-  const analyse: AnalyseBeats = (path, window) =>
-    client.request<MusicAnalysis>('audio.beats', { path, ffmpeg: FFMPEG, ...window }, { timeoutMs: 300_000 })
-  return { analyse, stop: () => client.stop(), note: null }
 }
 
 describe.skipIf(!PROVIDER)('the Director on a real model', () => {

@@ -17,6 +17,7 @@
     "pack:win": "npm run build && electron-builder --win --publish never",
     "harness": "vite --config vite.harness.config.ts",
     "eval": "vitest run tests/eval/director.eval.test.ts",
+    "eval:real": "vitest run tests/eval/real.eval.test.ts",
     "eval:rate": "node scripts/eval-rate.mjs",
     "eval:report": "node scripts/eval-report.mjs"
   },

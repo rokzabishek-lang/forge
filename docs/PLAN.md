@@ -161,6 +161,16 @@ pixels — so to the spine a card named `05_first_look.jpg` with the note
 check which slot is on screen. Real photos of the same names in
 `FORGE_EVAL_MEDIA/<brief>/` replace the cards, and are what the VLM half needs.
 
+> **Built 2026-09-26 — the real run.** `FORGE_REAL=<folder> npm run eval:real`
+> (`tests/eval/real.eval.test.ts`) takes the user's own pictures, one song and
+> a `brief.json` through the whole Director — the measurements and the beats
+> from the sidecar, one look request a picture, the gate, the spine, the rhythm
+> engine — with the headline cards drawn by the app's own type renderer in the
+> harness (`window.__forgeEvalCards`) and both ads rendered at 1080×1920, and
+> writes a README of what the eyes saw and what landed. Four node steps
+> (`looks`, `plan`, `score`, `render`) with the harness between them, the same
+> relay the ten-brief eval uses. The first run is in `eval/findings.md`.
+
 A committed test checks every brief names only Windows-legal basenames, and
 the render check runs one brief through the whole pipeline in CI with a canned
 answer, so a fixture can never rot unnoticed.
@@ -359,7 +369,7 @@ callers noticing. Image decode through the bundled ffmpeg, as `depth.py` does
 | measurement | how | reads as |
 |---|---|---|
 | sharpness | variance of `scipy.ndimage.laplace` on grey | soft below 0.35 × the set's median — **relative to the set**, because a soft-focus wedding set is a look, not ten rejects |
-| exposure | mean luma; clipped fraction at < 8 and > 247 | too dark < 0.18 mean; blown > 6 % clipped |
+| exposure | mean luma; clipped fraction at < 8 and > 247; `backdropClip`, the clipped-white share in regions touching the frame's edge (`scipy.ndimage.label`) | too dark < 0.18 mean; blown > 6 % clipped **inside** — `brightClip − backdropClip`. Added 2026-09-26 from the first real run: a product on a white studio backdrop clips 61–71 % by design and was never a hero |
 | duplicate | 64-bit dHash on 9×8 grey; Hamming ≤ 6 = near-duplicate | of the pair, keep the sharper; say which was left out |
 | orientation | `ffprobe` (already in `depth.py`) | portrait / landscape / square — the recipe's framing rules read it |
 | faces (footage only, later) | — | not in C1; `people` comes from the look |

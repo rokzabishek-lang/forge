@@ -10,15 +10,20 @@ import type { Fixture } from '../eval/fixtures'
 import { loadFixtures } from '../eval/fixtures'
 import { makeFixtureMedia } from '../eval/media'
 import {
+  applied,
+  cardsOf,
   menuOf,
   prepareFixture,
+  renderEval,
   requestFor,
   scoreFixture,
+  settleAnswer,
   type EvalRequest,
   type EvalResponse,
   type Prepared
 } from '../eval/pipeline'
-import { outputDir, pixelAt, saveFrame, writeNote } from './output'
+import { FFMPEG, outputDir, pixelAt, run, saveFrame, writeNote } from './output'
+import { mkdir } from 'node:fs/promises'
 
 /**
  * The Director eval's pipeline, end to end, without a model (docs/PLAN.md §3),
@@ -165,6 +170,46 @@ describe('the eval pipeline', () => {
     for (const s of result.timing.filter((x) => !x.hero)) expect(heroSpan).toBeGreaterThan(s.endFrame - s.startFrame)
     expect(Math.max(...black)).toBeLessThan(24)
   })
+
+  it('renders a headline card the harness drew, at the export’s size, and leaves out one it did not', async () => {
+    const s = settleAnswer(prepared, request, answer(JSON.stringify(plan())))
+    const project = applied(prepared, s.landed.composed, s.menu, 'fake-model', null)
+    const canvas = { width: 540, height: 960 }
+    // What the harness would be asked to draw: every headline card, at the size the export bakes stills.
+    const cards = cardsOf(project, canvas, 'cards/model')
+    expect(cards.length).toBeGreaterThanOrEqual(2)
+    expect(cards.map((c) => [c.width, c.height])).toEqual(cards.map(() => [540, 960]))
+    expect(cards[0].file).toBe(`cards/model/${cards[0].id}.png`)
+    expect(cards[0].spec.content).toBe('Run faster')
+
+    // Only the first card "drawn": a magenta still, a colour no photo, look or black in this ad produces.
+    const drawn = join(dir, 'cards', 'model')
+    await mkdir(drawn, { recursive: true })
+    await run(FFMPEG, ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', `color=c=0xff00ff:s=${canvas.width}x${canvas.height},format=rgba`, '-frames:v', '1', join(drawn, `${cards[0].id}.png`)])
+    const withCards = join(dir, 'renders-cards', 'with.mp4')
+    const without = join(dir, 'renders-cards', 'without.mp4')
+    await renderEval(project, withCards, { extraTransitions: [], cards: drawn })
+    await renderEval(project, without, { extraTransitions: [] })
+
+    const clipOf = (id: string): { start: number; duration: number } => project.clips.find((c) => c.id === id)!
+    const mid = (id: string): number => (clipOf(id).start + clipOf(id).duration / 2) / menu.fps
+    const first = await pixelAt(withCards, mid(cards[0].id), 270, 480, canvas)
+    const firstPlain = await pixelAt(without, mid(cards[0].id), 270, 480, canvas)
+    const second = await pixelAt(withCards, mid(cards[1].id), 270, 480, canvas)
+    const secondPlain = await pixelAt(without, mid(cards[1].id), 270, 480, canvas)
+    await writeNote(dir, [
+      '',
+      `Drawn cards: the first card (${cards[0].id}, "${cards[0].spec.content}") given a magenta PNG, the second not.`,
+      `- during the first card: rgb(${first.join(', ')}) with the card, rgb(${firstPlain.join(', ')}) without`,
+      `- during the second card: rgb(${second.join(', ')}) with the cards folder, rgb(${secondPlain.join(', ')}) without — the same, it was not drawn`
+    ])
+    // The drawn card is in the film — magenta, graded by the look, so read as "far from the frame without it"
+    // and red and blue well above green; the undrawn one is left out, as before, so those frames match.
+    expect(Math.abs(first[0] - firstPlain[0]) + Math.abs(first[1] - firstPlain[1]) + Math.abs(first[2] - firstPlain[2])).toBeGreaterThan(120)
+    expect(first[0]).toBeGreaterThan(first[1] + 60)
+    expect(first[2]).toBeGreaterThan(first[1] + 60)
+    for (let k = 0; k < 3; k++) expect(Math.abs(second[k] - secondPlain[k]), `channel ${k} during the undrawn card`).toBeLessThan(4)
+  }, 300_000)
 
   it('a style from another recipe is repaired, not rejected, and the repair is named', async () => {
     const other = plan()

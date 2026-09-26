@@ -11,7 +11,19 @@
  *
  *   window.__forgeEvalRelay('<run>')         start (returns a promise)
  *   window.__forgeEvalProgress               { run, done, total, current, errors }
+ *
+ * And the one other thing node cannot do: draw type. The headline cards are
+ * drawn by the app's own canvas renderer (textCanvas.ts), so an eval render
+ * with them in it needs a browser. `cards.json` in the run lists each card's
+ * spec and size (tests/eval/pipeline.ts `cardsOf`); each is drawn and written
+ * back as the PNG the render then reads.
+ *
+ *   window.__forgeEvalCards('<run>')         draw every card (returns a promise)
+ *   window.__forgeEvalCardsProgress          { run, done, total, errors, finished }
  */
+
+import type { TextSpec } from '@shared/timeline'
+import { renderTextPng } from '../textCanvas'
 
 interface RelayRequest {
   id: string
@@ -75,6 +87,43 @@ async function relay(run: string): Promise<Progress> {
   return progress
 }
 
+interface CardRequest {
+  id: string
+  /** Where the PNG goes, relative to the run. */
+  file: string
+  spec: TextSpec
+  width: number
+  height: number
+}
+
+interface CardsProgress {
+  run: string
+  done: number
+  total: number
+  errors: string[]
+  finished: boolean
+}
+
+async function cards(run: string): Promise<CardsProgress> {
+  const list = (await (await fetch(file(`${run}/cards.json`))).json()) as CardRequest[]
+  const progress: CardsProgress = { run, done: 0, total: list.length, errors: [], finished: false }
+  ;(window as unknown as { __forgeEvalCardsProgress: CardsProgress }).__forgeEvalCardsProgress = progress
+
+  for (const card of list) {
+    try {
+      const png = await renderTextPng(card.spec, card.width, card.height)
+      const put = await fetch(file(`${run}/${card.file}`), { method: 'PUT', body: png })
+      if (!put.ok) throw new Error(`the harness server answered ${put.status}`)
+    } catch (err) {
+      progress.errors.push(`${card.id}: ${err instanceof Error ? err.message : String(err)}`)
+    }
+    progress.done++
+  }
+  progress.finished = true
+  return progress
+}
+
 export function installEvalRelay(): void {
   ;(window as unknown as { __forgeEvalRelay: typeof relay }).__forgeEvalRelay = relay
+  ;(window as unknown as { __forgeEvalCards: typeof cards }).__forgeEvalCards = cards
 }

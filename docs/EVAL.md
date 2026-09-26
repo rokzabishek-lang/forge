@@ -120,6 +120,47 @@ is why it is only ever a filter beside the measurements.
 is unloaded. What the images add to time and memory is unmeasured until real
 photos are supplied (`FORGE_EVAL_MEDIA`).
 
+### The first real ad — the user's serum photos on Gemma 4 E2B (2026-09-26)
+
+`npm run eval:real` (`tests/eval/real.eval.test.ts`): four Good Molecules
+Hyaluronic Acid Serum listing photos (2000×2000, two on a white studio
+backdrop, two with the shop's own text baked in) and a 143.6 BPM techno track,
+brief "deep hydration that plumps fine lines", premium, 15 s, recipe left to
+the model — through the whole Director, the headline cards drawn by the app's
+own type renderer in the harness, rendered at 1080×1920 with the standard cut
+beside it. Run `tests/output/eval/real-serum-e2b/` (README.md has everything).
+
+**The eyes work on real pictures.** 2.5–4.0 s a photo, 299 + ~65 tokens; every
+look named the product, the count was right (the model shot: "one"), the words
+were concrete ("bottle serum dropper liquid glass cap label text"). `hero` was
+"usable" for all four — a 2B does not rank, as expected, which is why it is
+only a filter. **The plan landed first time** (8.5 s, 1215 + 335 tokens):
+Product reveal, the woman with the bottle as hero, hook "Good Molecules
+Serum" with "Serum" the punch word, "Shop now" on the hero, no repairs.
+
+**Three findings, two fixed the same day:**
+
+1. **The gate called both white-backdrop photos blown** (71 % and 61 % of
+   their pixels clip to white, by design), so the box and the bottle on white
+   could never be the hero and the prompt told the model they were "measured
+   blown". Fixed: `vision.measure` now sets `backdropClip` apart — clipped
+   white in regions touching the frame's edge (`scipy.ndimage.label`) — and
+   the gate judges what clips INSIDE the picture (`gate.ts`, PLAN §4.2).
+2. **The Hero style's end card drew SHOP NOW through the product's name**: the
+   painter stepped from a small row to a big one by the small row's line
+   height, and the big caps climbed over it. Fixed in `textPaint.ts` — each
+   baseline steps by the row above's descent plus its own ascent — with
+   `tests/textPaint.test.ts` driving the painter through a stand-in canvas.
+3. **A square photo cover-cropped to 9:16 loses its sides**: the hook photo's
+   "HOW TO LAYER" text and half the bottle are out of frame, the model shot's
+   baked text too. Not fixed yet: the answer is the blurred backdrop the
+   editor already has for a dropped photo (`dropIntent.ts` `background`) —
+   the still contained over a blurred, covered copy of itself — placed by the
+   Director for a still whose shape is far from the frame's.
+
+Also: the photos were AVIF and the app could not import them at all
+(EFFECTS.md §31, fixed the same day). Not yet rated blind by the user.
+
 ## Runs
 
 | run | model | think | transport | landed | used · repaired · rejected · error | median s | median tokens in/out | headlines that fit | copy (model / standard) | preferred to standard | C0 bar |
@@ -127,6 +168,7 @@ photos are supplied (`FORGE_EVAL_MEDIA`).
 | 2026-09-23-lmstudio-gemma-4-e2b-knob-language | google/gemma-4-e2b | off | relay | 3/4 | 0 · 3 · 1 · 0 | 11.6 | 894 / 453 | 23/24 | — / — (0 rated) | — | not rated |
 | 2026-09-23-lmstudio-gemma-4-e2b-r2 | google/gemma-4-e2b | off | relay | 6/10 | 0 · 6 · 4 · 0 | 11.3 | 909 / 444 | 50/53 | — / — (0 rated) | — | not rated |
 | 2026-09-23-lmstudio-gemma-4-e2b | google/gemma-4-e2b | off | relay | 7/10 | 3 · 4 · 3 · 0 | 9.7 | 840 / 404 | 58/62 | — / — (0 rated) | — | not rated |
+| 2026-09-26-spine2-gemma-4-e2b | google/gemma-4-e2b | off | relay | 10/10 | 8 · 2 · 0 · 0 | 11.2 | 1225 / 459 | 25/26 | — / — (0 rated) | — | not rated |
 
 ## 2026-09-23-lmstudio-gemma-4-e2b-knob-language
 
@@ -330,6 +372,56 @@ openai · `google/gemma-4-e2b` · think off · relay · media synthetic · trans
 | wedding-sravani-karthik | offer | Capture the whole day | 21 / 40 |
 | wedding-sravani-karthik | proof | Golden sunset moments | 21 / 40 |
 | wedding-sravani-karthik | cta | Link in bio now | 15 / 19 |
+
+</details>
+
+## 2026-09-26-spine2-gemma-4-e2b
+
+openai · `google/gemma-4-e2b` · think off · relay · media synthetic · transitions 8 built-in + 412 library
+
+| brief | lang | verdict | s | tokens in/out | headlines (fit/written) | notes | reasoning |
+|---|---|---|---|---|---|---|---|
+| event-diwali-sale | Hindi | used | 13.2 | 1208 / 392 | 3/3 |  | The 'product-reveal' recipe is the most suitable as it focuses on building up to a hero shot, which fits showcasing fashion items like Diwali wear for a sale. The urgent tone and the need to highlight a discount make this recipe effective. |
+| event-fest | English | used | 10.9 | 1221 / 455 | 2/2 | layout: the song is longer than these shots need — the ad ends at 18.1s | The 'energy' recipe is best suited for an urgent, hype-driven event like a music festival. The accelerating cuts and hits on the drop align perfectly with the urgent tone required for promoting Rhythm Fest 2026. |
+| fashion-perfume | English | used | 10.3 | 1190 / 427 | 3/3 | shots: slot_05 left out — the music is too short to hold every shot; shots: slot_03 left out — the music is too short to hold every shot; layout: slot_06's headline dropped — the recipe keeps 2 cards | The 'fashion' recipe is best suited for highlighting a luxury perfume like Noir 9, focusing on the aesthetic and premium feel. |
+| food-biryani | Telugu | repaired | 12.7 | 1221 / 548 | 2/3 | shots[6].slot: "slot_06" is used twice — the second dropped | The 'product-reveal' recipe is the most suitable as it allows for slow builds to a hero shot, which fits showcasing a food product like biryani. The energy of the music and the playful tone align well with this reveal style. |
+| product-coldbrew | Hindi | used | 10.0 | 1216 / 414 | 2/2 |  | The 'product-reveal' recipe is best suited for showcasing a new drink like cold coffee, as it allows for slow builds to a hero shot. The playful tone fits well with this reveal style. |
+| product-serum | English | used | 11.4 | 1229 / 474 | 2/2 |  | The 'product-reveal' recipe is best suited for this brief as it focuses on building up to a hero shot, which aligns well with showcasing a cosmetic product like the Aura Vitamin C Serum. |
+| product-sneaker | English | repaired | 11.0 | 1235 / 462 | 3/3 | shots[1].role: "story" is not a role in Energy — problem | The 'energy' recipe is the best fit for this brief as it requires accelerating cuts on the beat and a ramp, which aligns perfectly with an energetic tone for a running shoe product targeting runners. |
+| studio-lumen | English | used | 10.5 | 1235 / 434 | 2/2 |  | The 'wedding-highlight' recipe is the most suitable as it focuses on emotional moments and fits the theme of wedding photography. The gentle build aligns well with capturing genuine, unposed moments. |
+| wedding-priya-arjun | English | used | 12.6 | 1285 / 527 | 3/3 |  | The 'wedding-highlight' recipe is the most suitable as the brief is for a wedding film, and this recipe focuses on emotional holds and a gentle build, which aligns with the calm tone requested. |
+| wedding-sravani-karthik | Telugu | used | 11.9 | 1296 / 489 | 3/3 |  | The 'wedding-highlight' recipe is the most suitable as the brief is for a pelli video, which falls under weddings and family events. The emotional tone aligns well with the calm requirement. |
+
+<details><summary>Every headline</summary>
+
+| brief | role | headline | chars / fit in the shot |
+|---|---|---|---|
+| event-diwali-sale | hook | रंगरेज़ फैशन सेल | 11 / 40 |
+| event-diwali-sale | offer | 30% की छूट | 8 / 26 |
+| event-diwali-sale | cta | इस रविवार तक स्टोर पर आएं | 19 / 19 |
+| event-fest | hook | Rhythm Fest 2026 | 16 / 40 |
+| event-fest | cta | Tickets close Friday | 20 / 23 |
+| fashion-perfume | hook | Noir 9 for after dark | 21 / 40 |
+| fashion-perfume | cta | Discover Noir 9 | 15 / 40 |
+| fashion-perfume | cta | Discover Noir 9 | 15 / 40 |
+| food-biryani | hook | పరాధి స్పైస్ బిర్యానీ | 10 / 40 |
+| food-biryani | offer | ఈ వారం ఆర్డర్ చేయండి | 12 / 19 |
+| food-biryani | cta | ఇప్పుడే ఆర్డర్ చేయండి — ఈ వారం ఉచిత డెలి | 25 / 19 — **too long** |
+| product-coldbrew | hook | घर पर कॉफ़ी का स्वाद | 13 / 40 |
+| product-coldbrew | cta | अभी ऑर्डर करें | 9 / 19 |
+| product-serum | hook | Aura Vitamin C Serum | 20 / 34 |
+| product-serum | cta | Shop now — 20% off your first order | 35 / 40 |
+| product-sneaker | hook | Stride X2 | 9 / 34 |
+| product-sneaker | offer | 40% more bounce | 15 / 40 |
+| product-sneaker | cta | Get yours | 9 / 19 |
+| studio-lumen | hook | Every moment caught | 19 / 39 |
+| studio-lumen | cta | Book a call | 11 / 19 |
+| wedding-priya-arjun | hook | Priya & Arjun | 13 / 40 |
+| wedding-priya-arjun | cta | Relive the day | 14 / 40 |
+| wedding-priya-arjun | cta | Watch the full film | 19 / 39 |
+| wedding-sravani-karthik | hook | శ్రావని & కార్తీక్ | 9 / 38 |
+| wedding-sravani-karthik | cta | సంపూర్ణ వీడియో లింక్ | 10 / 40 |
+| wedding-sravani-karthik | cta | ఇన్‌స్టాగ్రామ్‌లో చూడండి | 10 / 22 |
 
 </details>
 
