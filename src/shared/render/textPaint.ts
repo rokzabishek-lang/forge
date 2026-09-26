@@ -4,7 +4,7 @@
 // too, where a canvas does not exist and where a stray `document` would be a
 // real bug — so the lib is asked for here rather than widened for everything.
 import type { TextSpec } from '../timeline'
-import { layoutText, type TextLayout } from './textLayout'
+import { ASCENT, LINE_HEIGHT, layoutText, type TextLayout } from './textLayout'
 import { piecesOf, stepAt, textAnimationById, type TextAnimation } from './textAnimation'
 import {
   gradientVector,
@@ -192,13 +192,27 @@ export function drawTextOnto(
   }
 
   const sizes = rows.map((row) => Math.max(6, Math.round(row.px * fit)))
-  const lineHeights = sizes.map((px) => Math.round(px * 1.18))
-  const styledBlock = lineHeights.reduce((sum, h) => sum + h, 0)
+  /*
+   * Rows of different sizes.
+   *
+   * A row's line is LINE_HEIGHT of its size: ASCENT above the baseline for the
+   * caps, the rest below for the descenders and the gap. Stepping from one
+   * baseline to the next by the row ABOVE's line height put a big row one small
+   * line under a small one — and its caps, ASCENT of a big size tall, climbed
+   * straight over the small words (the Hero style's end card: "SHOP NOW" drawn
+   * through the product's name). So the step is the row above's descent plus
+   * the row below's ascent. For equal sizes that is the same LINE_HEIGHT, the
+   * block is the same height either way, and the first baseline sits its own
+   * row's ascent under the block's top rather than the clip's nominal size.
+   */
+  const ascent = (px: number): number => px * ASCENT
+  const descent = (px: number): number => px * (LINE_HEIGHT - ASCENT)
+  const styledBlock = sizes.reduce((sum, px) => sum + Math.round(px * LINE_HEIGHT), 0)
   const drift = layout.blockHeight - styledBlock
   const shift =
     spec.position === 'top' ? 0 : spec.position === 'lower' ? drift : Math.round(drift / 2)
 
-  let y = layout.firstBaseline + shift
+  let y = Math.round(layout.top + shift + ascent(sizes[0]))
   rows.forEach((row, index) => {
     const paint = row.paint
     const fontPx = sizes[index]
@@ -244,7 +258,7 @@ export function drawTextOnto(
       paintLine(ctx, text, x, y, fontPx, paint ?? plainPaint(spec), spec)
     }
 
-    y += lineHeights[index]
+    if (index + 1 < rows.length) y += Math.round(descent(fontPx) + ascent(sizes[index + 1]))
   })
 }
 

@@ -34,8 +34,8 @@ export interface TextLayout {
 }
 
 /** Cap height sits a little above the em box; this is the usual approximation. */
-const ASCENT = 0.82
-const LINE_HEIGHT = 1.18
+export const ASCENT = 0.82
+export const LINE_HEIGHT = 1.18
 
 export function layoutText(spec: TextSpec, width: number, height: number): TextLayout {
   const fontPx = Math.max(8, Math.round(spec.size * height))
