@@ -169,7 +169,8 @@ describe('the eval pipeline', () => {
     const heroSpan = result.timing.filter((s) => s.hero).map((s) => s.endFrame - s.startFrame)[0]
     for (const s of result.timing.filter((x) => !x.hero)) expect(heroSpan).toBeGreaterThan(s.endFrame - s.startFrame)
     expect(Math.max(...black)).toBeLessThan(24)
-  })
+    // Two renders on the Windows runner's 2018 build: the same room every render check here gets (CI #98 timed out at the default).
+  }, 300_000)
 
   it('renders a headline card the harness drew, at the export’s size, and leaves out one it did not', async () => {
     const s = settleAnswer(prepared, request, answer(JSON.stringify(plan())))
@@ -203,11 +204,10 @@ describe('the eval pipeline', () => {
       `- during the first card: rgb(${first.join(', ')}) with the card, rgb(${firstPlain.join(', ')}) without`,
       `- during the second card: rgb(${second.join(', ')}) with the cards folder, rgb(${secondPlain.join(', ')}) without — the same, it was not drawn`
     ])
-    // The drawn card is in the film — magenta, graded by the look, so read as "far from the frame without it"
-    // and red and blue well above green; the undrawn one is left out, as before, so those frames match.
+    // The drawn card is in the film: the frame is far from the same frame without it (the fixture's own pink
+    // through the look is already red and blue, so only the DIFFERENCE says the card is there); the undrawn
+    // one is left out, as before, so those frames match.
     expect(Math.abs(first[0] - firstPlain[0]) + Math.abs(first[1] - firstPlain[1]) + Math.abs(first[2] - firstPlain[2])).toBeGreaterThan(120)
-    expect(first[0]).toBeGreaterThan(first[1] + 60)
-    expect(first[2]).toBeGreaterThan(first[1] + 60)
     for (let k = 0; k < 3; k++) expect(Math.abs(second[k] - secondPlain[k]), `channel ${k} during the undrawn card`).toBeLessThan(4)
   }, 300_000)
 

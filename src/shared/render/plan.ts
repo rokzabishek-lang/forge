@@ -17,7 +17,7 @@ import { hasKeys, keyframeExpression } from './keyframes'
 import { curvesFilter } from './colourCurve'
 import { whiteBalanceFilter } from './whiteBalance'
 import { chromakeyFilter, despillFilter, saneKey } from './chromaKey'
-import { isFullFrameMask, maskExpression } from './mask'
+import { isFullFrameMask, isMaskAnimated, isWholeFrameShape, maskExpression } from './mask'
 import { effectiveCrop, safeCrop, type Size } from './crop'
 import { atempoChain, clipRamp, clipSpeed, rampRate, rampVideoFilter, sourceFramesFor, speedVideoFilter } from './speed'
 import { audioFadeFilters, fadesWithNeighbours } from './audioFade'
@@ -1389,7 +1389,9 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
      * render/mask.ts for the measurement that forced it.
      */
     let shapeLabel: string | null = null
-    if (mask) {
+    // A blur of the whole picture needs no shape drawn — see the fast path below.
+    const wholeFrameBlur = mask !== null && mask.mode === 'blur' && isWholeFrameShape(mask.shape) && !isMaskAnimated(clip.keyframes)
+    if (mask && !wholeFrameBlur) {
       /*
        * Drawn onto a copy of the clip's OWN stream rather than a fresh canvas.
        *
@@ -1501,7 +1503,24 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
      * was measured too and mangles chroma on subsampled input. This route came
      * back exact to the byte on both sides of the edge.
      */
-    if (mask && shapeLabel && mask.mode !== 'reveal') {
+    if (mask && wholeFrameBlur) {
+      /*
+       * A blur over the WHOLE picture — the Director's backdrop, the "Blurred
+       * background" drop. The shape would be a `geq` over every pixel of every
+       * frame: measured at ten times the blur itself (3.9 s against 0.4 s for
+       * 90 frames at 540×960), and CI #98 timed out on four of them. So no
+       * shape, no overlay: the alpha comes off, the colour is blurred whole,
+       * and the alpha goes back on, so a picture that does not fill its box
+       * keeps its see-through bars exactly as the shaped route keeps them.
+       */
+      filters.push(`${head}${body || 'null'}[xs${i}]`)
+      filters.push(`[xs${i}]split[xa${i}][xb${i}]`)
+      filters.push(`[xa${i}]format=yuva420p,alphaextract[xl${i}]`)
+      filters.push(`[xb${i}]format=yuv420p,gblur=sigma=${Math.max(0.1, mask.blur / 2).toFixed(2)}[xe${i}]`)
+      filters.push(`[xe${i}][xl${i}]alphamerge[xo${i}]`)
+      head = `[xo${i}]`
+      body = ''
+    } else if (mask && shapeLabel && mask.mode !== 'reveal') {
       const inner =
         mask.mode === 'blur'
           ? // gblur wants a sigma; people think in radius, and half is the

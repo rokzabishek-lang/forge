@@ -561,6 +561,27 @@ export function withoutMaskKeys(keyframes: KeyframeTracks | undefined): Keyframe
   return Object.keys(kept).length > 0 ? kept : undefined
 }
 
+/**
+ * A rectangle that covers the whole picture, hard-edged, upright: nothing
+ * outside it to leave alone. A blur inside such a shape is a blur of the whole
+ * picture, and the render takes it without drawing the shape (plan.ts) — the
+ * shape is a `geq` over every pixel of every frame, measured at ten times the
+ * cost of the blur itself (3.9 s against 0.4 s for 90 frames at 540×960), and
+ * the Director's backdrops put one under every square photo.
+ */
+export function isWholeFrameShape(shape: MaskShape): boolean {
+  return (
+    shape.kind === 'rectangle' &&
+    !shape.invert &&
+    shape.rotation === 0 &&
+    shape.feather <= 0 &&
+    shape.x - shape.width <= 0 &&
+    shape.x + shape.width >= 1 &&
+    shape.y - shape.height <= 0 &&
+    shape.y + shape.height >= 1
+  )
+}
+
 /** Nothing is masked off — emit no filter and pay nothing per frame. */
 export function isFullFrameMask(mask: Mask | undefined): boolean {
   if (!mask) return true

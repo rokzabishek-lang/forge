@@ -191,6 +191,27 @@ describe('masks', () => {
       expect(inside, `bars inside should be blurred away, spread was ${inside}`).toBeLessThan(60)
     }, 180_000)
 
+    it('over the whole picture, blurs everywhere without drawing a shape — the Director’s backdrop, ten times cheaper', async () => {
+      const mask: Mask = {
+        ...defaultMask('blur'),
+        blur: 40,
+        // The default shape is an ellipse; only an upright, hard rectangle over everything is "the whole picture".
+        shape: { ...defaultMask().shape, kind: 'rectangle', x: 0.5, y: 0.5, width: 0.5, height: 0.5, feather: 0, rotation: 0, invert: false }
+      }
+      const project = maskedProject(stripes, mask)
+      const graph = buildRenderPlan({ project, outputPath: '/x.mp4' }).args.join(' ')
+      expect(graph).toContain('gblur')
+      expect(graph).not.toContain('geq=')
+      const file = await render(project)
+      expect(await rowSpread(file, Math.round(H / 2))).toBeLessThan(60)
+      expect(await rowSpread(file, 4)).toBeLessThan(60)
+      // Feathered, turned, inverted or short of an edge, the shape is drawn as ever.
+      for (const shape of [{ feather: 0.1 }, { rotation: 10 }, { invert: true }, { width: 0.45 }]) {
+        const shaped = buildRenderPlan({ project: maskedProject(stripes, { ...mask, shape: { ...mask.shape, ...shape } }), outputPath: '/x.mp4' }).args.join(' ')
+        expect(shaped, JSON.stringify(shape)).toContain('geq=')
+      }
+    }, 180_000)
+
     it('inverted, blurs the background and keeps the middle sharp', async () => {
       const mask: Mask = {
         ...defaultMask('blur'),
