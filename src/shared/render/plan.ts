@@ -143,6 +143,24 @@ function even(n: number): number {
   return Math.max(2, Math.round(n / 2) * 2)
 }
 
+/**
+ * How a picture within 1 % of its box's shape is fitted: filled, not padded.
+ *
+ * A crop to the frame's shape is never exactly that shape — it is rounded to
+ * even pixels, so a 4:5 photo reframed for 9:16 is 758 × 1350 (0.5615 against
+ * 0.5625) — and `contain` padded the difference: a two-pixel black column down
+ * the right of every such shot, measured on the spine@2 render check. Filling
+ * loses under 1 % of the picture at its edges instead of drawing a line. A real
+ * mismatch (a landscape clip in a portrait frame) is still letterboxed.
+ */
+export const NEAR_SHAPE = 0.01
+
+export function fitFor(box: { width: number; height: number; fit: 'contain' | 'cover' }, stream: Size | null): 'contain' | 'cover' {
+  if (box.fit === 'cover' || !stream || stream.width <= 0 || stream.height <= 0) return box.fit
+  const off = Math.abs(stream.width / stream.height / (box.width / box.height) - 1)
+  return off > 0 && off < NEAR_SHAPE ? 'cover' : 'contain'
+}
+
 function fitFilter(width: number, height: number, mode: 'contain' | 'cover' = 'contain'): string {
   if (mode === 'cover') {
     // Fill the box and cut the overflow. `increase` then crop is the standard
@@ -1128,7 +1146,7 @@ export function buildRenderPlan(request: RenderRequest): RenderPlan {
             width,
             height
           }) ?? zoomKeyframeFilter(clip, streamSize, fps, { width, height }),
-      fitFilter(box.width, box.height, box.fit),
+      fitFilter(box.width, box.height, fitFor(box, streamSize)),
       `fps=${fps}`,
       'setsar=1',
       // yuva420p, not rgba.

@@ -67,7 +67,7 @@ import { normaliseKeys, type Ease, type Keyframe, type KeyedProperty } from '@sh
 import { transitionById } from '@shared/transitions/registry'
 import { entriesOfKind } from '@shared/assets/catalog'
 import { DEFAULT_TRIGGER_OPTIONS, tagsForProp } from '@shared/automation/keywords'
-import { safeCrop } from '@shared/render/crop'
+import { solveCrop as solveCropFor } from '@shared/render/crop'
 import { dropPatch, type DropIntent } from '@shared/render/dropIntent'
 import { ASPECTS, aspectOf, type AspectKey } from '@shared/render/aspect'
 import {
@@ -236,46 +236,9 @@ const pendingText = new Map<
   { spec: TextSpec; timer: ReturnType<typeof setTimeout>; depth: number }
 >()
 
-/**
- * The largest rectangle of the target aspect that fits inside the source,
- * centred. This is the placeholder auto-reframe: it is what CV speaker-tracking
- * will replace, and what the user drags to fix when it lands on the wrong person.
- */
+/** The placeholder auto-reframe for a project aspect (shared/render/crop.ts `solveCrop`). */
 export function solveCrop(asset: MediaAsset, aspect: AspectKey): CropRect | undefined {
-  const source = { w: asset.width ?? 0, h: asset.height ?? 0 }
-  if (source.w <= 0 || source.h <= 0) return undefined
-
-  const target = ASPECTS[aspect]
-  const targetRatio = target.width / target.height
-  const sourceRatio = source.w / source.h
-
-  // Already the right shape — no crop needed.
-  if (Math.abs(targetRatio - sourceRatio) < 0.001) return undefined
-
-  const width = targetRatio < sourceRatio ? Math.round(source.h * targetRatio) : source.w
-  const height = targetRatio < sourceRatio ? source.h : Math.round(source.w / targetRatio)
-
-  /*
-   * Clamped on the way out, not just on the way into ffmpeg.
-   *
-   * These two roundings can each land a pixel over the source — and the render
-   * used to round them UP again to make them even, which is how an export died
-   * on "Invalid too big or non positive size for width '3210'". Swept over every
-   * realistic source size and all three aspects, HALF of them came out reaching
-   * outside the frame. The renderer clamps too, but a crop that is wrong the
-   * moment it is stored is also a crop the on-picture handles draw wrongly.
-   */
-  return (
-    safeCrop(
-      {
-        x: Math.round((source.w - width) / 2),
-        y: Math.round((source.h - height) / 2),
-        width,
-        height
-      },
-      { width: source.w, height: source.h }
-    ) ?? undefined
-  )
+  return solveCropFor(asset, ASPECTS[aspect])
 }
 
 /**

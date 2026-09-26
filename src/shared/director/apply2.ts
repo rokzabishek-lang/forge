@@ -19,6 +19,7 @@ import type { Brief } from './schema'
 import type { Role2 } from './recipes'
 import { SLOW_SPEED, type Composed } from './compose'
 import { SPINE2_PASS, type Menu2 } from './schema2'
+import { solveCrop } from '../render/crop'
 
 /**
  * A composed `spine@2` ad, as ordinary clips, in one project update (docs/PLAN.md §5.6).
@@ -127,6 +128,9 @@ export function applyRecipe(project: Project, composed: Composed, menu: Menu2, c
       }
     }
     const frames = laid.endFrame - laid.startFrame
+    // Filled, not letterboxed: the reframe every dropped clip gets — the largest centred rectangle of the
+    // ad's shape (C0 found 4:5 photos in a 9:16 ad floating in black). The user drags it when it lands wrong.
+    const crop = solveCrop(asset, { width, height })
     const slow = slot.kind === 'video' && shot.speed === 'slow'
     const speaks = slot.kind === 'video' && hasSpeech(next, asset, laid.clipFrames, fps)
     if (speaks) anySpeech = true
@@ -145,7 +149,8 @@ export function applyRecipe(project: Project, composed: Composed, menu: Menu2, c
       color: { ...NEUTRAL },
       generatedBy: { rule: SPINE_RULE, reason: `${recipe.name} · ${shot.role}${laid.hero ? ' · hero' : ''} · ${shot.why || slot.label}` },
       ...(motion ? { motion } : {}),
-      ...(slow ? { speed: SLOW_SPEED } : {})
+      ...(slow ? { speed: SLOW_SPEED } : {}),
+      ...(crop ? { crop } : {})
     }
     if (laid.clipFrames < frames) problems.push({ path: `$.shots[${i}]`, message: `${slot.id} ends ${((frames - laid.clipFrames) / fps).toFixed(1)}s before its shot` })
     shots.push({ clip, slotId: slot.id, video: slot.kind === 'video', index: i })

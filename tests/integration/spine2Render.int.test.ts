@@ -179,8 +179,15 @@ describe('a spine@2 ad, rendered', () => {
       const want = slotColour.get(shot.slotId)!
       const got = await pixelAt(plain.file, t, PHOTO.x, PHOTO.y, canvas)
       await saveFrame(plain.file, t, join(dir, `shot${i + 1}-plain.png`))
-      lines.push(`- shot ${i + 1} ${shot.slotId}${shot.hero ? ' (hero)' : ''} ${(at(shot.startFrame)).toFixed(2)}–${at(shot.endFrame).toFixed(2)} s: rgb(${got.join(', ')}), want rgb(${want.join(', ')})`)
-      for (let k = 0; k < 3; k++) expect(Math.abs(got[k] - want[k]), `shot ${i + 1} channel ${k}`).toBeLessThan(14)
+      // The top and bottom edges too: a 4:5 photo in a 9:16 ad is cropped to fill it, not letterboxed (C0).
+      const top = await pixelAt(plain.file, t, 270, 8, canvas)
+      const bottom = await pixelAt(plain.file, t, 270, canvas.height - 8, canvas)
+      lines.push(`- shot ${i + 1} ${shot.slotId}${shot.hero ? ' (hero)' : ''} ${(at(shot.startFrame)).toFixed(2)}–${at(shot.endFrame).toFixed(2)} s: rgb(${got.join(', ')}), want rgb(${want.join(', ')}); top edge rgb(${top.join(', ')}), bottom rgb(${bottom.join(', ')})`)
+      for (let k = 0; k < 3; k++) {
+        expect(Math.abs(got[k] - want[k]), `shot ${i + 1} channel ${k}`).toBeLessThan(14)
+        expect(Math.abs(top[k] - want[k]), `shot ${i + 1} top edge, channel ${k}`).toBeLessThan(14)
+        expect(Math.abs(bottom[k] - want[k]), `shot ${i + 1} bottom edge, channel ${k}`).toBeLessThan(14)
+      }
     }
     // The clip's last frame of its shot is still the clip, not black: the engine never gives it more than its footage.
     const clipShot = composed.layout.shots.find((s) => s.slotId === 'slot_04')!

@@ -484,8 +484,12 @@ left out — near-duplicate of slot_03 (slot_03 is sharper)".
 > - ~~`direct()`, the eval and the Director panel still run `spine@1`; no
 >   Recipe picker~~ — **wired 2026-09-25** (below).
 > - **Not yet**: ramps are noted and played at normal speed; the hold clip,
->   J/L cuts and treatments are not drawn; coherence.ts (§5.4) is not built;
->   stills are still letterboxed (C0), as the render check's frames show.
+>   J/L cuts and treatments are not drawn; coherence.ts (§5.4) is not built.
+> - ~~stills are still letterboxed (C0)~~ — **fixed 2026-09-25**: every shot
+>   gets the reframe every dropped clip gets (`solveCrop`, now shared), and the
+>   export fills a picture within 1 % of its box's shape instead of padding it —
+>   the even-pixel rounding had left a 2 px black column on every reframed photo
+>   in the app, not only the Director's (tests/integration/reframeFill).
 >
 > **Built 2026-09-25, third part: wired in (§5.6)** — `direct()` runs
 > `spine@2` through `run.ts`'s `gridsFor` / `menu2For` / `settle2`, the same

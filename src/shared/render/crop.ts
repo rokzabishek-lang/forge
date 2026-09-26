@@ -1,4 +1,4 @@
-import type { CropRect } from '../timeline'
+import type { CropRect, MediaAsset } from '../timeline'
 
 /**
  * Making a crop something ffmpeg will actually accept.
@@ -107,4 +107,43 @@ export function effectiveCrop(crop: CropRect | undefined, source: Size): CropRec
     width,
     height
   }
+}
+
+/**
+ * The largest rectangle of the target's shape that fits inside the source,
+ * centred. This is the placeholder auto-reframe: it is what CV speaker-tracking
+ * will replace, and what the user drags to fix when it lands on the wrong person.
+ *
+ * Shared rather than the store's own so the Director crops its shots with the
+ * same rule every dropped clip gets — without it a 4:5 photo in a 9:16 ad was
+ * letterboxed (C0, docs/EVAL.md).
+ *
+ * Clamped on the way out, not just on the way into ffmpeg: the two roundings
+ * can each land a pixel over the source, and a crop that is wrong the moment
+ * it is stored is also a crop the on-picture handles draw wrongly (see above).
+ */
+export function solveCrop(asset: Pick<MediaAsset, 'width' | 'height'>, target: Size): CropRect | undefined {
+  const source = { w: asset.width ?? 0, h: asset.height ?? 0 }
+  if (source.w <= 0 || source.h <= 0 || target.width <= 0 || target.height <= 0) return undefined
+
+  const targetRatio = target.width / target.height
+  const sourceRatio = source.w / source.h
+
+  // Already the right shape — no crop needed.
+  if (Math.abs(targetRatio - sourceRatio) < 0.001) return undefined
+
+  const width = targetRatio < sourceRatio ? Math.round(source.h * targetRatio) : source.w
+  const height = targetRatio < sourceRatio ? source.h : Math.round(source.w / targetRatio)
+
+  return (
+    safeCrop(
+      {
+        x: Math.round((source.w - width) / 2),
+        y: Math.round((source.h - height) / 2),
+        width,
+        height
+      },
+      { width: source.w, height: source.h }
+    ) ?? undefined
+  )
 }
