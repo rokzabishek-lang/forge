@@ -182,6 +182,18 @@ export async function meanVolumeDb(
   return Number(found[1])
 }
 
+/** The loudest sample over a span, dBFS — `max_volume` from the same `volumedetect` run `meanVolumeDb` reads. */
+export async function maxVolumeDb(file: string, fromSeconds: number, seconds: number): Promise<number> {
+  const { stderr } = await run(FFMPEG, [
+    '-hide_banner', '-nostats',
+    '-ss', String(fromSeconds), '-t', String(seconds), '-i', file,
+    '-af', 'volumedetect', '-f', 'null', '-'
+  ])
+  const found = /max_volume:\s*(-?\d+(?:\.\d+)?) dB/.exec(stderr)
+  if (!found) throw new Error(`no max_volume in ffmpeg output for ${file}`)
+  return Number(found[1])
+}
+
 /** A note beside the artefacts saying what they were meant to show. */
 export async function writeNote(dir: string, lines: string[]): Promise<void> {
   await writeFile(join(dir, 'README.txt'), `${lines.join('\n')}\n`, 'utf8')

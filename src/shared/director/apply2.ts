@@ -17,6 +17,9 @@ import {
   trimMusic
 } from './apply'
 import { dropPatch } from '../render/dropIntent'
+import { SOUND_LANE_NAME, placeSounds } from './sound'
+import type { SoundPack } from './soundRoles'
+import { SILENCE_RAMP_FRAMES } from '../render/soundLevels'
 import { punchIndex } from './validate'
 import type { Brief } from './schema'
 import type { Role2 } from './recipes'
@@ -52,6 +55,8 @@ export interface ApplyContext2 {
   parallaxAssets?: ReadonlySet<string>
   /** The recipe look's LUT, when the look library has it. */
   lookFile?: { file: string; name: string } | null
+  /** The sounds the library has for the Director (soundRoles.ts); none, and the ad has no sound design. */
+  sounds?: SoundPack
   newId?: (prefix: string) => string
 }
 
@@ -63,6 +68,8 @@ export interface Applied2 {
   cardClipIds: string[]
   /** Colour cards and the look layer, likewise. */
   solidClipIds: string[]
+  /** The sound design's clips, on the Director's own audio lanes. */
+  soundClipIds: string[]
 }
 
 const defaultId = (prefix: string): string => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
@@ -444,7 +451,68 @@ export function applyRecipe(project: Project, composed: Composed, menu: Menu2, c
     }
   }
 
-  return { project: next, problems, clipIds: shots.map((s) => s.clip.id), cardClipIds, solidClipIds }
+  /*
+   * The sound design (docs/PLAN.md §6): the events the engine fired, as clips
+   * on audio lanes the Director adds — named, marked its own, taken away with
+   * the ad — each file's measured peak on its frame; and the silence as the
+   * music's own envelope, gone over four frames at the last body cut and back
+   * at the end card. After the music is trimmed, so the envelope is drawn on
+   * the clip as it will play.
+   */
+  const soundClipIds: string[] = []
+  function soundLaneFor(start: number, duration: number, placed: Clip[]): string | null {
+    // A riser and a sub both peak on the hero: the second needs a lane the first is not on for those frames.
+    const busy = (trackId: string): boolean =>
+      overlapsOn(next, trackId, start, duration).length > 0 ||
+      placed.some((c) => c.trackId === trackId && start < c.start + c.duration && start + duration > c.start)
+    for (const t of next.tracks) {
+      if (t.kind === 'audio' && t.director && !t.locked && !busy(t.id)) return t.id
+    }
+    if (trackLimitReached(next)) return null
+    next = addTrack(next, 'audio', 'top')
+    const added = next.tracks[next.tracks.length - 1]
+    next = { ...next, tracks: next.tracks.map((t) => (t.id === added.id ? { ...t, name: SOUND_LANE_NAME, director: true as const } : t)) }
+    return added.id
+  }
+  if (layout.shots.length > 0 && layout.sounds.length > 0) {
+    const music = ctx.musicClipId ? next.clips.find((c) => c.id === ctx.musicClipId) : undefined
+    const placed = placeSounds(layout.sounds, ctx.sounds ?? [], {
+      fps,
+      musicVolume: music?.volume ?? 1,
+      intensity,
+      transitionFrames: Math.round(fps * 0.3),
+      newId,
+      assets: next.assets,
+      laneFor: soundLaneFor
+    })
+    problems.push(...placed.problems)
+    next = { ...next, assets: [...next.assets, ...placed.assets], clips: [...next.clips, ...placed.clips] }
+    soundClipIds.push(...placed.clips.map((c) => c.id))
+    if (music && placed.silences.length > 0) {
+      if (music.keyframes?.volume && music.keyframes.volume.length > 0 && !music.directorTrim?.silenced) {
+        problems.push({ path: '$.sounds', message: 'the music has an envelope of its own — the silence before the black was not drawn over it' })
+      } else {
+        const keys = placed.silences
+          .flatMap((s) => [
+            { frame: s.at - music.start - SILENCE_RAMP_FRAMES, value: music.volume },
+            { frame: s.at - music.start, value: 0 },
+            ...(s.until !== null ? [{ frame: s.until - music.start, value: 0 }, { frame: s.until - music.start + SILENCE_RAMP_FRAMES, value: music.volume }] : [])
+          ])
+          .filter((k) => k.frame >= 0)
+          .sort((a, b) => a.frame - b.frame)
+        // Stamped like a trim, so Clear gives the music its length, its own fade-out and its plain level back.
+        const stamp = music.directorTrim ?? { duration: music.duration, ...(music.fadeOut !== undefined ? { fadeOut: music.fadeOut } : {}) }
+        const silenced: Clip = {
+          ...music,
+          keyframes: { ...(music.keyframes ?? {}), volume: keys },
+          directorTrim: { ...stamp, silenced: true }
+        }
+        next = { ...next, clips: next.clips.map((c) => (c.id === music.id ? silenced : c)) }
+      }
+    }
+  }
+
+  return { project: next, problems, clipIds: shots.map((s) => s.clip.id), cardClipIds, solidClipIds, soundClipIds }
 }
 
 /** The decision, saved whole: the plan, the recipe, and what the engine placed for C3 and C4. */

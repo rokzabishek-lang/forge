@@ -990,6 +990,28 @@ model's choice) and shows the recipe's one line and the hero it chose;
 Firing is deterministic; the recipe names the events (§5.3 step 8) and this
 step realises them. No per-cut model choice.
 
+> **Built 2026-09-26 (evening).** `sound.ts` `placeSounds(events, pack, options)`
+> — each file's measured peak on the event's frame (a riser ends on the cut at
+> its peak, a few faded frames past it, in over its first fifth; a whoosh's
+> peak on the transition's midpoint; a hit keeps its tail to four seconds); the
+> silence handed back for `apply2.ts` to draw as the music's own envelope, gone
+> over four frames at the last body cut and back at the end card, stamped on
+> `directorTrim.silenced` so Clear restores it. Lanes are audio tracks the
+> Director adds, named *Sound design*, `Track.director`, one more when two
+> sounds overlap (a riser and a sub on the hero). Levels in
+> `render/soundLevels.ts`, each normalised by the file's own measured peak
+> (`soundRoles.ts` `peakDb` — the library's peaks span 17 dB) and moved ±2 dB
+> by the ad's intensity; a hit with no hit in the library is a sub-drop. The
+> pack comes from the catalogue through `soundPackFor` (the store, and
+> `tests/eval/local.ts` for the evals); none installed, one note.
+> `tests/directorSound.test.ts` (placement to the frame, picking, levels, the
+> envelope, the lanes, Clear); `soundDesign.int.test.ts` renders a product
+> reveal over a −20 dBFS tone with two sounds made and measured on the spot
+> (CI has no library) and reads the riser building, the sub on the hero, the
+> silent black, the music back on the end card and the true peak under −1 dBFS
+> through loudnorm; `soundRoles.int.test.ts` measures every library file again
+> where it is installed. `scripts/measure-sfx.mjs` is the measurement.
+
 ### 6.1 Events → clips — `src/shared/director/sound.ts`
 
 `placeSound(events, pack, layout, fps) → Clip[]` on an audio lane the

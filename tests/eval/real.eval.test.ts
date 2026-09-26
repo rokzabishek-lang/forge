@@ -17,7 +17,7 @@ import { recipeById, type RecipeId } from '@shared/director/recipes'
 import { probeMany } from '../../src/main/ffmpeg/probe'
 import { toAsset } from '../../src/main/assets'
 import type { Fixture } from './fixtures'
-import { FFPROBE, REPO, beatsVia, capability, libraryTransitions, measureOf, measureVia, startSidecar, type Measured } from './local'
+import { FFPROBE, REPO, beatsVia, capability, librarySounds, libraryTransitions, measureOf, measureVia, startSidecar, type Measured } from './local'
 import {
   applied,
   cardsOf,
@@ -333,13 +333,14 @@ describe.skipIf(!PROVIDER || !REAL)('a real ad from the user’s own pictures an
         const { menu, verdict, why, problems, settled, standard, landed } = settledAnswer
         const fps = menu.fps
 
+        const sounds = await librarySounds()
         if (STEP === 'score') {
           /* Every headline card of both ads, for the harness to draw — the same ids `scoreFixture` will apply them under. */
           const modelLook = await lookFileFor(landed.composed.recipe, rendersDir)
           const standardLook = await lookFileFor(standard.composed.recipe, rendersDir)
           const cards = [
-            ...(settled ? cardsOf(applied(prepared, settled.composed, menu, config.model, modelLook), CANVAS, 'cards/model') : []),
-            ...cardsOf(applied(prepared, standard.composed, menu, 'baseline', standardLook), CANVAS, 'cards/baseline')
+            ...(settled ? cardsOf(applied(prepared, settled.composed, menu, config.model, modelLook, sounds), CANVAS, 'cards/model') : []),
+            ...cardsOf(applied(prepared, standard.composed, menu, 'baseline', standardLook, sounds), CANVAS, 'cards/baseline')
           ]
           await writeJson(join(runDir, 'cards.json'), cards)
           await writeJson(join(runDir, 'settled.json'), {
@@ -369,8 +370,8 @@ describe.skipIf(!PROVIDER || !REAL)('a real ad from the user’s own pictures an
           const modelLook = await lookFileFor(landed.composed.recipe, rendersDir)
           const standardLook = await lookFileFor(standard.composed.recipe, rendersDir)
           const expected = [
-            ...(settled ? cardsOf(applied(prepared, settled.composed, menu, config.model, modelLook), CANVAS, 'cards/model') : []),
-            ...cardsOf(applied(prepared, standard.composed, menu, 'baseline', standardLook), CANVAS, 'cards/baseline')
+            ...(settled ? cardsOf(applied(prepared, settled.composed, menu, config.model, modelLook, sounds), CANVAS, 'cards/model') : []),
+            ...cardsOf(applied(prepared, standard.composed, menu, 'baseline', standardLook, sounds), CANVAS, 'cards/baseline')
           ]
           const missing = expected.filter((c) => !existsSync(join(runDir, c.file)))
           if (missing.length > 0) {
@@ -387,7 +388,8 @@ describe.skipIf(!PROVIDER || !REAL)('a real ad from the user’s own pictures an
               extraTransitions: library.transitions,
               ...(library.resolveAsset ? { resolveAsset: library.resolveAsset } : {}),
               canvas: CANVAS,
-              cards: cardDirs
+              cards: cardDirs,
+              sounds
             }
           })
           const record: BriefResult = {

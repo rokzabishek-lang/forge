@@ -2520,3 +2520,28 @@ picture that does not fill its box keeps its see-through bars exactly as the
 shaped route keeps them. A feathered, turned, inverted or smaller shape goes
 the old way. `tests/integration/mask.int.test.ts` checks both, and the
 backdrop render check asserts the graph has no `geq`.
+
+## 33. Sound design — what the audio side measured (2026-09-26)
+
+Three facts the C3 render check ran into, each of which changed a number:
+
+- **`sine` generates at an eighth of full scale.** `sine=frequency=220`
+  followed by `volume=0.1` measured −38 dBFS peak, not −20: the source's own
+  output is −18 dB. A test bed meant to sit at −20 dBFS wants `volume=0.8`.
+- **A clip's gain is clamped to +6 dB in the render** (`audibility.ts`
+  `MAX_GAIN`, the fader's ceiling — `clampGain` in `plan.ts`). A level
+  written on a clip above it is silently not heard: the sound design's
+  levels normalise each file by its measured peak and cap at the same
+  constant, so the library's quietest swell (−16.9 dB) lands 3 dB shy of
+  its table level rather than asking for a gain the file would never get.
+- **AAC overshoots a limited peak.** Through `loudnorm` at TP −1 the mix's
+  decoded sample peak read −0.8 to −1.2 dBFS across runs: the encoder's own
+  reconstruction, a few tenths of a dB. A check of "under the ceiling" on
+  the encoded file draws its line half a dB above the ceiling.
+
+And the measurement the sounds are placed by: every library file's loudest
+10 ms window, found by decoding to floats with the bundled ffmpeg
+(`scripts/measure-sfx.mjs`). The peaks agree with the librosa measurement of
+2026-09-23 to within 10 ms; the levels, which that measurement did not
+record, span 17 dB across the library (−0.2 to −16.9 dB), which is why the
+table carries `peakDb` and the placement normalises by it.

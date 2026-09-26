@@ -168,6 +168,7 @@ import {
 import type { DecisionRecord } from '@shared/project'
 import { clearDirector, occupiedBy } from '@shared/director/apply'
 import { applyRecipe, decisionFor2 } from '@shared/director/apply2'
+import { soundPackFor } from '@shared/director/soundRoles'
 import { BASELINE_MODEL } from '@shared/director/baseline'
 import type { Problem } from '@shared/director/conforms'
 import { buildSlots } from '@shared/director/menu'
@@ -1848,7 +1849,9 @@ export const useEditor = create<EditorState>((set, get) => ({
         catalogue,
         ...(musicClip ? { musicClipId: musicClip.id } : {}),
         parallaxAssets,
-        lookFile: look
+        lookFile: look,
+        // The library's sounds the Director may fire (soundRoles.ts); none installed, and the ad says so.
+        sounds: soundPackFor(useCatalog.getState().catalog, useCatalog.getState().root)
       })
       notes.push(...applied.problems.map(describeProblem))
       get().update(() => applied.project)

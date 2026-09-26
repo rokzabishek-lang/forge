@@ -16,6 +16,7 @@ import { COPY_RULE, LOOK_RULE } from '@shared/director/apply'
 import { graphemes, type Composed } from '@shared/director/compose'
 import { gate } from '@shared/director/gate'
 import { recipeById, type Recipe, type RecipeId } from '@shared/director/recipes'
+import type { SoundPack } from '@shared/director/soundRoles'
 import type { Grid } from '@shared/director/rhythm'
 import { bakeForExport, exportBakeSizes } from '@shared/render/exportBake'
 import { cubeFor, lookById } from '@shared/render/looks'
@@ -371,7 +372,14 @@ export async function lookFileFor(recipe: Recipe, dir: string): Promise<{ file: 
 }
 
 /** Apply a settled ad the way `direct()` does. */
-export function applied(prepared: Prepared, composed: Composed, menu: Menu2, model: string, lookFile: { file: string; name: string } | null): Project {
+export function applied(
+  prepared: Prepared,
+  composed: Composed,
+  menu: Menu2,
+  model: string,
+  lookFile: { file: string; name: string } | null,
+  sounds: SoundPack = []
+): Project {
   return applyRecipe(prepared.project, composed, menu, {
     fps: menu.fps,
     videoTrackId: prepared.videoTrackId,
@@ -381,6 +389,7 @@ export function applied(prepared: Prepared, composed: Composed, menu: Menu2, mod
     ...(prepared.musicClipId ? { musicClipId: prepared.musicClipId } : {}),
     parallaxAssets: new Set(),
     lookFile,
+    sounds,
     newId: counter()
   }).project
 }
@@ -556,6 +565,8 @@ export interface RenderOptions {
   canvas?: { width: number; height: number }
   /** Folders of drawn headline cards, one for each ad (renderEval's `cards`). */
   cards?: { model?: string; baseline?: string }
+  /** The library's sounds for the Director to fire; none, and the ad has no sound design (soundRoles.ts). */
+  sounds?: SoundPack
 }
 
 export async function scoreFixture(
@@ -570,7 +581,7 @@ export async function scoreFixture(
 
   const renders: BriefResult['renders'] = { model: null, baseline: null }
   if (options.render) {
-    const { dir, extraTransitions, resolveAsset, canvas, cards } = options.render
+    const { dir, extraTransitions, resolveAsset, canvas, cards, sounds } = options.render
     const renderOptions = (drawn: string | undefined): Parameters<typeof renderEval>[2] => ({
       extraTransitions,
       ...(resolveAsset ? { resolveAsset } : {}),
@@ -579,11 +590,11 @@ export async function scoreFixture(
     })
     renders.baseline = join(dir, `${fixture.id}.baseline.mp4`)
     const standardLook = await lookFileFor(standard.composed.recipe, dir)
-    await renderEval(applied(prepared, standard.composed, menu, 'baseline', standardLook), renders.baseline, renderOptions(cards?.baseline))
+    await renderEval(applied(prepared, standard.composed, menu, 'baseline', standardLook, sounds), renders.baseline, renderOptions(cards?.baseline))
     if (settled) {
       renders.model = join(dir, `${fixture.id}.model.mp4`)
       const look = await lookFileFor(settled.composed.recipe, dir)
-      await renderEval(applied(prepared, settled.composed, menu, options.model, look), renders.model, renderOptions(cards?.model))
+      await renderEval(applied(prepared, settled.composed, menu, options.model, look, sounds), renders.model, renderOptions(cards?.model))
     }
   }
 

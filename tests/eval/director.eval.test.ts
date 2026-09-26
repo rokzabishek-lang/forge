@@ -5,7 +5,7 @@ import { join, relative } from 'node:path'
 import { TRANSITIONS } from '@shared/transitions/registry'
 import { loadFixtures } from './fixtures'
 import { makeFixtureMedia } from './media'
-import { REPO, libraryTransitions, sidecarBeats } from './local'
+import { REPO, librarySounds, libraryTransitions, sidecarBeats } from './local'
 import {
   askNode,
   prepareFixture,
@@ -108,6 +108,7 @@ describe.skipIf(!PROVIDER)('the Director on a real model', () => {
         const requests = (await readJson<EvalRequest[]>(join(runDir, 'requests.json'))) ?? []
         const results = []
         const byId = new Map(fixtures.map((f) => [f.id, f]))
+        const sounds = await librarySounds()
         let real = false
         for (const request of requests) {
           const fixture = byId.get(request.fixtureId)
@@ -121,7 +122,7 @@ describe.skipIf(!PROVIDER)('the Director on a real model', () => {
             render:
               process.env.FORGE_EVAL_RENDER === 'off'
                 ? null
-                : { dir: join(runDir, 'renders'), extraTransitions: library.transitions, resolveAsset: library.resolveAsset }
+                : { dir: join(runDir, 'renders'), extraTransitions: library.transitions, resolveAsset: library.resolveAsset, sounds }
           })
           results.push({
             ...result,

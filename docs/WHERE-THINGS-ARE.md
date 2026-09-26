@@ -392,6 +392,13 @@ on a lane the Director adds UNDER V1 (the same thing the Blurred background
 drop makes, so it edits like your own), and goes when the ad is cleared;
 nothing else — a double-clicked photo, a reel — is ever built onto that lane.
 A blend into or out of such a shot is a cut, and the result box says so.
+The recipe's sounds — a riser and a sub into the hero, hits on the drops, a
+whoosh under a whip — land as ordinary audio clips on lanes named **Sound
+design** under the audio tracks, each from the asset library (its meme and UI
+sounds are never used); the music goes silent for the black and returns on
+the end card, drawn as the music clip's own volume envelope. All of it clears
+with the ad. With no library installed the ad has no sound design and the
+result box says so.
 
 **Importing AVIF or HEIC** — the file is converted to a PNG in the app's own
 cache on import (the bundled ffmpeg cannot read either), and the pool shows

@@ -420,7 +420,12 @@ export interface Clip {
    * so the ad can only ever shrink. Stamped once, on the first trim, and
    * restored and removed by `clearDirector`. See shared/director/apply.ts.
    */
-  directorTrim?: { duration: Frames; fadeOut?: Frames }
+  directorTrim?: {
+    duration: Frames
+    fadeOut?: Frames
+    /** The volume envelope on this clip is the Director's silence (sound.ts), and goes with the ad. */
+    silenced?: true
+  }
   /**
    * Camera move across a still.
    *

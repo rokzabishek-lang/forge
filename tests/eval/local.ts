@@ -5,6 +5,7 @@ import type { TransitionDef } from '@shared/transitions/registry'
 import { transitionsFromMasks } from '@shared/transitions/registry'
 import type { MusicAnalysis } from '@shared/automation/cutPlan'
 import type { Measure } from '@shared/director/gate'
+import { soundPackFor, type SoundPack } from '@shared/director/soundRoles'
 import { SidecarClient } from '../../src/main/sidecar/client'
 import { FFMPEG } from './media'
 import type { AnalyseBeats } from './pipeline'
@@ -30,6 +31,15 @@ export async function libraryTransitions(): Promise<{ transitions: TransitionDef
   const catalog = await scanAssets(root)
   const masks = entriesOfKind(catalog, 'transition').map((e) => ({ id: e.id, name: e.name, file: e.file }))
   return { transitions: transitionsFromMasks(masks), resolveAsset: resolveAssetFile }
+}
+
+/** The library's sounds the Director may fire, when the library is on this machine (soundRoles.ts). */
+export async function librarySounds(): Promise<SoundPack> {
+  const root = process.env.FORGE_ASSETS_DIR ?? join(REPO, 'assets')
+  if (!existsSync(root)) return []
+  process.env.FORGE_ASSETS_DIR = root
+  const { scanAssets } = await import('../../src/main/assets/scan')
+  return soundPackFor(await scanAssets(root), root)
 }
 
 export interface Sidecar {

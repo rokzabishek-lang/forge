@@ -42,7 +42,9 @@ export const ENDING_RULE = 'director.ending'
 export const LOOK_RULE = 'director.look'
 /** A blurred copy of a shot under it, for a picture whose shape is far from the frame's (apply2.ts). */
 export const BACKDROP_RULE = 'director.backdrop'
-export const DIRECTOR_RULES: readonly string[] = [SPINE_RULE, COPY_RULE, ENDING_RULE, LOOK_RULE, BACKDROP_RULE]
+/** A sound the rhythm engine fired, as a clip on the Director's own lane (sound.ts); `clearDirector` takes the file it brought too. */
+export const SOUND_RULE = 'director.sound'
+export const DIRECTOR_RULES: readonly string[] = [SPINE_RULE, COPY_RULE, ENDING_RULE, LOOK_RULE, BACKDROP_RULE, SOUND_RULE]
 
 /**
  * The accent on the punch word.
@@ -115,9 +117,11 @@ export function clearDirector(project: Project): Project {
   const gone = new Set(removed.map((c) => c.id))
   const survivors = project.clips.filter((c) => !gone.has(c.id))
   const stillUsed = new Set(survivors.map((c) => c.assetId))
-  // Only what the director DREW — cards, colour cards, the look layer — never footage,
-  // even when a shot was its only reference.
-  const cardAssets = new Set(removed.filter((c) => c.text || c.solid || c.adjustment).map((c) => c.assetId))
+  // Only what the director DREW — cards, colour cards, the look layer — or BROUGHT from the sound
+  // library; never footage, even when a shot was its only reference.
+  const cardAssets = new Set(
+    removed.filter((c) => c.text || c.solid || c.adjustment || c.generatedBy?.rule === SOUND_RULE).map((c) => c.assetId)
+  )
 
   // The track the Director added under the ad goes with the ad; one the user has since put a clip on stays —
   // and, as removeTrack keeps it, a project is never left without a video track.
@@ -131,10 +135,17 @@ export function clearDirector(project: Project): Project {
 }
 
 function restoreTrim(clip: Clip): Clip {
-  const { directorTrim, fadeOut: _fade, ...rest } = clip
+  const { directorTrim, fadeOut: _fade, keyframes, ...rest } = clip
   if (!directorTrim) return clip
+  // The silence the Director drew on the music goes with the ad; an envelope of the user's own was never written over.
+  let kept = keyframes
+  if (directorTrim.silenced && keyframes) {
+    const { volume: _silence, ...others } = keyframes
+    kept = Object.keys(others).length > 0 ? others : undefined
+  }
   return {
     ...rest,
+    ...(kept ? { keyframes: kept } : {}),
     duration: directorTrim.duration,
     ...(directorTrim.fadeOut !== undefined ? { fadeOut: directorTrim.fadeOut } : {})
   }
